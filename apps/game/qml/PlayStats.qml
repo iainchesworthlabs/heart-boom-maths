@@ -25,12 +25,12 @@ ColumnLayout {
     // The step last drawn, to tell a rise from a fall.
     property int lastMultiplier: 1
 
-    spacing: metrics.statRowGap
+    spacing: metrics.statGap
 
     // The points.
     Item {
         Layout.fillWidth: true
-        Layout.preferredHeight: pointsRow.implicitHeight + 2 * root.metrics.pointsPadY + (root.plainPoints ? 0 : 2 * root.metrics.pointsBorder)
+        Layout.preferredHeight: pointsRow.implicitHeight + (root.plainPoints ? 0 : 12 + 2 * root.metrics.pointsBorder)
         Accessible.role: Accessible.StaticText
         Accessible.name: qsTr("%1 points").arg(root.points)
 
@@ -46,15 +46,11 @@ ColumnLayout {
             id: pointsRow
 
             anchors.fill: parent
-            anchors.leftMargin: root.metrics.pointsPadX + (root.plainPoints ? 0 : root.metrics.pointsBorder)
-            anchors.rightMargin: root.metrics.pointsPadX + (root.plainPoints ? 0 : root.metrics.pointsBorder)
-            anchors.topMargin: root.metrics.pointsPadY + (root.plainPoints ? 0 : root.metrics.pointsBorder)
-            anchors.bottomMargin: root.metrics.pointsPadY + (root.plainPoints ? 0 : root.metrics.pointsBorder)
+            anchors.leftMargin: root.plainPoints ? 4 : 12 + root.metrics.pointsBorder
+            anchors.rightMargin: root.plainPoints ? 4 : 12 + root.metrics.pointsBorder
 
-            // The number and its label share one baseline, as on the boards.
             Text {
                 objectName: "pointsValue"
-                Layout.alignment: Qt.AlignBaseline
                 text: Theme.formatNumber(root.points)
                 color: Theme.ink
                 font.family: Theme.bodyFont
@@ -64,7 +60,6 @@ ColumnLayout {
                 Layout.fillWidth: true
             }
             Text {
-                objectName: "pointsLabel"
                 Layout.alignment: Qt.AlignBaseline
                 text: qsTr("POINTS")
                 color: Theme.ink
@@ -85,7 +80,7 @@ ColumnLayout {
             objectName: "multiplierBadge"
             Layout.fillWidth: true
             Layout.preferredWidth: root.falling ? 1.5 : 1
-            verticalPadding: root.metrics.badgePadY
+            Layout.preferredHeight: root.metrics.badgeFont + 8 + 2 * root.metrics.badgeBorder
             text: root.falling ? "" : (root.multiplier > 1 ? qsTr("x%1!").arg(root.multiplier) : qsTr("x%1").arg(root.multiplier))
             fillColor: root.multiplier > 1 && !root.falling ? Theme.red : Theme.white
             textColor: root.multiplier > 1 && !root.falling ? Theme.white : Theme.ink
@@ -159,7 +154,7 @@ ColumnLayout {
             objectName: "coinWallet"
             Layout.fillWidth: true
             Layout.preferredWidth: root.walletDelta !== 0 ? 1.5 : 1
-            Layout.preferredHeight: multiplierBadge.implicitHeight
+            Layout.preferredHeight: multiplierBadge.Layout.preferredHeight
             value: root.wallet
             delta: root.walletDelta
             coinSize: root.metrics.coinSize

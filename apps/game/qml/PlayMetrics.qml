@@ -43,15 +43,10 @@ QtObject {
     // The stats.
     readonly property real heartSize: pick(120, 190, 200)
     readonly property real rowGap: pick(14, 28, 18)
-    readonly property real statGap: pick(8, 14, 12) // between the two chips
-    readonly property real statRowGap: pick(8, 14, 18) // between the points and the chips
+    readonly property real statGap: pick(8, 14, 12)
     readonly property real pointsFont: pick(26, 46, 46)
     readonly property real pointsLabelFont: pick(14, 22, 20)
     readonly property real pointsBorder: pick(4, 5, 5)
-    // The room inside the points card (the desktop's points are plain text with 4 at the sides) and inside the chips.
-    readonly property real pointsPadX: pick(12, 20, 4)
-    readonly property real pointsPadY: pick(6, 10, 0)
-    readonly property real badgePadY: pick(4, 6, 4)
     readonly property real pointsRadius: pick(12, 16, 16)
     readonly property real badgeFont: pick(24, 40, 32)
     readonly property real badgeBorder: pick(4, 5, 4)
@@ -112,7 +107,4 @@ QtObject {
     readonly property real panelPadding: 24
     readonly property real panelGap: 18
     readonly property real columnGap: 32
-    readonly property real panelBorder: 5
-    readonly property real panelRadius: 22
-    readonly property real panelShadow: 8
 }
