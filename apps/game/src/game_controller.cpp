@@ -27,6 +27,38 @@ QString to_qstring(const std::string& text)
     return QString::fromStdString(text);
 }
 
+QStringList parts_for(const Question& q)
+{
+    QStringList parts;
+    if (q.shape == QuestionShape::MISSING_ADDEND)
+    {
+        parts << QString::number(q.terms[0]) << QStringLiteral("+") << QStringLiteral("?") << QStringLiteral("=")
+              << QString::number(q.terms[1]);
+        return parts;
+    }
+    for (int i = 0; i < q.term_count; ++i)
+    {
+        if (i > 0)
+        {
+            parts << (q.operators[static_cast<std::size_t>(i - 1)] == Operator::ADD ? QStringLiteral("+")
+                                                                                    : QString::fromUtf8(MINUS_SIGN));
+        }
+        parts << QString::number(q.terms[static_cast<std::size_t>(i)]);
+    }
+    parts << QStringLiteral("=") << QStringLiteral("?");
+    return parts;
+}
+
+QList<int> tiles_for(const Question& q)
+{
+    QList<int> out;
+    for (const int tile : q.tiles)
+    {
+        out << tile;
+    }
+    return out;
+}
+
 bool same_question(const Question& a, const Question& b) noexcept
 {
     return a.shape == b.shape && a.term_count == b.term_count && a.terms == b.terms && a.operators == b.operators &&
@@ -388,6 +420,7 @@ void GameController::refresh_view()
 {
     const SessionView& v = m_Session.view();
     const SessionView old = m_Shown;
+    m_Before = old;
     m_Shown = v;
 
     const bool level_changed = v.level != old.level || v.endless != old.endless ||
@@ -481,10 +514,12 @@ void GameController::handle_event(const Event& event)
         emit questionShown(event.question_number);
         break;
     case EventKind::ANSWER_CORRECT:
+        remember_answer(event, true);
         emit answerCorrect(event.tile, event.points, event.coins, event.streak_bonus_coins, event.run, event.multiplier,
                            event.multiplier_rose, event.ticks_delta / ticks_per_second);
         break;
     case EventKind::ANSWER_WRONG:
+        remember_answer(event, false);
         emit answerWrong(event.tile, event.correct_tile, -event.ticks_delta / ticks_per_second, event.multiplier);
         break;
     case EventKind::HINT_USED:
@@ -518,6 +553,27 @@ void GameController::handle_event(const Event& event)
         finish_game(event);
         break;
     }
+}
+
+void GameController::remember_answer(const Event& event, bool correct)
+{
+    const Question& q = m_Before.question;
+    const QList<int> tiles = tiles_for(q);
+    QVariantList tile_values;
+    for (const int tile : tiles)
+    {
+        tile_values.append(tile);
+    }
+    m_Answered = {
+        {QStringLiteral("questionNumber"), m_Before.question_number},
+        {QStringLiteral("parts"), parts_for(q)},
+        {QStringLiteral("tiles"), tile_values},
+        {QStringLiteral("removedTiles"), m_Before.removed_tiles},
+        {QStringLiteral("tile"), event.tile},
+        {QStringLiteral("correctTile"), event.correct_tile},
+        {QStringLiteral("correct"), correct},
+    };
+    emit answeredChanged();
 }
 
 void GameController::finish_game(const Event& event)
@@ -686,6 +742,17 @@ int GameController::ticks_total() const
     return m_Session.view().ticks_total;
 }
 
+int GameController::ticks_per_second() const
+{
+    return m_Tuning->ticks_per_second;
+}
+
+int GameController::alert_ticks() const
+{
+    const SessionView& v = m_Session.view();
+    return m_Tuning->ticks(v.endless ? m_Tuning->endless.alert_seconds : m_Tuning->alert_seconds);
+}
+
 int GameController::seconds_per_right_answer() const
 {
     return m_Session.view().seconds_per_right_answer;
@@ -709,29 +776,7 @@ int GameController::question_number() const
 QStringList GameController::question_parts() const
 {
     const SessionView& v = m_Session.view();
-    if (v.level == 0)
-    {
-        return {};
-    }
-    const Question& q = v.question;
-    QStringList parts;
-    if (q.shape == QuestionShape::MISSING_ADDEND)
-    {
-        parts << QString::number(q.terms[0]) << QStringLiteral("+") << QStringLiteral("?") << QStringLiteral("=")
-              << QString::number(q.terms[1]);
-        return parts;
-    }
-    for (int i = 0; i < q.term_count; ++i)
-    {
-        if (i > 0)
-        {
-            parts << (q.operators[static_cast<std::size_t>(i - 1)] == Operator::ADD ? QStringLiteral("+")
-                                                                                    : QString::fromUtf8(MINUS_SIGN));
-        }
-        parts << QString::number(q.terms[static_cast<std::size_t>(i)]);
-    }
-    parts << QStringLiteral("=") << QStringLiteral("?");
-    return parts;
+    return v.level == 0 ? QStringList{} : parts_for(v.question);
 }
 
 QString GameController::question_text() const
@@ -742,16 +787,7 @@ QString GameController::question_text() const
 QList<int> GameController::tiles() const
 {
     const SessionView& v = m_Session.view();
-    if (v.level == 0)
-    {
-        return {};
-    }
-    QList<int> out;
-    for (const int tile : v.question.tiles)
-    {
-        out << tile;
-    }
-    return out;
+    return v.level == 0 ? QList<int>{} : tiles_for(v.question);
 }
 
 int GameController::removed_tiles() const
@@ -772,6 +808,11 @@ bool GameController::hint_available() const
 int GameController::hint_cost() const
 {
     return m_Tuning->hint_cost_coins;
+}
+
+QVariantMap GameController::answered() const
+{
+    return m_Answered;
 }
 
 int GameController::ticks_left() const

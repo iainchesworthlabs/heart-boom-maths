@@ -13,10 +13,10 @@
 #include <QGuiApplication>
 #include <QObject>
 #include <QQmlApplicationEngine>
-#include <QQmlContext>
 #include <QQuickWindow>
 #include <QString>
 #include <QTimer>
+#include <QVariant>
 #include <cstdio>
 #include <string>
 #include <string_view>
@@ -81,7 +81,8 @@ int main(int argc, char* argv[])
                      { controller.on_application_state(state == Qt::ApplicationActive); });
 
     QQmlApplicationEngine engine;
-    engine.rootContext()->setContextProperty(QStringLiteral("game"), &controller);
+    // The window takes the controller as a required property, so qmllint and the QML compiler know its type.
+    engine.setInitialProperties({{QStringLiteral("game"), QVariant::fromValue(&controller)}});
     QObject::connect(
         &engine, &QQmlApplicationEngine::objectCreationFailed, &app, [] { QCoreApplication::exit(1); },
         Qt::QueuedConnection);
