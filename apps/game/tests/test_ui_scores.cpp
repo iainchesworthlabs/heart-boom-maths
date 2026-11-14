@@ -802,8 +802,8 @@ TEST_CASE("The on-screen keyboard types into the field and matches the phone boa
     CHECK(keyboard->mapToScene(QPointF(0, keyboard->height())).y() == PHONE.height());
     CHECK(keyboard->mapToScene(QPointF(0, 0)).y() == 506);
 
-    // Everything above it is where the board has it: the card at 186, the field at 338 and the buttons at 418, with SAVE
-    // 188 wide from x 24 and SKIP 140 wide up to 366.
+    // Everything above it is where the board has it: the card at 186, the field at 338 and the buttons at 418, with
+    // SAVE 188 wide from x 24 and SKIP 140 wide up to 366.
     CHECK(s.rect_of("entryCard").top() == 186);
     CHECK(s.rect_of("nameField").top() == 338);
     CHECK(s.rect_of("saveButton").top() == 418);

@@ -185,8 +185,8 @@ TEST_CASE("The digits of the question and its slot share one centre line at ever
         const char* name;
         QSize size;
     };
-    const Arrangement arrangement = GENERATE(Arrangement{"phone", PHONE}, Arrangement{"tablet", TABLET},
-                                             Arrangement{"desktop", DESKTOP});
+    const Arrangement arrangement =
+        GENERATE(Arrangement{"phone", PHONE}, Arrangement{"tablet", TABLET}, Arrangement{"desktop", DESKTOP});
     CAPTURE(arrangement.name);
     Shell s(arrangement.size);
     QQuickItem* card = s.h.find_item("questionCard");

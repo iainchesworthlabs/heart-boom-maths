@@ -784,7 +784,8 @@ TEST_CASE("The gate in a phone window matches the board: CANCEL and OPEN at 140 
     CHECK_THAT(left_of("openButton"), Catch::Matchers::WithinAbs(178.0, 1.0));
     CHECK_THAT(s.item("openButton")->width(), Catch::Matchers::WithinAbs(188.0, 1.0));
     CHECK_THAT(left_of("openButton") + s.item("openButton")->width(), Catch::Matchers::WithinAbs(366.0, 0.6));
-    // The prompt card holds two lines of 24 and two of 35.7, so the display and the keypad sit where the board has them.
+    // The prompt card holds two lines of 24 and two of 35.7, so the display and the keypad sit where the board has
+    // them.
     CHECK_THAT(top_of("gatePrompt"), Catch::Matchers::WithinAbs(114.0, 1.0));
     CHECK_THAT(s.item("gatePrompt")->height(), Catch::Matchers::WithinAbs(171.4, 1.0));
     CHECK_THAT(top_of("gateDisplay"), Catch::Matchers::WithinAbs(299.0, 1.5));
