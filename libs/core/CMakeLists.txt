@@ -15,15 +15,10 @@ hbm_generate_tuning_header(
     "${CMAKE_CURRENT_BINARY_DIR}/generated/heart_boom_maths/tuning_data.hpp")
 
 add_library(heart_boom_maths_core
-    src/greeting.cpp
     src/question_generator.cpp
     src/rng.cpp
-    src/tuning.cpp
-    src/version.cpp)
+    src/tuning.cpp)
 add_library(heart_boom_maths::core ALIAS heart_boom_maths_core)
-
-# One implementation file per platform; CMake adds the directory that matches the target.
-icl_platform_sources(heart_boom_maths_core)
 
 target_include_directories(heart_boom_maths_core
     PUBLIC

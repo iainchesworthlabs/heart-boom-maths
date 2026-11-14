@@ -40,8 +40,12 @@ include(IclCoverage)
 include(IclPlatform)
 
 option(HEART_BOOM_MATHS_BUILD_TESTS "Build the tests" ON)
-option(HEART_BOOM_MATHS_BUILD_CLI "Build the command-line application" ON)
 option(HEART_BOOM_MATHS_BUILD_IOS_APP "Build the iPhone and iPad application (iOS only)" ON)
+
+# The Qt application. AUTO builds it when a Qt 6 kit can be found and says so when it cannot, so a machine with no Qt
+# still builds and tests the core. ON makes a missing kit an error; OFF skips the application.
+set(HEART_BOOM_MATHS_BUILD_GAME "AUTO" CACHE STRING "Build the Qt application: AUTO (when Qt 6 is found), ON or OFF")
+set_property(CACHE HEART_BOOM_MATHS_BUILD_GAME PROPERTY STRINGS AUTO ON OFF)
 
 if(HEART_BOOM_MATHS_BUILD_TESTS)
     include(CTest)
@@ -51,8 +55,19 @@ endif()
 
 add_subdirectory(libs/core)
 
-if(HEART_BOOM_MATHS_BUILD_CLI)
-    add_subdirectory(apps/cli)
+if(HEART_BOOM_MATHS_BUILD_GAME STREQUAL "AUTO")
+    find_package(Qt6 6.8 QUIET COMPONENTS Quick)
+    if(Qt6_FOUND)
+        set(heart_boom_maths_build_game ON)
+    else()
+        set(heart_boom_maths_build_game OFF)
+        message(STATUS "No Qt 6 kit found: apps/game is not built (set ICL_QT_ROOT, or HEART_BOOM_MATHS_BUILD_GAME=ON to require it)")
+    endif()
+else()
+    set(heart_boom_maths_build_game "${HEART_BOOM_MATHS_BUILD_GAME}")
+endif()
+if(heart_boom_maths_build_game)
+    add_subdirectory(apps/game)
 endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS" AND HEART_BOOM_MATHS_BUILD_IOS_APP)
