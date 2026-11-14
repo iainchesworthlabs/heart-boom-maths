@@ -1,0 +1,1 @@
+**The game session is built.** `GameSession` plays the whole rules engine in integers: the tick timer and alert zone, scoring, the multiplier run and step, coins and hints, level end, the level 12 win and its once-only bonus, endless levels and game over, with a snapshot and restore that rejects bad data.
