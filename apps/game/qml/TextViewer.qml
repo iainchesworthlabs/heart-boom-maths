@@ -29,7 +29,7 @@ ScreenFrame {
 
             objectName: "viewerFlick"
             anchors.fill: parent
-            anchors.margins: 14 * root.unit
+            anchors.margins: 14 * root.unit + 5
             clip: true
             contentWidth: width
             contentHeight: body.height
@@ -84,8 +84,8 @@ ScreenFrame {
             objectName: "viewerBar"
             visible: flick.contentHeight > flick.height
             anchors.right: parent.right
-            anchors.rightMargin: 2
-            y: 14 * root.unit + (flick.height - height) * (flick.contentHeight > flick.height ? flick.contentY / (flick.contentHeight - flick.height) : 0)
+            anchors.rightMargin: 7
+            y: 14 * root.unit + 5 + (flick.height - height) * (flick.contentHeight > flick.height ? flick.contentY / (flick.contentHeight - flick.height) : 0)
             width: 6
             height: Math.max(32, flick.height * flick.height / Math.max(1, flick.contentHeight))
             radius: 3

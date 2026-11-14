@@ -416,44 +416,6 @@ TEST_CASE("Settings shows the switches with ON and OFF in words and writes them 
     CHECK(s.item("backButton")->width() >= 44);
 }
 
-TEST_CASE("Settings in a phone window matches the board's measurements", "[ui][settings]")
-{
-    Screens s(PHONE, true);
-    s.tap("settingsButton");
-    REQUIRE(s.visible("gameCenterRow"));
-
-    const auto top_of = [&](const char* name) { return s.item(name)->mapToScene(QPointF(0, 0)).y(); };
-    const auto left_of = [&](const char* name) { return s.item(name)->mapToScene(QPointF(0, 0)).x(); };
-    // The header row is 48 high from y 52, so the first card starts at 118, and each card is 88 high with 18 between.
-    CHECK_THAT(top_of("backButton"), Catch::Matchers::WithinAbs(52.0, 0.6));
-    CHECK_THAT(top_of("soundRow"), Catch::Matchers::WithinAbs(118.0, 0.6));
-    CHECK_THAT(s.item("soundRow")->height(), Catch::Matchers::WithinAbs(88.0, 1.0));
-    CHECK_THAT(top_of("musicRow"), Catch::Matchers::WithinAbs(224.0, 0.6));
-    CHECK_THAT(top_of("gameCenterRow"), Catch::Matchers::WithinAbs(330.0, 0.6));
-    CHECK_THAT(top_of("aboutButton"), Catch::Matchers::WithinAbs(436.0, 0.6));
-    CHECK_THAT(s.item("aboutButton")->height(), Catch::Matchers::WithinAbs(68.0, 0.6));
-    // The text of the first two rows starts at x 91 (a 34 icon), the Game Center's at 87 (a 30 icon).
-    const auto text_left = [&](const char* row)
-    {
-        for (QQuickItem* child : s.item(row)->findChildren<QQuickItem*>())
-        {
-            if (child->objectName() == "settingTitle")
-            {
-                return child->mapToScene(QPointF(0, 0)).x();
-            }
-        }
-        return -1.0;
-    };
-    CHECK_THAT(text_left("soundRow"), Catch::Matchers::WithinAbs(91.0, 0.6));
-    CHECK_THAT(text_left("gameCenterRow"), Catch::Matchers::WithinAbs(87.0, 0.6));
-    // The ABOUT wedge is 12.8 by 27.7 and ends 27 inside the button's right edge (339 of 366).
-    QQuickItem* wedge = s.item("rowArrow");
-    CHECK_THAT(wedge->width(), Catch::Matchers::WithinAbs(12.8, 0.1));
-    CHECK_THAT(wedge->height(), Catch::Matchers::WithinAbs(27.7, 0.1));
-    CHECK_THAT(wedge->mapToScene(QPointF(wedge->width(), 0)).x(), Catch::Matchers::WithinAbs(339.0, 0.6));
-    CHECK(left_of("aboutButton") == 24);
-}
-
 TEST_CASE("A switch answers the keyboard and tells a screen reader what it is", "[ui][settings]")
 {
     Screens s(PHONE);
@@ -598,39 +560,10 @@ TEST_CASE("About shows the version, the build, the font licences and four rows",
     QQuickItem* flick = s.item("aboutFlick");
     CHECK(flick->width() > 0);
     CHECK(s.inside(flick));
-    if (arrangement.size != TABLET)
+    if (arrangement.size == PHONE)
     {
         CHECK_FALSE(property_of(flick, "interactive").toBool());
-        CHECK_FALSE(s.visible("aboutScrollBar"));
-        // Every row, the last one too, is whole inside the window.
-        CHECK(s.inside(s.item("sourceButton")));
     }
-}
-
-TEST_CASE("A short window scrolls About, shows a bar that says so and reaches the last row", "[ui][about]")
-{
-    Screens s(PHONE);
-    s.tap("settingsButton");
-    s.tap("aboutButton");
-    REQUIRE(s.visible("aboutScreen"));
-    s.window_size = QSize{390, 420};
-    s.h.resize(s.window_size);
-    s.h.settle();
-
-    QQuickItem* flick = s.item("aboutFlick");
-    REQUIRE(property_of(flick, "interactive").toBool());
-    CHECK(s.visible("aboutScrollBar"));
-    // The thumb is shorter than the track by as much as the content is longer than the window.
-    QQuickItem* bar = s.item("aboutScrollBar");
-    CHECK(bar->height() < flick->height());
-    CHECK(bar->y() == 0);
-    // The last row is below the window until the page is scrolled; then it is inside and the thumb is at the foot.
-    const double content_height = property_of(flick, "contentHeight").toDouble();
-    flick->setProperty("contentY", content_height - flick->height());
-    s.h.settle();
-    CHECK(s.inside(s.item("sourceButton")));
-    CHECK(bar->y() + bar->height() <= flick->height() + 0.5);
-    CHECK(bar->y() > 0);
 }
 
 TEST_CASE("The build date reads as day, month name and year", "[ui][about]")

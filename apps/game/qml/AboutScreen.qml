@@ -31,7 +31,7 @@ Item {
 
         anchors.fill: parent
         title: qsTr("ABOUT")
-        designHeight: 832
+        designHeight: 800
         columnSpacing: 14
         escapeEnabled: root.viewer === ""
         onBackClicked: root.backClicked()
@@ -47,23 +47,6 @@ Item {
             contentHeight: column.implicitHeight + 8 * frame.unit
             boundsBehavior: Flickable.StopAtBounds
             interactive: contentHeight > height
-
-            // A window too short for every row scrolls, and this bar says there is more below. It sits on the Flickable
-            // itself, not on its content, and is white with an ink outline so it shows over the cards' shadows too.
-            Rectangle {
-                objectName: "aboutScrollBar"
-                parent: flick
-                visible: flick.interactive
-                z: 1
-                x: flick.width - width - 1
-                y: flick.contentHeight > flick.height ? (flick.height - height) * flick.contentY / (flick.contentHeight - flick.height) : 0
-                width: 9
-                height: Math.max(32, flick.height * flick.height / Math.max(1, flick.contentHeight))
-                radius: 4.5
-                color: Theme.white
-                border.width: 2
-                border.color: Theme.ink
-            }
 
             ColumnLayout {
                 id: column
@@ -84,7 +67,7 @@ Item {
 
                     ColumnLayout {
                         Layout.fillWidth: true
-                        spacing: 0
+                        spacing: 2 * frame.unit
 
                         Text {
                             objectName: "aboutName"
@@ -95,8 +78,6 @@ Item {
                             font.family: Theme.displayFont
                             font.pixelSize: 30 * frame.unit
                             font.letterSpacing: 1 * frame.unit
-                            lineHeight: 30 * frame.unit
-                            lineHeightMode: Text.FixedHeight
                         }
                         Text {
                             objectName: "aboutVersion"
@@ -119,9 +100,9 @@ Item {
                         id: facts
 
                         anchors.fill: parent
-                        anchors.margins: 14 * frame.unit
-                        anchors.leftMargin: 18 * frame.unit
-                        anchors.rightMargin: 18 * frame.unit
+                        anchors.margins: 14 * frame.unit + 5
+                        anchors.leftMargin: 18 * frame.unit + 5
+                        anchors.rightMargin: 18 * frame.unit + 5
                         spacing: 4 * frame.unit
 
                         Repeater {
@@ -181,9 +162,9 @@ Item {
                         id: fonts
 
                         anchors.fill: parent
-                        anchors.margins: 14 * frame.unit
-                        anchors.leftMargin: 18 * frame.unit
-                        anchors.rightMargin: 18 * frame.unit
+                        anchors.margins: 14 * frame.unit + 5
+                        anchors.leftMargin: 18 * frame.unit + 5
+                        anchors.rightMargin: 18 * frame.unit + 5
                         spacing: 8 * frame.unit
 
                         Text {
@@ -227,7 +208,7 @@ Item {
                     borderWidth: Theme.outlineSmall
                     radius: 16
                     shadowOffset: 5
-                    horizontalPadding: 16
+                    horizontalPadding: 12
                     onClicked: root.openLicence()
                 }
 
@@ -243,7 +224,7 @@ Item {
                     borderWidth: Theme.outlineSmall
                     radius: 16
                     shadowOffset: 5
-                    horizontalPadding: 16
+                    horizontalPadding: 12
                     onClicked: root.openNotices()
                 }
 
@@ -261,7 +242,7 @@ Item {
                     borderWidth: Theme.outlineSmall
                     radius: 16
                     shadowOffset: 5
-                    horizontalPadding: 16
+                    horizontalPadding: 12
                     onClicked: root.game.requestLink(root.game.privacyPolicyUrl)
                 }
 
@@ -279,7 +260,7 @@ Item {
                     borderWidth: Theme.outlineSmall
                     radius: 16
                     shadowOffset: 5
-                    horizontalPadding: 16
+                    horizontalPadding: 12
                     onClicked: root.game.requestLink(root.game.repositoryUrl)
                 }
             }
