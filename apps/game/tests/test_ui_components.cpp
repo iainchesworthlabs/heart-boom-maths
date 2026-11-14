@@ -9,6 +9,7 @@
 #include <QSignalSpy>
 #include <QTest>
 #include <algorithm>
+#include <cstdlib>
 
 using namespace hbm_test;
 using Catch::Matchers::WithinAbs;
@@ -489,8 +490,10 @@ Item {
     REQUIRE(tile != nullptr);
     auto* badge = qobject_cast<QQuickItem*>(child(tile, "tileBadge"));
     auto* face = qobject_cast<QQuickItem*>(child(tile, "tileFace"));
+    auto* fade = qobject_cast<QQuickItem*>(child(tile, "tileFade"));
     REQUIRE(badge != nullptr);
     REQUIRE(face != nullptr);
+    REQUIRE(fade != nullptr);
 
     SECTION("normal: no badge, takes taps")
     {
@@ -525,8 +528,50 @@ Item {
         auto* ghost = qobject_cast<QQuickItem*>(child(tile, "tileGhost"));
         REQUIRE(ghost != nullptr);
         CHECK(ghost->opacity() > 0.9);
-        CHECK(face->opacity() < 0.1);
+        CHECK(fade->opacity() < 0.1);
     }
+}
+
+TEST_CASE("A dimmed tile is cream over the page with an olive shadow, not an opaque khaki", "[ui][tile]")
+{
+    auto h = QmlHarness::from_source(R"(
+import QtQuick
+import HeartBoomMaths
+Item {
+    Rectangle {
+        anchors.fill: parent
+        color: "#FFE14D"
+    }
+    AnswerTile {
+        objectName: "tile"
+        x: 20
+        y: 20
+        width: 160
+        height: 96
+        value: "7"
+        look: "dimmed"
+        shadowOffset: 6
+    }
+}
+)",
+                                     SMALL);
+    QTest::qWait(500); // the fade
+    h.settle();
+    const QImage image = h.view().grabWindow().convertToFormat(QImage::Format_RGB32);
+    const auto near = [](QRgb pixel, int r, int g, int b)
+    { return std::abs(qRed(pixel) - r) <= 6 && std::abs(qGreen(pixel) - g) <= 6 && std::abs(qBlue(pixel) - b) <= 6; };
+    // The body: white at 55 per cent over the page, #FFE14D.
+    const QRgb body = image.pixel(30, 30);
+    INFO(QColor(body).name().toStdString());
+    CHECK(near(body, 255, 242, 175));
+    // The shadow, right of the tile and below it: ink at 55 per cent over the page.
+    const QRgb shadow = image.pixel(20 + 160 + 2, 20 + 40);
+    INFO(QColor(shadow).name().toStdString());
+    CHECK(near(shadow, 124, 111, 44));
+    // The border: ink at 55 per cent over the page, on the top edge, where no shadow lies under it.
+    const QRgb edge = image.pixel(100, 20 + 2);
+    INFO(QColor(edge).name().toStdString());
+    CHECK(near(edge, 124, 111, 44));
 }
 
 TEST_CASE("The question card reads one line for two terms and two for more", "[ui][question]")

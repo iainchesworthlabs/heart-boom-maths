@@ -78,25 +78,18 @@ Item {
         border.color: Theme.ink
     }
 
-    ComicCard {
-        id: face
+    // The face fades as one picture. Each part of a card fading on its own would let the white body paint over the black
+    // shadow beneath it and turn the whole tile khaki; as one layer it is the cream of white at 55% over the page, with an
+    // olive shadow. The layer is as big as the card and its shadow. Only the dimmed look needs it: a tile that is going
+    // away moves outside the layer's edge, and fades too quickly to show the difference.
+    Item {
+        id: fade
 
-        objectName: "tileFace"
-        width: parent.width
-        height: parent.height
-        fillColor: root.look === "wrong" ? Theme.red : (root.look === "right" ? Theme.green : Theme.white)
-        borderWidth: root.borderWidth
-        radius: root.radius
-        shadowOffset: root.shadowOffset
+        objectName: "tileFade"
+        width: root.width + root.shadowOffset
+        height: root.height + root.shadowOffset
         opacity: root.look === "gone" ? 0 : (root.look === "dimmed" ? 0.55 : 1)
-        scale: root.look === "right" ? pulse : 1
-        rotation: root.look === "wrong" ? -4 : 0
-        transform: Translate {
-            x: (root.look === "wrong" ? -6 + root.shake : 0) + (root.pressed ? root.shadowOffset / 2 : 0)
-            y: (root.look === "gone" ? root.height * 0.3 : 0) + (root.pressed ? root.shadowOffset / 2 : 0)
-        }
-
-        property real pulse: 1.04
+        layer.enabled: root.look === "dimmed"
 
         Behavior on opacity {
             NumberAnimation {
@@ -104,60 +97,80 @@ Item {
             }
         }
 
-        SequentialAnimation on pulse {
-            running: root.look === "right"
-            loops: Animation.Infinite
+        ComicCard {
+            id: face
 
-            NumberAnimation {
-                to: 1.09
-                duration: 220
-                easing.type: Easing.InOutSine
+            objectName: "tileFace"
+            width: root.width
+            height: root.height
+            fillColor: root.look === "wrong" ? Theme.red : (root.look === "right" ? Theme.green : Theme.white)
+            borderWidth: root.borderWidth
+            radius: root.radius
+            shadowOffset: root.shadowOffset
+            scale: root.look === "right" ? pulse : 1
+            rotation: root.look === "wrong" ? -4 : 0
+            transform: Translate {
+                x: (root.look === "wrong" ? -6 + root.shake : 0) + (root.pressed ? root.shadowOffset / 2 : 0)
+                y: (root.look === "gone" ? root.height * 0.3 : 0) + (root.pressed ? root.shadowOffset / 2 : 0)
             }
-            NumberAnimation {
-                to: 1.04
-                duration: 220
-                easing.type: Easing.InOutSine
-            }
-        }
 
-        Text {
-            anchors.centerIn: parent
-            text: root.value
-            color: root.look === "wrong" ? Theme.white : Theme.ink
-            font.family: Theme.bodyFont
-            font.pixelSize: root.fontSize
-        }
+            property real pulse: 1.04
 
-        // The corner badge: a cross on the wrong tile, a tick on the right one.
-        Shape {
-            objectName: "tileBadge"
-            visible: root.look === "wrong" || root.look === "right"
-            x: parent.width - root.badgeSize - 6
-            y: 4 - root.borderWidth
-            width: 30
-            height: 30
-            scale: root.badgeSize / 30
-            transformOrigin: Item.TopLeft
-            preferredRendererType: Shape.CurveRenderer
+            SequentialAnimation on pulse {
+                running: root.look === "right"
+                loops: Animation.Infinite
 
-            ShapePath {
-                fillColor: Theme.white
-                strokeColor: Theme.ink
-                strokeWidth: 3
-
-                PathSvg {
-                    path: "M3 15 A12 12 0 1 0 27 15 A12 12 0 1 0 3 15 Z"
+                NumberAnimation {
+                    to: 1.09
+                    duration: 220
+                    easing.type: Easing.InOutSine
+                }
+                NumberAnimation {
+                    to: 1.04
+                    duration: 220
+                    easing.type: Easing.InOutSine
                 }
             }
-            ShapePath {
-                fillColor: "transparent"
-                strokeColor: Theme.ink
-                strokeWidth: 3.5
-                capStyle: ShapePath.RoundCap
-                joinStyle: ShapePath.RoundJoin
 
-                PathSvg {
-                    path: root.look === "wrong" ? "M10 10 L20 20 M20 10 L10 20" : "M9 15 L13 19 L21 11"
+            Text {
+                anchors.centerIn: parent
+                text: root.value
+                color: root.look === "wrong" ? Theme.white : Theme.ink
+                font.family: Theme.bodyFont
+                font.pixelSize: root.fontSize
+            }
+
+            // The corner badge: a cross on the wrong tile, a tick on the right one.
+            Shape {
+                objectName: "tileBadge"
+                visible: root.look === "wrong" || root.look === "right"
+                x: parent.width - root.badgeSize - 6
+                y: 4 - root.borderWidth
+                width: 30
+                height: 30
+                scale: root.badgeSize / 30
+                transformOrigin: Item.TopLeft
+                preferredRendererType: Shape.CurveRenderer
+
+                ShapePath {
+                    fillColor: Theme.white
+                    strokeColor: Theme.ink
+                    strokeWidth: 3
+
+                    PathSvg {
+                        path: "M3 15 A12 12 0 1 0 27 15 A12 12 0 1 0 3 15 Z"
+                    }
+                }
+                ShapePath {
+                    fillColor: "transparent"
+                    strokeColor: Theme.ink
+                    strokeWidth: 3.5
+                    capStyle: ShapePath.RoundCap
+                    joinStyle: ShapePath.RoundJoin
+
+                    PathSvg {
+                        path: root.look === "wrong" ? "M10 10 L20 20 M20 10 L10 20" : "M9 15 L13 19 L21 11"
+                    }
                 }
             }
         }
