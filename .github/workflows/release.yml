@@ -116,13 +116,13 @@ jobs:
         uses: iainchesworthlabs/icl-common-infra/actions/sign-windows@721426d0ced1522f7c690d4ebd3e0d66f550bb8b # v0.1.8
         with:
           mode: ${{ vars.SIGN_WINDOWS || 'false' }}
-          files: stage/bin/icl-template.exe
+          files: stage/bin/heart-boom-maths.exe
           pfx-base64: ${{ secrets.WIN_TESTSIGN_PFX_BASE64 }}
           pfx-password: ${{ secrets.WIN_TESTSIGN_PFX_PASSWORD }}
       - name: Archive
         shell: bash
         env:
-          NAME: icl-template-${{ github.ref_type == 'tag' && github.ref_name || 'dry-run' }}-${{ matrix.name }}
+          NAME: heart-boom-maths-${{ github.ref_type == 'tag' && github.ref_name || 'dry-run' }}-${{ matrix.name }}
         run: |
           set -euo pipefail
           mkdir -p dist
@@ -153,9 +153,9 @@ jobs:
     permissions:
       contents: read
     env:
-      # ICL_TEMPLATE_APPLICATION_ID in CMakeLists.txt; the check of the IPA fails if the two differ.
-      BUNDLE_ID: com.iainchesworthlabs.icltemplate
-      EXECUTABLE: icl-template
+      # HEART_BOOM_MATHS_APPLICATION_ID in CMakeLists.txt; the check of the IPA fails if the two differ.
+      BUNDLE_ID: com.iainchesworthlabs.heartboommaths
+      EXECUTABLE: heart-boom-maths
       VCPKG_DISABLE_METRICS: "1"
     steps:
       - name: Check out
@@ -191,9 +191,9 @@ jobs:
         run: >
           cmake --preset ios-release
           -DCMAKE_XCODE_GENERATE_SCHEME=ON
-          -DICL_TEMPLATE_IOS_BUILD_NUMBER="$BUILD_NUMBER"
-          -DICL_TEMPLATE_IOS_SIGNING_TEAM="$TEAM_ID"
-          -DICL_TEMPLATE_IOS_SIGNING_PROFILE="$PROFILE_NAME"
+          -DHEART_BOOM_MATHS_IOS_BUILD_NUMBER="$BUILD_NUMBER"
+          -DHEART_BOOM_MATHS_IOS_SIGNING_TEAM="$TEAM_ID"
+          -DHEART_BOOM_MATHS_IOS_SIGNING_PROFILE="$PROFILE_NAME"
 
       - name: Name the package
         id: name
@@ -208,7 +208,7 @@ jobs:
           project="$(find build/ios-release -maxdepth 1 -name '*.xcodeproj' | head -n 1)"
           [ -n "$project" ] || { echo "::error::CMake made no .xcodeproj under build/ios-release"; exit 1; }
           echo "project=$project" >> "$GITHUB_OUTPUT"
-          echo "ipa=dist-ios/icl-template-$label-ios-appstore.ipa" >> "$GITHUB_OUTPUT"
+          echo "ipa=dist-ios/heart-boom-maths-$label-ios-appstore.ipa" >> "$GITHUB_OUTPUT"
           echo "version=${label#v}" >> "$GITHUB_OUTPUT"
 
       - name: Archive and export the IPA
@@ -216,7 +216,7 @@ jobs:
         uses: iainchesworthlabs/icl-common-infra/actions/export-ios-ipa@e15f14812b7446517252d6677abf755698d57986 # v0.1.18
         with:
           project: ${{ steps.name.outputs.project }}
-          scheme: icl_template_ios
+          scheme: heart_boom_maths_ios
           bundle-id: ${{ env.BUNDLE_ID }}
           team-id: ${{ steps.signing.outputs.team-id }}
           profile-name: ${{ steps.signing.outputs.profile-name }}

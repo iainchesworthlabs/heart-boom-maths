@@ -3,7 +3,7 @@
 
 #include <string>
 
-#include "icl_template/greeting.hpp"
+#include "heart_boom_maths/greeting.hpp"
 
 // The smallest application that can be signed, uploaded to TestFlight and opened: one screen showing the greeting of
 // the core library. A project replaces it with its own (Qt Quick, UIKit or anything else); what stays is the packaging
@@ -23,7 +23,7 @@
     UIViewController* controller = [[UIViewController alloc] init];
     controller.view.backgroundColor = UIColor.systemBackgroundColor;
 
-    const icl_template::Greeter greeter("world");
+    const heart_boom_maths::Greeter greeter("world");
     UILabel* label = [[UILabel alloc] init];
     label.text = [NSString stringWithUTF8String:greeter.greet().c_str()];
     label.numberOfLines = 0;

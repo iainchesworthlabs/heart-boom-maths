@@ -1,4 +1,6 @@
 {
+  "description": "Cross-platform app and game for iOS, Android, WebAssembly and desktop",
+  "homepage": "https://iainchesworthlabs.github.io/heart-boom-maths/",
   "repository": {
     "has_issues": true,
     "has_wiki": false,
@@ -18,7 +20,11 @@
     "cpp",
     "cpp23",
     "cmake",
-    "vcpkg"
+    "vcpkg",
+    "game",
+    "ios",
+    "android",
+    "webassembly"
   ],
   "actions": {
     "default_workflow_permissions": "read",
