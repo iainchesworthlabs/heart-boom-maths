@@ -284,6 +284,12 @@ Deviations from the sketches above, all small:
 - The controller is built from `GameServices` (pointers) and `GameOptions` (tuning, session seed, gate seed source, build information). The clock is the `Clock` interface (`SteadyClock`, and `ManualClock` for tests), and `TickDriver` is plain C++ with integer arithmetic only.
 - The gate asks for a three-digit number in English words (`parental_gate.hpp`). A wrong answer deals a new number. Only the two link purposes and the Game Center switch use it.
 
+### As built (play screen)
+
+- The screens are one static QML module, `HeartBoomMaths`, inside the `heart_boom_maths_app` library, so the program and the `ui` tests load the same QML. The controller reaches QML as a typed `required property GameController game` on the main window (an initial property, not a context property), which lets `qmllint` and the QML compiler check every binding. See `docs/ui-components.md`.
+- The controller gains `ticksPerSecond`, `alertTicks` (the alert zone, a different share of the fuse in endless levels) and `answered`: the question as it stood when the child tapped. The core deals the next question at once, so the play screen draws `answered` for the second that `AnswerFeedback` holds a right or wrong look. The core is never paused or delayed by it, and taps are ignored while a look is held.
+- Navigation is in `AppShell.qml`. The play screen stays up after the last answer of a level or after the bomb until the hold ends.
+
 ## Tests
 
 Nearly all behaviour lives in `libs/core`, so nearly all tests run there, without Qt, a window or a clock.
