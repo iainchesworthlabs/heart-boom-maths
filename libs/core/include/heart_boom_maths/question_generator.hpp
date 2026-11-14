@@ -5,6 +5,7 @@
 #include "heart_boom_maths/rng.hpp"
 #include "heart_boom_maths/tuning.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <span>
 #include <vector>
@@ -30,9 +31,25 @@ public:
     [[nodiscard]] std::vector<std::int64_t> snapshot() const;
     [[nodiscard]] bool restore(std::span<const std::int64_t> values);
 
+    /// How many different questions a level can deal, counted up to `cap` (a level with more returns `cap`). The
+    /// generator lists and shuffles a level when this is 50 or fewer, and redraws on a repeat otherwise.
+    [[nodiscard]] int possible_question_count(int level, int cap = 51) const;
+
 private:
+    // NOT_STARTED: no level yet. REDRAW: `m_Keys` holds the questions dealt so far. DECK: `m_Keys` is a shuffled list
+    // of every possible question and `m_DeckPos` is the next one to deal.
+    enum class Mode
+    {
+        NOT_STARTED,
+        REDRAW,
+        DECK,
+    };
+
     const Tuning* m_Tuning;
     int m_Level = 1;
+    Mode m_Mode = Mode::NOT_STARTED;
+    std::vector<std::int64_t> m_Keys;
+    std::size_t m_DeckPos = 0;
 };
 
 } // namespace heart_boom_maths
