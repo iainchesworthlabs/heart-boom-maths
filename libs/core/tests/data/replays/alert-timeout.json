@@ -1,0 +1,16 @@
+{
+  "format": 1,
+  "seed": 103,
+  "tuning": "defaults",
+  "note": "Four right answers, then nothing: the clock runs down through the alert zone and the bomb goes off.",
+  "recipe": "--seed 103 --auto stall 4",
+  "commands": [
+    { "tick": 0, "do": "start_game" },
+    { "tick": 30, "do": "answer", "tile": 0 },
+    { "tick": 60, "do": "answer", "tile": 1 },
+    { "tick": 90, "do": "answer", "tile": 3 },
+    { "tick": 120, "do": "answer", "tile": 3 }
+  ],
+  "end_tick": 1320,
+  "expect": { "events_hash": "fe1e0b90f2b3cb6d", "final_hash": "bfa65965e9c24c77", "score": 60 }
+}
