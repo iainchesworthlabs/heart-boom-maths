@@ -14,7 +14,7 @@ commit SHA. Dependabot proposes the SHA bump; the pull request also needs
 | Change to what the iOS build reads (a path filter), or a manual run | iOS compile checks (`ios-build.yml` for the stub, `ios-game-build.yml` for the game; not required) |
 | Change to what the Android build reads (a path filter), or a manual run | Android compile check (`android-build.yml`, not required) |
 | Change to what the browser build reads (a path filter), or a manual run | WebAssembly build (`wasm-build.yml`, not required) |
-| Nightly | CodeQL |
+| Nightly | CodeQL, and the performance tests (`perf.yml`, not required; also by hand) |
 | Tag `v*` | Release |
 
 The Plan job reads `.github/ci/plan.json`. A change to documentation only builds nothing. A path
@@ -75,6 +75,12 @@ fails. See [iOS and Game Center](ios.md).
 permission, is debuggable in the release, or carries more than `arm64-v8a`. It needs no secret and runs nothing on a
 device. The signed build is the `android` job of `release.yml`, which runs only when the repository variable
 `SIGN_ANDROID_UPLOAD` is `true` (`docs/releasing.md`). What a device has to show is listed in `docs/android.md`.
+`perf.yml` runs the performance tests (label `perf`, [Performance tests](testing.md#performance-tests)) on the hosted Linux
+release build once a night and on `workflow_dispatch`. It is not a required check and never runs on a pull request or the
+merge queue, and it stays on the hosted runner class whatever `CI_RUNNER_MODE` says so that one night compares with the next.
+The job summary holds the table of every test against its budget and the artifact `perf-results-linux-release` the
+per-test JSON, `summary.json` and `summary.csv`. The jobs of `ci.yml` never build these tests (the `*-perf` presets do), so
+the shared test runner's optional `perf` phase finds nothing to run there.
 `wasm-build.yml` is separate for the same reason. Its three jobs build the rules for Node and compare eight games with
 the native build, build the game for the browser and check the site and its size against a budget
 (`WASM_GZIP_BUDGET_BYTES`, a placeholder to confirm), and open the site in Chrome. It installs two Emscripten releases

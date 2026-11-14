@@ -398,4 +398,59 @@ if(HEART_BOOM_MATHS_BUILD_TESTS)
     add_test(NAME game.qmllint
         COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --target heart_boom_maths_app_qmllint)
     set_tests_properties(game.qmllint PROPERTIES LABELS ui TIMEOUT 120)
+
+    # The performance tests (label perf), only when a perf preset asks for them (docs/testing.md, "Performance tests"). The
+    # main program times the controller, the save and the screens on the offscreen platform with the software renderer; the
+    # GPU program is the optional one that reads the GPU's frame time and skips itself unless HBM_PERF_GPU=1. Neither is
+    # linked with coverage. (Unlike the core's, they do not replace operator new to count allocations: Qt's libraries free
+    # what the program allocates, and a replacement the libraries do not share crashes them.)
+    if(HEART_BOOM_MATHS_BUILD_PERF_TESTS)
+        find_package(Qt6 REQUIRED COMPONENTS GuiPrivate)
+        set(hbm_perf_core_dir "${PROJECT_SOURCE_DIR}/libs/core/tests/perf")
+        if(WIN32)
+            set(hbm_process_memory_source tests/perf/process_memory_windows.cpp)
+        else()
+            set(hbm_process_memory_source tests/perf/process_memory_proc.cpp)
+        endif()
+        set(hbm_perf_definitions
+            HBM_TEST_FONT_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fonts"
+            HBM_PERF_BUDGETS_FILE="${PROJECT_SOURCE_DIR}/tools/perf-budgets.json"
+            _CRT_SECURE_NO_WARNINGS) # MSVC calls getenv unsafe; the harness reads two switches with it
+
+        add_executable(heart_boom_maths_game_perf
+            tests/perf/perf_main.cpp
+            tests/perf/perf_app.cpp
+            tests/perf/perf_ui.cpp
+            tests/ui_support.cpp
+            "${hbm_process_memory_source}")
+        target_include_directories(heart_boom_maths_game_perf PRIVATE tests tests/perf "${hbm_perf_core_dir}")
+        target_compile_definitions(heart_boom_maths_game_perf PRIVATE ${hbm_perf_definitions})
+        target_link_libraries(heart_boom_maths_game_perf
+            PRIVATE heart_boom_maths_app heart_boom_maths_appplugin Qt6::Test Catch2::Catch2 icl::warnings)
+        icl_relax_generated_warnings(heart_boom_maths_game_perf)
+        catch_discover_tests(heart_boom_maths_game_perf
+            TEST_PREFIX "perf."
+            TEST_SPEC "[perf]"
+            DISCOVERY_MODE PRE_TEST
+            PROPERTIES LABELS perf TIMEOUT 900
+                ENVIRONMENT "HBM_PERF_RESULTS_DIR=${PROJECT_BINARY_DIR}/perf-results")
+
+        add_executable(heart_boom_maths_game_perf_gpu
+            tests/perf/perf_gpu_main.cpp
+            tests/perf/perf_gpu.cpp
+            tests/ui_support.cpp)
+        target_include_directories(heart_boom_maths_game_perf_gpu PRIVATE tests tests/perf "${hbm_perf_core_dir}")
+        target_compile_definitions(heart_boom_maths_game_perf_gpu PRIVATE ${hbm_perf_definitions})
+        # QRhi is a header of Qt Gui's non-public API; the test only reads the GPU time from it.
+        target_link_libraries(heart_boom_maths_game_perf_gpu
+            PRIVATE heart_boom_maths_app heart_boom_maths_appplugin Qt6::Test Qt6::GuiPrivate Catch2::Catch2 icl::warnings)
+        icl_relax_generated_warnings(heart_boom_maths_game_perf_gpu)
+        # A test that skips itself exits with 4, which CTest reports as skipped and not as a failure.
+        catch_discover_tests(heart_boom_maths_game_perf_gpu
+            TEST_PREFIX "perf."
+            TEST_SPEC "[perf-gpu]"
+            DISCOVERY_MODE PRE_TEST
+            PROPERTIES LABELS perf TIMEOUT 300 SKIP_RETURN_CODE 4
+                ENVIRONMENT "HBM_PERF_RESULTS_DIR=${PROJECT_BINARY_DIR}/perf-results")
+    endif()
 endif()

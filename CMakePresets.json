@@ -68,6 +68,20 @@
       }
     },
     {
+      "name": "linux-release-perf",
+      "displayName": "Linux, Release, performance tests",
+      "description": "linux-release with the performance tests (label perf) built. A separate build directory, so the ordinary test run never sees them. Run: ctest --preset linux-release-perf; summary: python3 tools/ci/perf_report.py (docs/testing.md).",
+      "inherits": "linux-release",
+      "cacheVariables": { "HEART_BOOM_MATHS_BUILD_PERF_TESTS": "ON" }
+    },
+    {
+      "name": "windows-msvc-release-perf",
+      "displayName": "Windows, MSVC, Release, performance tests",
+      "description": "windows-msvc-release with the performance tests (label perf) built. A separate build directory, so the ordinary test run never sees them. Run: pwsh tools/dev/test.ps1 -Perf (docs/testing.md).",
+      "inherits": "windows-msvc-release",
+      "cacheVariables": { "HEART_BOOM_MATHS_BUILD_PERF_TESTS": "ON" }
+    },
+    {
       "name": "windows-msvc-asan",
       "displayName": "Windows, MSVC, AddressSanitizer, /O1",
       "inherits": "windows-msvc-release",
@@ -186,11 +200,13 @@
   "buildPresets": [
     { "name": "linux-debug", "configurePreset": "linux-debug" },
     { "name": "linux-release", "configurePreset": "linux-release" },
+    { "name": "linux-release-perf", "configurePreset": "linux-release-perf" },
     { "name": "linux-asan-ubsan", "configurePreset": "linux-asan-ubsan" },
     { "name": "linux-tsan", "configurePreset": "linux-tsan" },
     { "name": "linux-coverage", "configurePreset": "linux-coverage" },
     { "name": "macos-release", "configurePreset": "macos-release" },
     { "name": "windows-msvc-release", "configurePreset": "windows-msvc-release", "configuration": "Release" },
+    { "name": "windows-msvc-release-perf", "configurePreset": "windows-msvc-release-perf", "configuration": "Release" },
     { "name": "windows-msvc-asan", "configurePreset": "windows-msvc-asan" },
     { "name": "ios-release", "configurePreset": "ios-release", "configuration": "Release" },
     { "name": "ios-game-release", "configurePreset": "ios-game-release", "configuration": "Release" },
@@ -202,6 +218,21 @@
   "testPresets": [
     { "name": "linux-debug", "configurePreset": "linux-debug", "output": { "outputOnFailure": true } },
     { "name": "linux-release", "configurePreset": "linux-release", "output": { "outputOnFailure": true } },
+    {
+      "name": "linux-release-perf",
+      "configurePreset": "linux-release-perf",
+      "output": { "outputOnFailure": true, "verbosity": "verbose" },
+      "filter": { "include": { "label": "perf" } },
+      "execution": { "jobs": 1, "noTestsAction": "error" }
+    },
+    {
+      "name": "windows-msvc-release-perf",
+      "configurePreset": "windows-msvc-release-perf",
+      "configuration": "Release",
+      "output": { "outputOnFailure": true, "verbosity": "verbose" },
+      "filter": { "include": { "label": "perf" } },
+      "execution": { "jobs": 1, "noTestsAction": "error" }
+    },
     { "name": "linux-asan-ubsan", "configurePreset": "linux-asan-ubsan", "output": { "outputOnFailure": true } },
     { "name": "linux-tsan", "configurePreset": "linux-tsan", "output": { "outputOnFailure": true } },
     { "name": "linux-coverage", "configurePreset": "linux-coverage", "output": { "outputOnFailure": true } }
