@@ -7,6 +7,8 @@
 #include <catch2/generators/catch_generators.hpp>
 
 #include <QByteArray>
+#include <QDate>
+#include <QLocale>
 #include <QQuickItem>
 #include <QTest>
 #include <algorithm>
@@ -515,7 +517,15 @@ TEST_CASE("About shows the version, the build, the font licences and four rows",
                                            .arg(info.value(QStringLiteral("buildNumber")).toInt()));
     CHECK(s.text_of("revisionValue") == info.value(QStringLiteral("commit")).toString());
     CHECK(s.text_of("branchValue") == info.value(QStringLiteral("branch")).toString());
-    CHECK(s.text_of("builtValue") == info.value(QStringLiteral("date")).toString());
+    // A CI build carries a real date, which About writes as "14 Nov 2026"; a local build says "dev" and keeps it.
+    const QString date = info.value(QStringLiteral("date")).toString();
+    const QDate parsed_date = QDate::fromString(date, Qt::ISODate);
+    CHECK(s.text_of("builtValue") == (parsed_date.isValid()
+                                          ? QStringLiteral("%1 %2 %3")
+                                                .arg(parsed_date.day())
+                                                .arg(QLocale::c().monthName(parsed_date.month(), QLocale::ShortFormat))
+                                                .arg(parsed_date.year())
+                                          : date));
     CHECK(s.visible("aboutHeart"));
     CHECK_FALSE(property_of(s.h.find("aboutHeart"), "showSeconds").toBool());
     CHECK(s.visible("fontLicences"));

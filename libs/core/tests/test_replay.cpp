@@ -111,7 +111,7 @@ TEST_CASE("The golden replays cover what they say they cover", "[replay][unit]")
         CHECK(count(p, EventKind::ANSWER_CORRECT) == 10);
         CHECK(count(p, EventKind::ANSWER_WRONG) == 0);
         REQUIRE(count(p, EventKind::LEVEL_CLEARED) == 1);
-        const Event cleared = hbm_test::events_of(p.events, EventKind::LEVEL_CLEARED).front();
+        const Event cleared = hbm_test::events_of(p.events, EventKind::LEVEL_CLEARED).at(0);
         CHECK(cleared.perfect);
         CHECK(cleared.perfect_bonus_points == t.perfect_level_bonus_points);
         CHECK(p.result.state == SessionState::LEVEL_CLEAR);
@@ -139,7 +139,7 @@ TEST_CASE("The golden replays cover what they say they cover", "[replay][unit]")
         const Played p = play(parsed(golden("win-12-levels")));
         CHECK(count(p, EventKind::LEVEL_CLEARED) == 12);
         REQUIRE(count(p, EventKind::GAME_WON) == 1);
-        CHECK(hbm_test::events_of(p.events, EventKind::GAME_WON).front().coins == t.win_bonus_coins);
+        CHECK(hbm_test::events_of(p.events, EventKind::GAME_WON).at(0).coins == t.win_bonus_coins);
         CHECK(p.result.level == t.campaign_levels);
         CHECK(p.result.state == SessionState::GAME_OVER);
     }
