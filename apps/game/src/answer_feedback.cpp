@@ -207,10 +207,15 @@ void AnswerFeedback::on_wrong(int tile, int correct_tile, int seconds_lost, int 
 
 void AnswerFeedback::on_game_over(GameController::EndReason reason)
 {
-    // Only the bomb gets its pop; QUIT and FINISH go straight to the game-over card.
+    // Only the bomb gets its pop; QUIT and FINISH go straight to the game-over card, so the look of an answer given
+    // just before the pause must not keep the play screen up.
     if (reason == GameController::EndReason::Bomb)
     {
         hold(Kind::Boom, m_BoomHoldMs);
+    }
+    else
+    {
+        clear();
     }
 }
 

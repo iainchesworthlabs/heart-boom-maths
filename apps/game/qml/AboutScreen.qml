@@ -6,7 +6,10 @@ import QtQuick.Layouts
 // About (board CP15): the version and build, the font licences, and four rows: Licence and Third-party notices open
 // a text that scrolls over this screen, and Privacy policy and Source code ask the controller to open a web address, which
 // puts the parental gate in front of it. Nothing here opens an address itself.
-Item {
+//
+// A focus scope: the shell gives the screen the keyboard, and the scope passes it on to the frame (or to the text viewer
+// while one is open), so the Android back key reaches the screen that is on top.
+FocusScope {
     id: root
 
     required property GameController game
@@ -17,6 +20,14 @@ Item {
     signal backClicked
 
     readonly property var info: game.buildInfo
+
+    onViewerChanged: {
+        if (root.viewer !== "") {
+            viewerScreen.flick.forceActiveFocus();
+        } else {
+            frame.forceActiveFocus();
+        }
+    }
 
     function openLicence() {
         root.viewer = "licence";
@@ -30,6 +41,7 @@ Item {
         id: frame
 
         anchors.fill: parent
+        focus: true
         title: qsTr("ABOUT")
         designHeight: 800
         columnSpacing: 14
@@ -273,6 +285,7 @@ Item {
         objectName: "textViewer"
         anchors.fill: parent
         visible: root.viewer !== ""
+        focus: false
         title: root.viewer === "licence" ? qsTr("LICENCE") : qsTr("NOTICES")
         text: root.viewer === "licence" ? root.licenceText : (root.game.noticesText !== "" ? root.game.noticesText : qsTr("The notices are missing from this build."))
         onBackClicked: root.viewer = ""

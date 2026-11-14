@@ -306,6 +306,13 @@ Deviations from the sketches above, all small:
 - SKIP also clears `newBest`, because a skipped score is not in the list.
 - HOME on the game-over card is a shell overlay, not a core state (see `ui-components.md`).
 
+### As built (journeys and lifecycle)
+
+- The screens, every way between them, what is saved at each step and what happens when the app is interrupted are in [User journeys](user-journeys.md), with the open decisions for the owner at its top.
+- `continueGame()` restores a saved run on a scratch session first and resumes it only when it is a running or paused level. Anything else the core would restore (a level-clear card, a win, a finished game) counts as a run that cannot be restored: it is spent and `continueFailed` is emitted.
+- `on_application_state(false)` also closes the parental gate. `AnswerFeedback` ends its hold on any game over that is not the bomb.
+- The back key is handled in `AppShell.qml` (a `Back` shortcut) for the screens that have no back button, and by `ScreenFrame` for the pages and the gate. About is a focus scope so the key reaches its frame or its text viewer.
+
 ## Tests
 
 Nearly all behaviour lives in `libs/core`, so nearly all tests run there, without Qt, a window or a clock.
