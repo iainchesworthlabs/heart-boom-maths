@@ -69,6 +69,8 @@ exe="$app/$executable"
 
 # The value of a key as JSON (a string, an array, true or false), or nothing when the key is absent.
 json() { plutil -extract "$1" json -o - "$plist" 2>/dev/null | tr -d '[:space:]' || true; }
+# A single true or false has no JSON form for plutil (it wants a dictionary or an array), so read those as raw text.
+raw() { plutil -extract "$1" raw -o - "$plist" 2>/dev/null | tr -d '[:space:]' || true; }
 
 [ "$(json UISupportedInterfaceOrientations)" = '["UIInterfaceOrientationPortrait"]' ] \
   || fail "iPhone orientations are $(json UISupportedInterfaceOrientations); the game is portrait only on a phone"
@@ -79,7 +81,7 @@ for orientation in Portrait PortraitUpsideDown LandscapeLeft LandscapeRight; do
     *) fail "iPad orientations are $ipad; UIInterfaceOrientation$orientation is missing" ;;
   esac
 done
-[ "$(json UIRequiresFullScreen)" = "true" ] || fail "UIRequiresFullScreen is '$(json UIRequiresFullScreen)'"
+[ "$(raw UIRequiresFullScreen)" = "true" ] || fail "UIRequiresFullScreen is '$(raw UIRequiresFullScreen)'"
 capabilities="$(json UIRequiredDeviceCapabilities)"
 case "$capabilities" in
   *'"arm64"'*'"gamekit"'* | *'"gamekit"'*'"arm64"'*) ;;
