@@ -8,8 +8,27 @@
   ],
   "features": {
     "profiling": {
-      "description": "Tracy profiler client",
-      "dependencies": [ "tracy" ]
+      "description": "The Tracy profiler client, built for manual lifetime and loopback-only listening by the overlay port in vcpkg-overlay-ports/tracy: it starts only when the game is asked to profile",
+      "dependencies": [
+        {
+          "name": "tracy",
+          "version>=": "0.14.1",
+          "default-features": false,
+          "features": [ "manual-lifetime", "on-demand", "only-localhost" ]
+        }
+      ]
+    },
+    "profiling-tools": {
+      "description": "Tracy's command-line tools (tracy-capture, tracy-csvexport), built for the host: a trace is recorded and dumped headlessly",
+      "dependencies": [
+        {
+          "name": "tracy",
+          "version>=": "0.14.1",
+          "host": true,
+          "default-features": false,
+          "features": [ "cli-tools" ]
+        }
+      ]
     }
   }
 }
