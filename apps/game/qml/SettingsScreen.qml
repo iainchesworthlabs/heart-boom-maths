@@ -54,6 +54,7 @@ ScreenFrame {
         unit: root.unit
         title: qsTr("Game Center")
         hint: qsTr("Needs a grown-up")
+        iconSize: 30
         switchObjectName: "gameCenterSwitch"
         checked: root.game.gameCenterEnabled
         onToggleRequested: root.game.requestGameCenter(!root.game.gameCenterEnabled)
