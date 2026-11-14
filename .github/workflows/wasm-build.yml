@@ -1,0 +1,276 @@
+name: WebAssembly build
+
+# The browser build of the game (docs/web.md), in three jobs:
+#
+#   1. rules   the rules (libs/core) and the text harness built with Emscripten and run under Node: the golden replays
+#              must check out, and a fixed set of games must print exactly what the native Linux build prints, so the
+#              same seed plays the same game on WebAssembly as on Linux (and on MSVC, which tier 2 of ci.yml compares).
+#   2. game    apps/game built with the `wasm-release` preset (Qt's single-threaded WebAssembly kit): the site is
+#              checked (tools/ci/check_web_site.py: a closed page, every file there), weighed raw and gzipped against
+#              a budget, and kept as an artifact.
+#   3. smoke   the site opened in the runner's Chrome (tools/ci/web_smoke.mjs): it starts, asks for nothing outside
+#              itself, saves, and a hidden tab leaves a paused run that survives a reload.
+#
+# Not a required check, and not on the merge queue: it runs only when something the browser build reads changes (a required
+# check that a path filter keeps from running never reports, which would hold every unrelated pull request), and it
+# downloads two Qt kits and an Emscripten SDK. Dispatch it by hand to run it anywhere:
+#   gh workflow run wasm-build.yml --ref <branch>
+#
+# There is no deploy job: where the site is hosted is an open decision (docs/web.md).
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "libs/**"
+      - "apps/**"
+      - "cmake/**"
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - ".github/toolchain-versions.json"
+      - "tools/ci/check_web_site.py"
+      - "tools/ci/harness_matrix.sh"
+      - "tools/ci/web_smoke.mjs"
+      - ".github/workflows/wasm-build.yml"
+  push:
+    branches: [main, develop]
+    paths:
+      - "libs/**"
+      - "apps/**"
+      - "cmake/**"
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - ".github/toolchain-versions.json"
+      - "tools/ci/check_web_site.py"
+      - "tools/ci/harness_matrix.sh"
+      - "tools/ci/web_smoke.mjs"
+      - ".github/workflows/wasm-build.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: wasm-build-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/develop' && github.ref != 'refs/heads/main' }}
+
+# No job gets more than it names below.
+permissions: {}
+
+env:
+  VCPKG_DISABLE_METRICS: "1"
+  # The most a first visit may download, gzipped, in bytes: 12 MiB. A PLACEHOLDER BUDGET, to be confirmed by the owner
+  # once the size of the finished game (sound, more screens) is known; the measured size is in each run's summary.
+  WASM_GZIP_BUDGET_BYTES: "12582912"
+  # Qt 6.12.0's WebAssembly kit is built with one Emscripten release and refuses to configure with any other (it records
+  # QT_EMCC_VERSION in qconfig.h). That release is older than the `emscripten` pin of .github/toolchain-versions.json,
+  # which the `rules` job uses. Change the two together when Qt moves; the "Check the kit" step names the one Qt wants.
+  QT_EMSCRIPTEN_VERSION: "5.0.5"
+  # The commit of the emsdk manager repository at the tag above (git ls-remote --tags https://github.com/emscripten-core/emsdk.git).
+  QT_EMSDK_COMMIT: "c9ef2c9d6000341d667a32a807ba47ca489d1e1b"
+
+jobs:
+  wasm-rules:
+    name: WebAssembly rules (replays under Node)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install GCC
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-gcc@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+
+      - name: Set up CMake
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-cmake@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+
+      # The Emscripten release of .github/toolchain-versions.json (the action's default is the same pin).
+      - name: Install Emscripten
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-emscripten@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+
+      - name: Show the toolchain
+        shell: bash
+        run: |
+          set -x
+          cmake --version | head -n 1
+          ninja --version
+          g++ --version | head -n 1
+          emcc --version | head -n 1
+          # The Node that comes with the SDK is the one Emscripten's own tests use.
+          node_bin="$(ls -d "$EMSDK"/node/*/bin/node | head -n 1)"
+          "$node_bin" --version
+          echo "NODE_BIN=$node_bin" >> "$GITHUB_ENV"
+          pinned="$(python3 -c "import json; print(json.load(open('.github/toolchain-versions.json'))['emscripten'])")"
+          case "$(emcc --version | head -n 1)" in
+            *" $pinned "*) ;;
+            *) echo "::error::emcc is not the pinned Emscripten $pinned"; exit 1 ;;
+          esac
+
+      - name: Build the harness for WebAssembly
+        run: |
+          cmake --preset wasm-core
+          cmake --build --preset wasm-core
+          ls -l build/wasm-core/libs/core/
+
+      - name: Build the harness natively
+        run: |
+          cmake -S . -B build/harness-linux -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DHEART_BOOM_MATHS_BUILD_TESTS=OFF -DHEART_BOOM_MATHS_BUILD_GAME=OFF -DHEART_BOOM_MATHS_BUILD_HARNESS=ON
+          cmake --build build/harness-linux
+          ls -l build/harness-linux/libs/core/
+
+      - name: Check the golden replays under Node
+        run: '"$NODE_BIN" build/wasm-core/libs/core/heart_boom_maths_harness.js --check libs/core/tests/data/replays'
+
+      # The same fixed set of games on both builds. Any difference is a rule that behaves differently on WebAssembly.
+      - name: Compare the games with the native build
+        shell: bash
+        run: |
+          set -uo pipefail
+          tools/ci/harness_matrix.sh libs/core/tests/data/replays build/harness-linux/libs/core/heart_boom_maths_harness > native.txt
+          tools/ci/harness_matrix.sh libs/core/tests/data/replays "$NODE_BIN" build/wasm-core/libs/core/heart_boom_maths_harness.js > wasm.txt
+          {
+            echo "### Games on WebAssembly (Node) and native Linux"
+            echo
+            echo '```'
+            grep -E '^(==|FINAL)' wasm.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if ! diff -u native.txt wasm.txt; then
+            echo "::error::WebAssembly and native Linux played different games (diff above)"
+            exit 1
+          fi
+          if grep -q '^exit [1-9]' wasm.txt; then
+            echo "::error::a harness run failed (see wasm.txt in the log above)"
+            cat wasm.txt
+            exit 1
+          fi
+          echo "WebAssembly and native Linux played the same games."
+
+  wasm-game:
+    name: WebAssembly game (build, size)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up CMake
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-cmake@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+
+      # The desktop kit of the same Qt version: Qt runs its own tools (moc, rcc, qmlcachegen, qsb) from it while it builds
+      # for the browser (QT_HOST_PATH).
+      - name: Set up Qt (desktop kit, the host tools)
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-qt@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+
+      # The WebAssembly kit is published for all hosts, under its own aqtinstall target.
+      - name: Set up Qt (WebAssembly kit, single-threaded)
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-qt@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+        with:
+          host: all_os
+          target: wasm
+          arch: wasm_singlethread
+
+      - name: Install Emscripten (the release Qt's kit was built with)
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-emscripten@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+        with:
+          emsdk-version: ${{ env.QT_EMSCRIPTEN_VERSION }}
+          emsdk-repo-commit: ${{ env.QT_EMSDK_COMMIT }}
+
+      - name: Check the kits
+        shell: bash
+        run: |
+          set -eux
+          qt_version="$(python3 -c "import json; print(json.load(open('.github/toolchain-versions.json'))['qt'])")"
+          qt_dir="$RUNNER_WORKSPACE/Qt/$qt_version"
+          ls "$qt_dir"
+          wasm_root="$qt_dir/wasm_singlethread"
+          host_root="$qt_dir/gcc_64"
+          test -f "$wasm_root/lib/cmake/Qt6/qt.toolchain.cmake"
+          test -d "$host_root/lib/cmake/Qt6"
+          echo "HEART_BOOM_MATHS_QT_WASM_ROOT=$wasm_root" >> "$GITHUB_ENV"
+          echo "ICL_QT_ROOT=$host_root" >> "$GITHUB_ENV"
+          # Qt's own record of the Emscripten release it was built with, against the one just installed.
+          wanted="$(sed -n 's/^#define QT_EMCC_VERSION "\(.*\)"/\1/p' "$wasm_root/include/QtCore/qconfig.h")"
+          have="$(emcc --version | head -n 1)"
+          cmake --version | head -n 1
+          echo "Qt wants Emscripten $wanted; installed: $have"
+          case "$have" in
+            *" $wanted "*) ;;
+            *) echo "::error::Qt $qt_version's WebAssembly kit needs Emscripten $wanted (QT_EMSCRIPTEN_VERSION, QT_EMSDK_COMMIT in this workflow)"; exit 1 ;;
+          esac
+
+      - name: Configure
+        run: cmake --preset wasm-release
+
+      - name: Build
+        run: cmake --build --preset wasm-release
+
+      - name: List the site
+        run: ls -l build/wasm-release/site
+
+      # Every file is there and the page reaches nothing but its own files; then the sizes, raw and gzipped, and the budget.
+      - name: Check the site and its size
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            echo "### Web build size"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+          python3 tools/ci/check_web_site.py --self-test
+          python3 tools/ci/check_web_site.py --site build/wasm-release/site \
+            --budget-gzip-bytes "$WASM_GZIP_BUDGET_BYTES" --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the site
+        if: ${{ !cancelled() && hashFiles('build/wasm-release/site/index.html') != '' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: heart-boom-maths-web
+          path: build/wasm-release/site
+          if-no-files-found: error
+          retention-days: 14
+
+  wasm-smoke:
+    name: WebAssembly game (browser smoke test)
+    needs: wasm-game
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download the site
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: heart-boom-maths-web
+          path: site
+
+      - name: Show the browser
+        shell: bash
+        run: |
+          set -x
+          node --version
+          command -v google-chrome || command -v chromium || { echo "::error::no Chrome on this runner image"; exit 1; }
+          (google-chrome --version || chromium --version)
+          ls -l site
+
+      - name: Open the site in Chrome
+        run: node tools/ci/web_smoke.mjs site --screenshot smoke.png
+
+      - name: Upload the screenshot
+        if: ${{ !cancelled() && hashFiles('smoke.png') != '' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: heart-boom-maths-web-smoke
+          path: smoke.png
+          retention-days: 14
