@@ -9,7 +9,7 @@ commit SHA. Dependabot proposes the SHA bump; the pull request also needs
 | Event | Jobs |
 |---|---|
 | Draft pull request | Policy, Plan, Project rules, workflow analysis, dependency scan |
-| Ready pull request | Above, plus Linux release and sanitizer builds and coverage |
+| Ready pull request | Above, plus Linux release, sanitizer and profile builds and coverage |
 | Merge queue, push to `develop` | Above, plus Linux debug and TSan, macOS, Windows release and ASan |
 | Change to what the iOS build reads (a path filter), or a manual run | iOS compile checks (`ios-build.yml` for the stub, `ios-game-build.yml` for the game; not required) |
 | Change to what the Android build reads (a path filter), or a manual run | Android compile check (`android-build.yml`, not required) |

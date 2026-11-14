@@ -38,12 +38,12 @@ Fonts (Bangers and Lilita One, SIL OFL 1.1) are bundled in `apps/game/fonts/` wi
 
 Dependencies point down: the app layer uses the platform and core layers, the platform layer uses core types, and the core layer uses nothing.
 
-1. `libs/core` includes the C++ standard library and nothing else. No Qt, file access, clock, threads or global state.
+1. `libs/core` includes the C++ standard library and nothing else, with one exception: Tracy, through `heart_boom_maths/profile.hpp`, which is empty unless profiling is built in (see [Profiling](profiling.md)). No Qt, file access, clock, threads or global state; the only state the profiling header holds is the flag that says whether the profiler was started, which no rule reads.
 2. The platform layer declares the service interfaces and implements them once per OS. It may use Qt and core types.
 3. The app layer may use both. It is the only place that holds a real-time clock, a `QObject` or a QML type.
 4. The tests in `libs/core/tests` link `libs/core` alone, so the whole rule set runs without Qt or a display.
 
-CMake enforces rule 1: the core target links no Qt target, and CI fails if a core file includes a Qt header. This keeps rules testable in milliseconds, makes replays repeat exactly, and lets the v2 ESP32-P4 handheld reuse `libs/core` unchanged.
+CMake enforces rule 1: the core target links no Qt target, and CI fails if a core file includes a Qt header, or a Tracy header from anywhere but `profile.hpp`. This keeps rules testable in milliseconds, makes replays repeat exactly, and lets the v2 ESP32-P4 handheld reuse `libs/core` unchanged.
 
 ## Game core
 

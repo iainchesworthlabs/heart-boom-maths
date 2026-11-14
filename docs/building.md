@@ -34,16 +34,18 @@ ctest --preset linux-debug
 
 | Preset | Purpose |
 |---|---|
-| `linux-debug` | Debug with Tracy available (feature `profiling`) |
-| `linux-release` | Optimised build |
+| `linux-debug` | Debug with Tracy built in (feature `profiling`), started only when asked |
+| `linux-release` | Optimised build, Tracy built in and dormant (feature `profiling`) |
 | `linux-asan-ubsan` | AddressSanitizer and UndefinedBehaviorSanitizer, at -O1 (every sanitizer preset is, from `cmake/icl/IclSanitizers.cmake`) |
 | `linux-tsan` | ThreadSanitizer |
 | `linux-asan-o1`, `linux-ubsan` | The nightly's AddressSanitizer alone and UndefinedBehaviorSanitizer alone, at -O1 with assertions on. See [Nightly checks](testing.md#nightly-checks) |
 | `linux-static-analysis`, `linux-gcc-analyzer` | Inputs of the nightly's clang-tidy, cppcheck and GCC `-fanalyzer`; nothing is run |
 | `linux-coverage` | Instrumented build for gcovr |
-| `macos-release`, `windows-msvc-release`, `windows-msvc-asan` | Platform builds |
+| `macos-release`, `windows-msvc-release` | Platform builds; Tracy built in and dormant (see [Profiling](profiling.md)) |
 | `linux-release-perf`, `windows-msvc-release-perf` | The release build with the performance tests built (`HEART_BOOM_MATHS_BUILD_PERF_TESTS=ON`), in a build directory of their own. See [Performance tests](testing.md#performance-tests) |
 | `macos-asan-ubsan`, `windows-msvc-analyze` | The nightly's Apple Clang sanitizers, and MSVC `/analyze` (build only) |
+| `windows-msvc-asan` | AddressSanitizer on Windows; no Tracy |
+| `windows-msvc-profile`, `linux-profile` | Optimised with symbols, Tracy on and started at launch, for taking a profile. The Windows one also builds `tracy-capture` and `tracy-csvexport`. See [Profiling](profiling.md) |
 | `ios-release` | The iPhone and iPad application (`apps/ios`), unsigned, on a Mac with Xcode; no tests and no Qt application |
 | `ios-game-release` | The whole game on an iPhone or iPad, linked statically against Qt for iOS, unsigned, on a Mac with Xcode. See iOS below and [iOS and Game Center](ios.md) |
 | `wasm-release` | The game in a browser (`apps/game`), single-threaded. See WebAssembly below |
@@ -105,8 +107,8 @@ node build/wasm-core/libs/core/heart_boom_maths_harness.js --check libs/core/tes
 
 The harness is built without the tests when `HEART_BOOM_MATHS_BUILD_HARNESS=ON` and `HEART_BOOM_MATHS_BUILD_TESTS=OFF`.
 
-Sanitizers, Tracy, coverage and fuzzing exclude each other. The configure step stops with a
-message when two are enabled.
+Sanitizers, coverage and fuzzing exclude Tracy, and so do the web, Android and iOS builds. The configure step stops with a
+message when two are enabled. Tracy and its switch are in [Profiling](profiling.md).
 
 ### iOS
 
