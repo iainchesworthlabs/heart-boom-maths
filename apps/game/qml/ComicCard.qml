@@ -2,7 +2,9 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 
-// A card with a thick ink outline and the hard offset shadow (no blur). Children go inside the outline.
+// A card with a thick ink outline and the hard offset shadow (no blur). Children go inside the outline: their parent is
+// the area the border leaves free, so a margin on a child is measured from the inside of the border, as CSS padding is on
+// the boards.
 Item {
     id: root
 
@@ -14,8 +16,10 @@ Item {
     property real shadowOffset: Theme.shadowLarge
     property bool dashed: false
 
-    default property alias content: body.data
+    default property alias content: inner.data
     readonly property alias body: body
+    // The free area inside the border.
+    readonly property alias inner: inner
 
     Rectangle {
         visible: root.shadowOffset > 0
@@ -35,6 +39,13 @@ Item {
         color: root.fillColor
         border.width: root.dashed ? 0 : root.borderWidth
         border.color: root.borderColor
+    }
+
+    Item {
+        id: inner
+
+        anchors.fill: parent
+        anchors.margins: root.borderWidth
     }
 
     DashedBox {

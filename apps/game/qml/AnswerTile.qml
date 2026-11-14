@@ -132,8 +132,8 @@ Item {
         Shape {
             objectName: "tileBadge"
             visible: root.look === "wrong" || root.look === "right"
-            x: parent.width - root.badgeSize - 6 - root.borderWidth
-            y: 4
+            x: parent.width - root.badgeSize - 6
+            y: 4 - root.borderWidth
             width: 30
             height: 30
             scale: root.badgeSize / 30
