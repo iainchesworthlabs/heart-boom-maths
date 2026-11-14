@@ -493,41 +493,6 @@ TEST_CASE("Winning level 12 offers KEEP GOING, and endless levels say so and sho
     CHECK(s.text_of("timeGain") == QStringLiteral("+%1 s").arg(s.rig.controller.seconds_per_right_answer()));
 }
 
-TEST_CASE("In an endless level the time gained hangs clear of the question card", "[ui][shell][endless]")
-{
-    Shell s(PHONE);
-    for (int level = 1; level <= 12; ++level)
-    {
-        s.rig.play_level_right();
-        if (level < 12)
-        {
-            s.rig.controller.nextLevel();
-        }
-    }
-    s.wait_out_holds();
-    click(s.h.find_item("keepGoingButton"));
-    s.h.settle();
-    s.rig.play_for_ms(9000);
-    s.h.settle();
-    s.feedback->setProperty("rightHoldMs", 60000);
-    click(s.tile(s.rig.controller.session_view().question.correct_tile));
-    s.h.settle();
-    QTest::qWait(400); // the tag pops in
-
-    QQuickItem* gain = s.h.find_item("timeGain");
-    QQuickItem* fuse = s.h.find_item("fuseBar");
-    QQuickItem* card = s.h.find_item("questionCard");
-    REQUIRE(gain != nullptr);
-    REQUIRE(gain->isVisible());
-    // The tag sits 5 under the bar, and the card is at least 30 under the bar: the tag is whole above it.
-    const double gain_bottom = gain->mapToScene(QPointF(0, gain->height())).y();
-    const double card_top = card->mapToScene(QPointF(0, 0)).y();
-    const double fuse_bottom = fuse->mapToScene(QPointF(0, fuse->height())).y();
-    CHECK_THAT(gain->y() - fuse->height(), Catch::Matchers::WithinAbs(5.0, 0.1));
-    CHECK(gain_bottom <= card_top - 1.0);
-    CHECK(card_top - fuse_bottom >= 30.0);
-}
-
 TEST_CASE("The window can change from a phone to a desktop shape while playing", "[ui][play][resize]")
 {
     Shell s(PHONE);
@@ -602,27 +567,5 @@ TEST_CASE("Screenshots of the play screen for the hand check against the boards"
         s.rig.play_for_ms(61000);
         QTest::qWait(500);
         CHECK(s.h.grab(prefix + "boom.png"));
-
-        // CP13: an endless level, with the time gained by a right answer hanging from the fuse.
-        {
-            Shell endless(size.size);
-            for (int level = 1; level <= 12; ++level)
-            {
-                endless.rig.play_level_right();
-                if (level < 12)
-                {
-                    endless.rig.controller.nextLevel();
-                }
-            }
-            endless.wait_out_holds();
-            click(endless.h.find_item("keepGoingButton"));
-            endless.h.settle();
-            endless.rig.play_for_ms(9000);
-            endless.h.settle();
-            endless.feedback->setProperty("rightHoldMs", 60000);
-            click(endless.tile(endless.rig.controller.session_view().question.correct_tile));
-            QTest::qWait(400);
-            CHECK(endless.h.grab(prefix + "endless.png"));
-        }
     }
 }

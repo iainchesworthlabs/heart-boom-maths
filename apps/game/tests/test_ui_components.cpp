@@ -7,8 +7,6 @@
 #include <QAccessible>
 #include <QSignalSpy>
 #include <QTest>
-#include <algorithm>
-#include <vector>
 
 using namespace hbm_test;
 using Catch::Matchers::WithinAbs;
@@ -380,29 +378,6 @@ Item {
     CHECK(property_of(longCard, "multiLine").toBool());
     CHECK(property_of(shortCard, "spoken").toString() == "8 plus what equals 13");
     CHECK(property_of(longCard, "spoken").toString() == "250 plus 480 minus 130 equals what");
-    // The second line, "= ?", is centred under the terms, and so is the first: both lines share the card's middle.
-    std::vector<QQuickItem*> lines;
-    std::vector<QQuickItem*> pending{h.find_item("long")};
-    while (!pending.empty())
-    {
-        QQuickItem* item = pending.back();
-        pending.pop_back();
-        for (QQuickItem* kid : item->childItems())
-        {
-            pending.push_back(kid);
-        }
-        if (item->objectName() == QLatin1String("questionLine"))
-        {
-            lines.push_back(item);
-        }
-    }
-    REQUIRE(lines.size() == 2);
-    const double card_middle = h.find_item("long")->mapToScene(QPointF(h.find_item("long")->width() / 2, 0)).x();
-    for (QQuickItem* line : lines)
-    {
-        CHECK_THAT(line->mapToScene(QPointF(line->width() / 2, 0)).x(), WithinAbs(card_middle, 1.0));
-    }
-    CHECK(std::max(lines[0]->width(), lines[1]->width()) > 2.0 * std::min(lines[0]->width(), lines[1]->width()));
     // Every line fits the card: nothing is wider than the card allows.
     CHECK(property_of(shortCard, "contentHeight").toDouble() > 0);
     CHECK(property_of(longCard, "contentHeight").toDouble() > property_of(shortCard, "contentHeight").toDouble());

@@ -56,11 +56,7 @@ ComicCard {
             delegate: Item {
                 id: rowBox
 
-                objectName: "questionLine"
                 required property var modelData
-
-                // The second line ("= ?") sits under the middle of the terms, not at the left edge.
-                anchors.horizontalCenter: parent.horizontalCenter
 
                 // Wider than the card allows: shrink the whole line.
                 readonly property real available: root.width - 2 * (root.contentPadding + root.borderWidth)
