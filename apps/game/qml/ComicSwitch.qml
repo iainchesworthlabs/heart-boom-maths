@@ -91,6 +91,11 @@ Item {
 
         enabled: root.enabled
         gesturePolicy: TapHandler.ReleaseWithinBounds
-        onTapped: root.clicked()
+        onTapped: {
+            root.clicked();
+            // After the click, so the Haptics switch that has just turned itself on is felt, and one that has just turned
+            // itself off is not.
+            Haptics.tap();
+        }
     }
 }

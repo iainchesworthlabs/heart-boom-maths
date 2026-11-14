@@ -41,6 +41,7 @@ struct SaveData
     bool sound = true;
     bool music = true;
     bool game_center = false;
+    bool haptics = true;
     std::vector<ScoreEntry> top10; // best first; of equal scores the older entry comes first
     std::optional<std::vector<std::int64_t>> run;
 

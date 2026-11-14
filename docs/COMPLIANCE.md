@@ -16,6 +16,7 @@ Heart Boom Maths targets the lowest age rating in each store: 4+ on the App Stor
 | No notifications | Never request notification permission |
 | No links out except behind a parental gate | One call opens a URL (`LinkOpener::open`), reached only through the gate. CI fails if another appears |
 | Typed names stay on the device | Names are in the save file only |
+| No permissions beyond what a store lists for a game with no data | Haptics use `performHapticFeedback` on Android, which needs none (never `Vibrator.vibrate()` and its VIBRATE permission), the UIKit feedback generators on iOS and `navigator.vibrate` in a browser. They collect and send nothing. See [Haptics](haptics.md) |
 
 Entering the App Store Kids Category is a separate decision. It adds the parental gate and no-third-party-analytics rules, which this list already follows.
 

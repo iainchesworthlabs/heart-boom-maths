@@ -147,10 +147,11 @@ One small JSON document per device. `libs/core` owns the schema. Platforms store
 | `won_once` | Whether the 1,000-coin win bonus was paid | Level 12 cleared |
 | `sound`, `music` | The two Settings switches | When changed |
 | `game_center` | The Game Center switch (Apple only, default off) | When changed |
+| `haptics` | The Haptics switch (default on, optional on reading: an older save reads as on) | When changed |
 | `top10` | Up to 10 entries of name and score | After name entry |
 | `run` | Saved run snapshot | On pause. Removed as soon as CONTINUE loads it, and when a game ends |
 
-The plan's field table does not list `game_center`. The PRD and decision 6 require the switch to persist, so add it and note it in the schema.
+The plan's field table does not list `game_center`. The PRD and decision 6 require the switch to persist, so add it and note it in the schema. `haptics` is added the same way: an optional boolean that reads as its default when absent, a wrong type damages the save, the writer always writes it, and the version stays 1.
 
 Best score is the top entry of `top10`, so it is not stored twice.
 
@@ -192,7 +193,7 @@ QML screens driven by one view-model each. The QML is the same on every platform
 | Name entry | CP11 | Rank, score, name field, SAVE and SKIP |
 | Top 10 | CP12 | Rank, name and score per entry |
 | Game over | CP7 | Score, level reached, coins, best score |
-| Settings | CP14 | Sound and music switches, and a Game Center switch on Apple devices |
+| Settings | CP14 | Sound and music switches, a Haptics switch where the device can, and a Game Center switch on Apple devices |
 | About | CP15 | Build information, font licences, notices |
 | Pause | CP16 | RESUME and QUIT |
 | Parental gate | CP17 | A number in words for a grown-up to type back, before a link opens or Game Center turns on |
@@ -212,6 +213,7 @@ The platform layer holds everything that touches the operating system. Each serv
 | `SaveStore` | `FileSaveStore`, `WebSaveStore`, `MemorySaveStore` | See Persistence |
 | `ScoreService` | `GameCenterScoreService` on iOS and iPadOS, `NullScoreService` elsewhere | Submits a finished score. The local top 10 does not depend on it |
 | `AudioService` | `BackedAudioService` over Qt Multimedia, or over AVFoundation on iOS (`ClipAudioBackend`); `NullAudioService` for tests | Effects and music, with the two Settings switches |
+| `HapticsService` | `BackedHapticsService` over a `HapticBackend` per platform (UIKit generators on iOS, `performHapticFeedback` on Android, `navigator.vibrate` in a browser); `NullHapticsService` on the desktop and for tests | Touch feedback for answers and presses, with its own Settings switch. See [Haptics](haptics.md) |
 | `LinkOpener` | System browser | Reached only through the parental gate |
 | `BuildInfo` | Generated at configure time | Version, build number, commit and Qt version |
 | Notices | Generated at build time | Third-party licence texts for the About screen |
@@ -252,7 +254,7 @@ The local top 10 is part of the save data and the core ranks it, so it works wit
 
 ### Lifecycle and screen time
 
-The app observes `QGuiApplication::applicationStateChanged`. When the state leaves Active, `GameController` calls `pause()`, stops the tick driver, suspends audio and writes the save. When the app is active again, a paused run opens the pause screen with RESUME and QUIT, and the tick driver stays stopped until RESUME.
+The app observes `QGuiApplication::applicationStateChanged`. When the state leaves Active, `GameController` calls `pause()`, stops the tick driver, suspends audio and haptics and writes the save. When the app is active again, a paused run opens the pause screen with RESUME and QUIT, and the tick driver stays stopped until RESUME.
 
 The game has no code for screen-time settings. A Screen Time limit, Downtime, a Family Link lock or a Digital Wellbeing timer takes the app out of the foreground, and that is the only signal needed. Device tests confirm each produces a state change in Qt.
 
@@ -263,6 +265,10 @@ Desktop windows pause when they lose focus. In the browser the same path runs fr
 One table in the app layer maps core events to sounds, using the feedback table in `SPEC.md`. The core knows nothing about audio. Browsers block audio until the first tap, so on the web the first tap on Title starts the sound. Whether Qt Multimedia is enough on WebAssembly, and the audio format, are settled by the M2 spike.
 
 The built service, its placeholder sounds and how to replace them are in [Audio](audio.md).
+
+### Haptics
+
+One table in the app layer maps core events to haptics (`event_haptics`), one haptic per command, and a light tick comes from button presses through `GameController::tap()`. The core knows nothing about touch feedback. The rules (switch off, paused, background, a minimum gap between beats, the three beats of the win) are plain C++ in `BackedHapticsService`, and each platform's `HapticBackend` only translates a beat. The Settings switch is shown only where the device can make haptics. No permission is needed on any platform. What fires when, the platform notes and the device checks are in [Haptics](haptics.md).
 
 ### Parental gate
 

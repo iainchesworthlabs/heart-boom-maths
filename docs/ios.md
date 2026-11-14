@@ -200,7 +200,7 @@ far as a submission.
 | The game compiles and links for a device against static Qt, and the bundle has the right keys, entitlement file, GameKit and none of the forbidden frameworks | A `macos-26` runner | `ios-game-build.yml` |
 | The sound rules: the clips loaded at start-up, volumes, looping, the session activated by the first sound, interruption and reset, a clip that fails to load | Every desktop, in CI | `game.*` tests in `tests/test_clip_audio.cpp`, over a fake host and fake players |
 | The sound files are in the executable, and AVFoundation is linked | A `macos-26` runner | `verify_game_app.sh` |
-| The Objective-C++ shims (GameKit, AVFoundation) | A `macos-26` runner (compile only) | `ios-game-build.yml`. Not run by any test |
+| The Objective-C++ shims (GameKit, AVFoundation, UIKit and CoreHaptics for [haptics](haptics.md)) | A `macos-26` runner (compile only) | `ios-game-build.yml`. Not run by any test |
 | The signed IPA: the signature, an App Store profile for the identifier, the Game Center entitlement in the state the profile allowed, Apple's own validation | A `macos-26` runner, with the signing secrets | The `ios` job of `release.yml`. Only the runner can show it: nothing of Xcode runs on a Windows or Linux machine |
 | The game makes sound on a device, goes quiet with the silent switch, and recovers after a phone call, Siri and a Screen Time lock | **Not done**: needs a device | Owner |
 | The game starts on a device, plays, and pauses and saves when it leaves the foreground | **Not done**: needs a device | Owner |

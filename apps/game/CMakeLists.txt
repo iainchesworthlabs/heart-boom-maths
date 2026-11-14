@@ -96,6 +96,16 @@ target_sources(heart_boom_maths_app PRIVATE
     src/services/qsettings_backend.cpp
     src/services/web_save_store.cpp)
 
+# Touch feedback. The rules of when a haptic is felt are plain C++ over a small backend and a timer; what each platform is
+# asked for is a table (haptic_maps.cpp), and src/platform/<os>/haptics_platform.* only hands a beat to the system (UIKit on
+# iOS, performHapticFeedback on Android, navigator.vibrate in a browser, nothing on the desktop).
+target_sources(heart_boom_maths_app PRIVATE
+    src/event_haptics.cpp
+    src/services/backed_haptics_service.cpp
+    src/services/haptic_maps.cpp
+    src/services/haptic_patterns.cpp
+    src/services/qt_haptic_timer.cpp)
+
 # The files are made by tools/assets/make_placeholder_sounds.py and are replaced by a sound designer's work.
 set(HEART_BOOM_MATHS_AUDIO_FILES
     audio/coin_chime.wav
@@ -150,6 +160,8 @@ set(HEART_BOOM_MATHS_QML_FILES
     qml/FuseBar.qml
     qml/GameOverScreen.qml
     qml/GearIcon.qml
+    qml/Haptics.qml
+    qml/HapticsIcon.qml
     qml/HalftoneBackground.qml
     qml/HeartBomb.qml
     qml/LevelClearScreen.qml
@@ -191,8 +203,8 @@ foreach(qml_file IN LISTS HEART_BOOM_MATHS_QML_FILES)
     get_filename_component(qml_name "${qml_file}" NAME)
     set_source_files_properties("${qml_file}" PROPERTIES QT_RESOURCE_ALIAS "${qml_name}")
 endforeach()
-# Theme is a singleton: one set of tokens for every screen.
-set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+# Theme is a singleton: one set of tokens for every screen. Haptics is one too: the controls' way to the controller's tick.
+set_source_files_properties(qml/Theme.qml qml/Haptics.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
 # The URI differs from the program name: on a case-insensitive file system "HeartBoomMaths" and "heart-boom-maths" must
 # not name one directory in the build tree.
@@ -307,6 +319,9 @@ if(HEART_BOOM_MATHS_BUILD_TESTS)
     # key), the same store over QSettings on the desktop, the factory that picks the store, and the hidden-tab path.
     target_sources(heart_boom_maths_game_tests PRIVATE tests/test_web_save_store.cpp)
 
+    # The haptic rules over a fake backend, timer and clock, the event table and the platform tables.
+    target_sources(heart_boom_maths_game_tests PRIVATE tests/test_haptics.cpp)
+
     # The sound rules over a recording backend, the factory, the first-gesture filter and the placeholder sound files.
     target_sources(heart_boom_maths_game_tests PRIVATE tests/test_audio.cpp tests/test_clip_audio.cpp)
     find_package(Python3 QUIET COMPONENTS Interpreter)
@@ -355,6 +370,7 @@ if(HEART_BOOM_MATHS_BUILD_TESTS)
         tests/ui_support.cpp
         tests/test_answer_feedback.cpp
         tests/test_ui_components.cpp
+        tests/test_ui_haptics.cpp
         tests/test_ui_journeys.cpp
         tests/test_ui_play.cpp
         tests/test_ui_scores.cpp

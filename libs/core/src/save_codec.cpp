@@ -130,6 +130,8 @@ std::expected<SaveData, SaveError> read_fields(const Value& root, const Tuning& 
     const auto music = read_bool(root, "music", std::nullopt);
     // game_center is the one switch with a stated default, so a file that predates it still loads.
     const auto game_center = read_bool(root, "game_center", false);
+    // haptics is the other: a save from before it existed keeps the touch feedback on, as a new player has it.
+    const auto haptics = read_bool(root, "haptics", true);
     if (!coins)
     {
         return std::unexpected(coins.error());
@@ -150,11 +152,16 @@ std::expected<SaveData, SaveError> read_fields(const Value& root, const Tuning& 
     {
         return std::unexpected(game_center.error());
     }
+    if (!haptics)
+    {
+        return std::unexpected(haptics.error());
+    }
     data.coins = *coins;
     data.won_once = *won_once;
     data.sound = *sound;
     data.music = *music;
     data.game_center = *game_center;
+    data.haptics = *haptics;
 
     auto top10 = read_top10(root, tuning);
     if (!top10)
@@ -197,6 +204,7 @@ std::expected<std::string, SaveError> serialise(const SaveData& data, const Tuni
     root.set("sound", Value::boolean(data.sound));
     root.set("music", Value::boolean(data.music));
     root.set("game_center", Value::boolean(data.game_center));
+    root.set("haptics", Value::boolean(data.haptics));
 
     Value::Array entries;
     entries.reserve(data.top10.size());

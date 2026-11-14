@@ -36,6 +36,7 @@ GameServices make_services(UiRig& rig)
     services.store = &rig.store;
     services.audio = &rig.audio;
     services.scores = &rig.scores;
+    services.haptics = &rig.haptics;
     services.links = &rig.links;
     services.clock = &rig.clock;
     return services;
@@ -51,7 +52,13 @@ GateChallenge UiRig::gate_challenge(int nth)
 }
 
 UiRig::UiRig(std::uint64_t seed, bool scores_available, std::string saved_text)
-    : scores(scores_available), store(saved_text.empty() ? MemorySaveStore() : MemorySaveStore(std::move(saved_text))),
+    : UiRig(seed, scores_available, std::move(saved_text), false)
+{
+}
+
+UiRig::UiRig(std::uint64_t seed, bool scores_available, std::string saved_text, bool haptics_available)
+    : scores(scores_available), haptics(haptics_available),
+      store(saved_text.empty() ? MemorySaveStore() : MemorySaveStore(std::move(saved_text))),
       controller(make_services(*this),
                  [this, seed]
                  {

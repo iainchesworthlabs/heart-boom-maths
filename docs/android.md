@@ -61,6 +61,9 @@ The merged manifest has one `uses-permission` line all the same, which AndroidX 
 receivers registered at run time. It asks nothing of a person and no other application can hold it. The check allows that
 one name and fails on any other.
 
+The touch feedback (haptics) needs none either: the game calls `View.performHapticFeedback`, never `Vibrator.vibrate()`, which is
+the call that asks for `android.permission.VIBRATE` ([Haptics](haptics.md)).
+
 A permission is added only with the code that needs it and a decision in `DECISIONS.md`; the check then changes with it.
 
 ## Manifest decisions

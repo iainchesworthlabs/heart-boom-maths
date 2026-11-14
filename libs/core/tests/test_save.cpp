@@ -30,6 +30,7 @@ SaveData sample_data()
     data.sound = false;
     data.music = true;
     data.game_center = true;
+    data.haptics = false;
     data.top10 = {{"ADA", 900}, {"BEN", 500}, {"CY", 500}, {"DI", 1}};
     data.run = std::vector<std::int64_t>{1, 2, 3, -4};
     return data;
@@ -78,6 +79,7 @@ TEST_CASE("save defaults are the SPEC defaults", "[unit][save]")
     REQUIRE(data.sound);
     REQUIRE(data.music);
     REQUIRE_FALSE(data.game_center);
+    REQUIRE(data.haptics);
     REQUIRE(data.top10.empty());
     REQUIRE_FALSE(data.run.has_value());
     REQUIRE(validate(data).has_value());
@@ -100,8 +102,9 @@ TEST_CASE("the default save and a save without a run round-trip", "[unit][save]"
 {
     const auto text = serialise(SaveData{});
     REQUIRE(text.has_value());
-    REQUIRE(*text ==
-            R"({"coins":0,"game_center":false,"music":true,"sound":true,"top10":[],"version":1,"won_once":false})");
+    REQUIRE(
+        *text ==
+        R"({"coins":0,"game_center":false,"haptics":true,"music":true,"sound":true,"top10":[],"version":1,"won_once":false})");
     REQUIRE(parse(*text).data == SaveData{});
 }
 
@@ -109,7 +112,7 @@ TEST_CASE("the serialised form is stable", "[unit][save]")
 {
     const auto text = serialise(sample_data());
     REQUIRE(text.has_value());
-    REQUIRE(*text == R"({"coins":250,"game_center":true,"music":true,"run":[1,2,3,-4],"sound":false,)"
+    REQUIRE(*text == R"({"coins":250,"game_center":true,"haptics":false,"music":true,"run":[1,2,3,-4],"sound":false,)"
                      R"("top10":[{"name":"ADA","score":900},{"name":"BEN","score":500},{"name":"CY","score":500},)"
                      R"({"name":"DI","score":1}],"version":1,"won_once":true})");
 }
@@ -136,6 +139,8 @@ TEST_CASE("the version 1 fixture file loads", "[unit][save]")
     REQUIRE(result.data.sound);
     REQUIRE_FALSE(result.data.music);
     REQUIRE_FALSE(result.data.game_center);
+    // The fixture predates the haptics switch, so it reads as the default.
+    REQUIRE(result.data.haptics);
     REQUIRE(result.data.top10.size() == 4);
     REQUIRE(result.data.top10[0] == ScoreEntry{"ADA", 48210});
     REQUIRE(result.data.top10[1] == ScoreEntry{"BEN", 31000});
@@ -153,6 +158,30 @@ TEST_CASE("game_center is optional on reading and defaults to off", "[unit][save
     const ParseResult result = parse(document_without("game_center"));
     REQUIRE(result.status == LoadStatus::OK);
     REQUIRE_FALSE(result.data.game_center);
+}
+
+TEST_CASE("haptics is optional on reading and defaults to on", "[unit][save]")
+{
+    const ParseResult result = parse(document_without("haptics"));
+    REQUIRE(result.status == LoadStatus::OK);
+    REQUIRE(result.data.haptics);
+}
+
+TEST_CASE("haptics reads back off and on, and the writer always writes it", "[unit][save]")
+{
+    const ParseResult off = parse(document_with("haptics", "false"));
+    REQUIRE(off.status == LoadStatus::OK);
+    REQUIRE_FALSE(off.data.haptics);
+    const ParseResult on = parse(document_with("haptics", "true"));
+    REQUIRE(on.status == LoadStatus::OK);
+    REQUIRE(on.data.haptics);
+
+    SaveData data;
+    data.haptics = false;
+    const auto text = serialise(data);
+    REQUIRE(text.has_value());
+    REQUIRE(text->find(R"("haptics":false)") != std::string::npos);
+    REQUIRE_FALSE(parse(*text).data.haptics);
 }
 
 TEST_CASE("unknown members are ignored", "[unit][save]")
@@ -206,6 +235,8 @@ TEST_CASE("a field of the wrong type is damaged", "[unit][save]")
     require_damaged(document_with("sound", "\"on\""), SaveError::WRONG_TYPE);
     require_damaged(document_with("music", "0"), SaveError::WRONG_TYPE);
     require_damaged(document_with("game_center", "1"), SaveError::WRONG_TYPE);
+    require_damaged(document_with("haptics", "1"), SaveError::WRONG_TYPE);
+    require_damaged(document_with("haptics", "\"on\""), SaveError::WRONG_TYPE);
     require_damaged(document_with("top10", "{}"), SaveError::WRONG_TYPE);
     require_damaged(document_with("top10", "[5]"), SaveError::WRONG_TYPE);
     require_damaged(document_with("top10", R"([{"name":5,"score":5}])"), SaveError::WRONG_TYPE);

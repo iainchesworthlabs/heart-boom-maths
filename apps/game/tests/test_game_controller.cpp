@@ -38,6 +38,7 @@ struct Rig
         services.store = &memory;
         services.audio = &audio;
         services.scores = &scores;
+        services.haptics = &haptics;
         services.links = &links;
         services.clock = &clock;
         return services;
@@ -91,6 +92,7 @@ struct Rig
     ManualClock clock;
     RecordingAudio audio;
     RecordingScores scores;
+    RecordingHaptics haptics;
     RecordingLinks links;
     int gate_seeds_used = 0;
     GameController controller;
@@ -925,7 +927,9 @@ TEST_CASE("The controller registers its types and properties with Qt", "[integra
                              "privacyPolicyUrl",
                              "repositoryUrl",
                              "firstLevelQuestions",
-                             "firstLevelSeconds"})
+                             "firstLevelSeconds",
+                             "hapticsEnabled",
+                             "hapticsAvailable"})
     {
         INFO(name);
         CHECK(meta.indexOfProperty(name) >= 0);
@@ -933,7 +937,7 @@ TEST_CASE("The controller registers its types and properties with Qt", "[integra
     for (const char* name :
          {"startGame()", "continueGame()", "answer(int)", "useHint()", "pause()", "resume()", "quit()", "nextLevel()",
           "keepGoing()", "finish()", "requestLink(QString)", "submitGate(QString)", "saveName(QString)", "skipName()",
-          "gateMatches(QString)", "cancelGate()"})
+          "gateMatches(QString)", "cancelGate()", "setHapticsEnabled(bool)", "tap()"})
     {
         INFO(name);
         CHECK(meta.indexOfMethod(name) >= 0);
@@ -1202,8 +1206,7 @@ TEST_CASE("SAVE needs a letter and SKIP takes the best-score mark away", "[integ
     CHECK(c.best_score() == 0);
 }
 
-// ---- Journeys and lifecycle: what the controller does when the app is interrupted or the save is odd
-// ------------------
+// Journeys and lifecycle: what the controller does when the app is interrupted or the save is odd
 
 namespace
 {
@@ -1407,4 +1410,390 @@ TEST_CASE("A guard of zero lets a tap through at once", "[integration][controlle
     rig.controller.startGame();
     rig.answer_right();
     CHECK(rig.controller.session_view().questions_answered == 1);
+}
+
+// ---- Haptics ------------------------------------------------------------------------------------------------------
+
+namespace
+{
+
+using Haptics = std::vector<HapticId>;
+
+/// A controller over the real haptic rules and a recording device, to see what a phone would be asked to do. The clock
+/// is the rules' too, so time moves the timer of the win and of the gap between two haptics.
+struct HapticGame
+{
+    explicit HapticGame(MemorySaveStore& memory) : controller(make_services(memory), make_options()) {}
+
+    GameServices make_services(MemorySaveStore& memory)
+    {
+        GameServices services;
+        services.store = &memory;
+        services.audio = &audio;
+        services.scores = &scores;
+        services.haptics = &device.service;
+        services.links = &links;
+        services.clock = &device.clock;
+        return services;
+    }
+
+    static GameOptions make_options()
+    {
+        GameOptions options;
+        options.session_seed = 20261114;
+        options.tile_guard_ns = 0;
+        return options;
+    }
+
+    void answer_right()
+    {
+        controller.answer(controller.session_view().question.correct_tile);
+        device.advance_ms(300); // the next tap is a new moment
+    }
+
+    /// Plays levels 1 to 12 right to the win. With `settle_last` false the clock stands still after the last answer, so
+    /// the later beats of the win are still to come.
+    void play_to_win(bool settle_last)
+    {
+        controller.startGame();
+        for (int level = 1; level <= 12; ++level)
+        {
+            for (int i = 0; i < 10; ++i)
+            {
+                controller.answer(controller.session_view().question.correct_tile);
+                if (settle_last || level < 12 || i < 9)
+                {
+                    device.advance_ms(300);
+                }
+            }
+            if (level < 12)
+            {
+                controller.nextLevel();
+            }
+        }
+    }
+
+    HapticRig device;
+    RecordingAudio audio;
+    RecordingScores scores;
+    RecordingLinks links;
+    GameController controller;
+};
+
+} // namespace
+
+TEST_CASE("Haptics are on by default, reach the service and are available where the device can",
+          "[integration][haptics]")
+{
+    MemorySaveStore memory;
+    Rig rig(memory);
+    CHECK(rig.controller.haptics_enabled());
+    CHECK(rig.controller.haptics_available());
+    CHECK(rig.haptics.enabled);
+    CHECK_FALSE(memory.text().has_value());
+}
+
+TEST_CASE("Without a haptics service the controller is silent and says haptics are unavailable",
+          "[integration][haptics]")
+{
+    MemorySaveStore memory;
+    ManualClock clock;
+    RecordingAudio audio;
+    RecordingScores scores;
+    RecordingLinks links;
+    GameServices services;
+    services.store = &memory;
+    services.audio = &audio;
+    services.scores = &scores;
+    services.links = &links;
+    services.clock = &clock;
+    GameOptions options;
+    options.tile_guard_ns = 0;
+    GameController c(services, options);
+    CHECK_FALSE(c.haptics_available());
+    c.startGame();
+    c.tap();
+    c.answer(c.session_view().question.correct_tile);
+    c.pause();
+    c.resume();
+    c.on_application_state(false);
+    c.on_application_state(true);
+    c.setHapticsEnabled(false);
+    CHECK_FALSE(c.haptics_enabled());
+}
+
+TEST_CASE("A device that cannot make haptics reports them unavailable but keeps the preference",
+          "[integration][haptics]")
+{
+    MemorySaveStore memory;
+    ManualClock clock;
+    RecordingAudio audio;
+    RecordingScores scores;
+    RecordingLinks links;
+    RecordingHaptics haptics(false);
+    GameServices services;
+    services.store = &memory;
+    services.audio = &audio;
+    services.scores = &scores;
+    services.haptics = &haptics;
+    services.links = &links;
+    services.clock = &clock;
+    GameController c(services);
+    CHECK_FALSE(c.haptics_available());
+    CHECK(c.haptics_enabled());
+}
+
+TEST_CASE("A save from before haptics turns them on, and one that turned them off keeps them off",
+          "[integration][haptics]")
+{
+    MemorySaveStore older(R"({"version":1,"coins":5,"won_once":false,"sound":true,"music":true,"top10":[]})");
+    Rig first(older);
+    CHECK(first.controller.haptics_enabled());
+    CHECK(first.haptics.enabled);
+    CHECK(first.controller.wallet() == 5);
+
+    SaveData data;
+    data.haptics = false;
+    MemorySaveStore off(*serialise(data));
+    Rig second(off);
+    CHECK_FALSE(second.controller.haptics_enabled());
+    CHECK_FALSE(second.haptics.enabled);
+}
+
+TEST_CASE("The haptics switch saves at once and survives a restart", "[integration][haptics]")
+{
+    MemorySaveStore memory;
+    {
+        Rig rig(memory);
+        QSignalSpy spy(&rig.controller, &GameController::settingsChanged);
+        rig.controller.setHapticsEnabled(false);
+        CHECK_FALSE(rig.controller.haptics_enabled());
+        CHECK_FALSE(rig.haptics.enabled);
+        CHECK_FALSE(saved(memory).haptics);
+        CHECK(spy.count() == 1);
+        rig.controller.setHapticsEnabled(false); // no change, no signal
+        CHECK(spy.count() == 1);
+        // The other switches are untouched.
+        CHECK(saved(memory).sound);
+        CHECK(saved(memory).music);
+    }
+    {
+        Rig again(memory);
+        CHECK_FALSE(again.controller.haptics_enabled());
+        CHECK_FALSE(again.haptics.enabled);
+        again.controller.setHapticsEnabled(true);
+        CHECK(saved(memory).haptics);
+    }
+    Rig third(memory);
+    CHECK(third.controller.haptics_enabled());
+}
+
+TEST_CASE("Each right answer is felt as the table says, and the last of a level as its clear", "[integration][haptics]")
+{
+    MemorySaveStore memory;
+    Rig rig(memory);
+    GameController& c = rig.controller;
+    c.startGame();
+    rig.answer_right();
+    rig.answer_right();
+    rig.answer_right(); // a run of 3 lifts the multiplier
+    CHECK(rig.haptics.played == Haptics{HapticId::RIGHT, HapticId::RIGHT, HapticId::MULTIPLIER_UP});
+
+    for (int i = 0; i < 7; ++i)
+    {
+        rig.answer_right();
+    }
+    REQUIRE(c.state() == State::LevelClear);
+    // One haptic per answer, whatever else the answer set off, and the tenth is the level clear alone.
+    CHECK(rig.haptics.played.size() == 10);
+    CHECK(rig.haptics.played.back() == HapticId::LEVEL_CLEAR);
+    CHECK(rig.haptics.count(HapticId::LEVEL_CLEAR) == 1);
+}
+
+TEST_CASE("A wrong answer is felt as an error", "[integration][haptics]")
+{
+    MemorySaveStore memory;
+    Rig rig(memory);
+    rig.controller.startGame();
+    rig.answer_wrong();
+    CHECK(rig.haptics.played == Haptics{HapticId::WRONG});
+}
+
+TEST_CASE("A hint is felt as a soft haptic", "[integration][haptics]")
+{
+    SaveData data;
+    data.coins = 10;
+    MemorySaveStore memory(*serialise(data));
+    Rig rig(memory);
+    rig.controller.startGame();
+    rig.controller.useHint();
+    CHECK(rig.haptics.played == Haptics{HapticId::HINT});
+}
+
+TEST_CASE("The alert and the bomb are felt once each, and the ticking between them not at all",
+          "[integration][haptics]")
+{
+    MemorySaveStore memory;
+    Rig rig(memory);
+    GameController& c = rig.controller;
+    c.startGame();
+    rig.play_for_ms(51'000);
+    REQUIRE(c.alert());
+    CHECK(rig.haptics.played == Haptics{HapticId::ALERT});
+
+    // Pausing and coming back inside the alert zone does not warn a second time.
+    c.pause();
+    c.resume();
+    CHECK(rig.haptics.played == Haptics{HapticId::ALERT});
+
+    while (c.state() == State::Playing)
+    {
+        rig.play_for_ms(50);
+    }
+    CHECK(c.end_reason() == GameController::EndReason::Bomb);
+    CHECK(rig.haptics.played == Haptics{HapticId::ALERT, HapticId::BOOM});
+}
+
+TEST_CASE("Quitting from the pause screen is not felt as a bomb", "[integration][haptics]")
+{
+    MemorySaveStore memory;
+    Rig rig(memory);
+    rig.controller.startGame();
+    rig.controller.pause();
+    rig.controller.quit();
+    REQUIRE(rig.controller.state() == State::GameOver);
+    CHECK(rig.haptics.asked.empty());
+}
+
+TEST_CASE("Clearing level 12 is felt as the win and not as a level clear on top", "[integration][haptics]")
+{
+    MemorySaveStore memory;
+    Rig rig(memory);
+    GameController& c = rig.controller;
+    c.startGame();
+    for (int level = 1; level <= 12; ++level)
+    {
+        rig.play_level_right();
+        if (level < 12)
+        {
+            c.nextLevel();
+        }
+    }
+    REQUIRE(c.state() == State::Won);
+    CHECK(rig.haptics.count(HapticId::LEVEL_CLEAR) == 11);
+    CHECK(rig.haptics.count(HapticId::WIN) == 1);
+    CHECK(rig.haptics.played.back() == HapticId::WIN);
+}
+
+TEST_CASE("A tap is a light haptic, and none is felt on a paused game", "[integration][haptics]")
+{
+    MemorySaveStore memory;
+    Rig rig(memory);
+    GameController& c = rig.controller;
+
+    c.tap();
+    CHECK(rig.haptics.played == Haptics{HapticId::TAP});
+
+    c.startGame();
+    c.pause();
+    CHECK(rig.haptics.suspended);
+    CHECK(rig.haptics.suspends == 1);
+    c.tap();
+    CHECK(rig.haptics.asked.back() == HapticId::TAP);
+    CHECK(rig.haptics.played == Haptics{HapticId::TAP}); // only the one before the pause
+
+    c.resume();
+    CHECK_FALSE(rig.haptics.suspended);
+    c.tap();
+    CHECK(rig.haptics.played == Haptics{HapticId::TAP, HapticId::TAP});
+}
+
+TEST_CASE("Leaving the foreground silences haptics until the app is back and the game is not paused",
+          "[integration][haptics]")
+{
+    MemorySaveStore memory;
+    Rig rig(memory);
+    GameController& c = rig.controller;
+
+    // On the title screen: quiet in the background, back when the app returns.
+    c.on_application_state(false);
+    CHECK(rig.haptics.suspended);
+    c.tap();
+    CHECK(rig.haptics.played.empty());
+    c.on_application_state(true);
+    CHECK_FALSE(rig.haptics.suspended);
+
+    // In a game: the pause the app made on leaving keeps it quiet until RESUME.
+    c.startGame();
+    c.on_application_state(false);
+    REQUIRE(c.state() == State::Paused);
+    CHECK(rig.haptics.suspended);
+    c.on_application_state(true);
+    CHECK(rig.haptics.suspended);
+    c.resume();
+    CHECK_FALSE(rig.haptics.suspended);
+    rig.answer_right();
+    CHECK(rig.haptics.played == Haptics{HapticId::RIGHT});
+}
+
+TEST_CASE("With the switch off nothing reaches the device, and turning it on brings it back", "[integration][haptics]")
+{
+    MemorySaveStore memory;
+    HapticGame game(memory);
+    GameController& c = game.controller;
+    CHECK(c.haptics_available());
+
+    c.setHapticsEnabled(false);
+    c.tap();
+    c.startGame();
+    game.answer_right();
+    const int wrong_tile = c.session_view().question.correct_tile == 0 ? 1 : 0;
+    c.answer(wrong_tile);
+    game.device.advance_ms(300);
+    c.useHint();
+    c.pause();
+    c.resume();
+    game.device.advance_ms(1000);
+    CHECK(game.device.backend.fired.empty());
+
+    c.setHapticsEnabled(true);
+    c.tap();
+    CHECK(game.device.backend.ids() == Haptics{HapticId::TAP});
+}
+
+TEST_CASE("A right and a wrong answer reach the device as RIGHT and WRONG", "[integration][haptics]")
+{
+    MemorySaveStore memory;
+    HapticGame game(memory);
+    GameController& c = game.controller;
+    c.startGame();
+    game.answer_right();
+    c.answer(c.session_view().question.correct_tile == 0 ? 1 : 0);
+    game.device.advance_ms(300);
+    CHECK(game.device.backend.ids() == Haptics{HapticId::RIGHT, HapticId::WRONG});
+}
+
+TEST_CASE("The win reaches the device as its three beats", "[integration][haptics]")
+{
+    MemorySaveStore memory;
+    HapticGame game(memory);
+    game.play_to_win(true);
+    REQUIRE(game.controller.state() == State::Won);
+    const Haptics fired = game.device.backend.ids();
+    REQUIRE(fired.size() >= 3);
+    CHECK(fired[fired.size() - 3] == HapticId::RIGHT);
+    CHECK(fired[fired.size() - 2] == HapticId::MULTIPLIER_UP);
+    CHECK(fired[fired.size() - 1] == HapticId::LEVEL_CLEAR);
+}
+
+TEST_CASE("Leaving the app in the middle of the win's beats cuts them short", "[integration][haptics]")
+{
+    MemorySaveStore memory;
+    HapticGame game(memory);
+    game.play_to_win(false);
+    REQUIRE(game.controller.state() == State::Won);
+    const std::size_t before = game.device.backend.fired.size();
+    game.controller.on_application_state(false);
+    game.device.advance_ms(1000);
+    CHECK(game.device.backend.fired.size() == before);
 }

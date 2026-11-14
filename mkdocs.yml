@@ -21,6 +21,7 @@ nav:
       - Milestones: MILESTONES.md
       - Compliance: COMPLIANCE.md
       - Audio: audio.md
+      - Haptics: haptics.md
       - iOS and Game Center: ios.md
       - Browser build: web.md
   - Release:

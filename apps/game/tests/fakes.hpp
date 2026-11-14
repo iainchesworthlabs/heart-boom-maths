@@ -4,12 +4,19 @@
 // Recording stand-ins for the platform services, so a test reads what the controller asked for.
 
 #include "services/audio_service.hpp"
+#include "services/backed_haptics_service.hpp"
+#include "services/clock.hpp"
+#include "services/haptic_backend.hpp"
+#include "services/haptic_timer.hpp"
+#include "services/haptics_service.hpp"
 #include "services/link_opener.hpp"
 #include "services/score_service.hpp"
 
 #include <algorithm>
 #include <cstdint>
+#include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace hbm_test
@@ -69,6 +76,191 @@ public:
     int suspends = 0;
     int resumes = 0;
     int unlocks = 0;
+};
+
+/// The HapticsService as a test sees it from the controller: `asked` is every request, `played` only the ones a real
+/// service would let through (the switch is on and the game is not paused or in the background).
+class RecordingHaptics final : public HapticsService
+{
+public:
+    explicit RecordingHaptics(bool is_available = true) : m_Available(is_available) {}
+
+    [[nodiscard]] bool available() const override
+    {
+        return m_Available;
+    }
+
+    void play(HapticId id) override
+    {
+        asked.push_back(id);
+        if (enabled && !suspended)
+        {
+            played.push_back(id);
+        }
+    }
+
+    void set_enabled(bool on) override
+    {
+        enabled = on;
+    }
+
+    void suspend() override
+    {
+        suspended = true;
+        ++suspends;
+    }
+
+    void resume() override
+    {
+        suspended = false;
+        ++resumes;
+    }
+
+    [[nodiscard]] int count(HapticId id) const
+    {
+        return static_cast<int>(std::count(played.begin(), played.end(), id));
+    }
+
+    std::vector<HapticId> asked;
+    std::vector<HapticId> played;
+    bool enabled = true;
+    bool suspended = false;
+    int suspends = 0;
+    int resumes = 0;
+
+private:
+    bool m_Available;
+};
+
+/// One beat that reached the device, and when (milliseconds on the test clock).
+struct FiredBeat
+{
+    HapticId id;
+    std::int64_t at_ms;
+
+    friend bool operator==(const FiredBeat&, const FiredBeat&) = default;
+};
+
+class RecordingHapticBackend final : public HapticBackend
+{
+public:
+    explicit RecordingHapticBackend(const Clock& clock, bool is_available = true)
+        : m_Clock(clock), m_Available(is_available)
+    {
+    }
+
+    [[nodiscard]] bool available() const override
+    {
+        return m_Available;
+    }
+
+    void fire(HapticId beat) override
+    {
+        fired.push_back({beat, m_Clock.now_ns() / 1'000'000});
+    }
+
+    void cancel() override
+    {
+        ++cancels;
+    }
+
+    [[nodiscard]] std::vector<HapticId> ids() const
+    {
+        std::vector<HapticId> out;
+        for (const FiredBeat& beat : fired)
+        {
+            out.push_back(beat.id);
+        }
+        return out;
+    }
+
+    std::vector<FiredBeat> fired;
+    int cancels = 0;
+
+private:
+    const Clock& m_Clock;
+    bool m_Available;
+};
+
+/// A single-shot timer that fires when the test moves the clock past it (see HapticRig::advance_ms).
+class ManualHapticTimer final : public HapticTimer
+{
+public:
+    explicit ManualHapticTimer(const Clock& clock) : m_Clock(clock) {}
+
+    void start(int delay_ms, std::function<void()> on_fire) override
+    {
+        m_Callback = std::move(on_fire);
+        m_DueMs = m_Clock.now_ns() / 1'000'000 + delay_ms;
+        ++starts;
+    }
+
+    void stop() override
+    {
+        m_Callback = nullptr;
+    }
+
+    [[nodiscard]] bool armed() const
+    {
+        return static_cast<bool>(m_Callback);
+    }
+
+    [[nodiscard]] std::int64_t due_ms() const
+    {
+        return m_DueMs;
+    }
+
+    /// Fires what is pending, once. The callback may arm the timer again.
+    void fire()
+    {
+        auto callback = std::move(m_Callback);
+        m_Callback = nullptr;
+        if (callback)
+        {
+            callback();
+        }
+    }
+
+    int starts = 0;
+
+private:
+    const Clock& m_Clock;
+    std::function<void()> m_Callback;
+    std::int64_t m_DueMs = 0;
+};
+
+/// The real haptic rules over a recording device, a hand-driven timer and a clock that moves only when told to.
+struct HapticRig
+{
+    explicit HapticRig(bool device_can = true)
+        : backend(clock, device_can), timer(clock), service(backend, clock, timer)
+    {
+    }
+
+    /// Moves time on, firing the timer at each moment it falls due on the way.
+    void advance_ms(std::int64_t milliseconds)
+    {
+        const std::int64_t target = clock.now_ns() / 1'000'000 + milliseconds;
+        while (timer.armed() && timer.due_ms() <= target)
+        {
+            const std::int64_t now = clock.now_ns() / 1'000'000;
+            if (timer.due_ms() > now)
+            {
+                clock.advance_ms(timer.due_ms() - now);
+            }
+            timer.fire();
+        }
+        const std::int64_t now = clock.now_ns() / 1'000'000;
+        if (target > now)
+        {
+            clock.advance_ms(target - now);
+        }
+    }
+
+    ManualClock clock;
+    RecordingHapticBackend backend;
+    ManualHapticTimer timer;
+    BackedHapticsService service;
 };
 
 class RecordingLinks final : public LinkOpener

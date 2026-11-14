@@ -37,6 +37,10 @@ struct UiRig
     /// are fixed, so a test knows what to type.
     [[nodiscard]] static heart_boom_maths::game::GateChallenge gate_challenge(int nth);
 
+    /// `haptics_available` makes the haptics service report a device that can, which shows the Haptics switch in
+    /// Settings.
+    UiRig(std::uint64_t seed, bool scores_available, std::string saved_text, bool haptics_available);
+
     /// A rig whose device already holds a save, such as a top 10 with entries in it.
     UiRig(std::uint64_t seed, std::string save_text);
 
@@ -49,6 +53,7 @@ struct UiRig
     heart_boom_maths::game::ManualClock clock;
     RecordingAudio audio;
     RecordingScores scores;
+    RecordingHaptics haptics;
     RecordingLinks links;
     heart_boom_maths::MemorySaveStore store;
     int gate_seeds_used = 0;
