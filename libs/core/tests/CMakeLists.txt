@@ -27,6 +27,7 @@ add_executable(heart_boom_maths_core_tests
     test_platform.cpp
     test_save.cpp
     test_save_fuzz.cpp
+    test_save_manager.cpp
     test_tuning.cpp)
 target_include_directories(heart_boom_maths_core_tests PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_link_libraries(heart_boom_maths_core_tests

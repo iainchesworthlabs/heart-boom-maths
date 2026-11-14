@@ -21,6 +21,8 @@ add_library(heart_boom_maths_core
     src/rng.cpp
     src/save_codec.cpp
     src/save_data.cpp
+    src/save_manager.cpp
+    src/save_store.cpp
     src/tuning.cpp
     src/version.cpp)
 add_library(heart_boom_maths::core ALIAS heart_boom_maths_core)
