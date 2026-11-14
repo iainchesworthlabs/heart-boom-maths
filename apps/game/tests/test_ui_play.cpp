@@ -668,12 +668,25 @@ TEST_CASE("Screenshots of the play screen for the hand check against the boards"
             endless.wait_out_holds();
             click(endless.h.find_item("keepGoingButton"));
             endless.h.settle();
-            endless.rig.play_for_ms(9000);
-            endless.h.settle();
-            endless.feedback->setProperty("rightHoldMs", 60000);
-            click(endless.tile(endless.rig.controller.session_view().question.correct_tile));
-            QTest::qWait(400);
-            CHECK(endless.h.grab(prefix + "endless.png"));
+            // Levels 13, 14 and 20, each with a right answer held: the time gained hangs from the fuse.
+            for (int level = 13; level <= 20; ++level)
+            {
+                if (level == 13 || level == 14 || level == 20)
+                {
+                    endless.rig.play_for_ms(9000);
+                    endless.h.settle();
+                    endless.feedback->setProperty("rightHoldMs", 60000);
+                    click(endless.tile(endless.rig.controller.session_view().question.correct_tile));
+                    QTest::qWait(400);
+                    CHECK(endless.h.grab(prefix + (level == 13 ? QStringLiteral("endless.png")
+                                                               : QStringLiteral("endless-%1.png").arg(level))));
+                    QMetaObject::invokeMethod(endless.feedback, "clear");
+                    endless.h.settle();
+                }
+                endless.rig.play_level_right();
+                endless.rig.controller.nextLevel();
+                endless.h.settle();
+            }
         }
     }
 }

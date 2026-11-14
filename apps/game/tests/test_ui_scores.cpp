@@ -676,6 +676,63 @@ TEST_CASE(
     CHECK(s.screen() == "title"); // back to the title, not to the card it came from
 }
 
+TEST_CASE("The NEW tag follows the name and the score stays at the right edge", "[ui][scores][top10]")
+{
+    auto h = QmlHarness::from_source(R"(
+import QtQuick
+import HeartBoomMaths
+Item {
+    ScoreRow {
+        objectName: "row"
+        x: 24
+        y: 10
+        width: 342
+        rank: 2
+        name: "ROCKET"
+        scoreText: "1,520"
+        highlighted: true
+    }
+    ScoreRow {
+        objectName: "long"
+        x: 24
+        y: 80
+        width: 342
+        rank: 3
+        name: "ABCDEFGHIJKL"
+        scoreText: "1,000,000"
+        highlighted: true
+    }
+}
+)",
+                                     QSize{390, 160});
+    const auto part = [&](const char* row, const char* name)
+    {
+        QQuickItem* r = h.find_item(QLatin1String(row));
+        REQUIRE(r != nullptr);
+        for (QQuickItem* child : r->findChildren<QQuickItem*>())
+        {
+            if (child->objectName() == QLatin1String(name))
+            {
+                return child->mapRectToScene(QRectF(0, 0, child->width(), child->height()));
+            }
+        }
+        FAIL("no part " << name);
+        return QRectF();
+    };
+    // About 14 between the end of the name and the tag, and the score ends 12 inside the row.
+    const QRectF name = part("row", "nameText");
+    const QRectF tag = part("row", "newTag");
+    const QRectF score = part("row", "scoreText");
+    CHECK_THAT(tag.left() - name.right(), Catch::Matchers::WithinAbs(14.0, 1.0));
+    CHECK_THAT(score.right(), Catch::Matchers::WithinAbs(24.0 + 342.0 - 12.0, 1.5));
+    CHECK(score.left() > tag.right() + 20);
+    // A name too long for the row is elided and the tag and the score still fit inside the row.
+    const QRectF long_tag = part("long", "newTag");
+    const QRectF long_score = part("long", "scoreText");
+    CHECK(long_tag.right() <= long_score.left());
+    CHECK(long_score.right() <= 24.0 + 342.0);
+}
+
 TEST_CASE("The top 10's play button stands at the foot of the window with the list above it", "[ui][scores][top10]")
 {
     const SizeCase size = GENERATE(SizeCase{"phone", PHONE}, SizeCase{"tablet", TABLET}, SizeCase{"desktop", DESKTOP});
