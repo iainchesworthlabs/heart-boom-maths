@@ -332,8 +332,14 @@ Item {
             game: root.game
             // The new entry is marked only while the list follows the game that earned it.
             highlightRank: root.game.state === GameController.GameOver && root.overlay !== "title" ? root.game.highlightRank : 0
-            // PLAY AGAIN follows a game that has just ended; after HOME the title is on show and its button says PLAY.
-            playText: root.game.state === GameController.GameOver && root.overlay !== "title" ? qsTr("PLAY AGAIN") : qsTr("PLAY")
+            // PLAY AGAIN follows a game that has just ended. Otherwise the title is on show and the button says what the
+            // title's own one says, NEW GAME when a saved run is waiting there, because starting a game drops that run.
+            playText: {
+                if (root.game.state === GameController.GameOver && root.overlay !== "title") {
+                    return qsTr("PLAY AGAIN");
+                }
+                return root.game.hasSavedRun ? qsTr("NEW GAME") : qsTr("PLAY");
+            }
             onBackRequested: root.back()
             onPlayRequested: root.game.startGame()
         }

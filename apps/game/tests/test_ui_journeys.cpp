@@ -581,6 +581,14 @@ TEST_CASE("Journey: pause, Settings from the pause screen, leave the app, be kil
     CHECK(second.text_of("playButton") == "NEW GAME");
     CHECK(second.text_of("titleCaption").startsWith("Saved game: level 1"));
 
+    // The Top 10 from here has a button that starts a game too, so it says NEW GAME like the title and not PLAY.
+    second.tap("top10Button");
+    REQUIRE(second.page() == "top10");
+    CHECK(second.text_of("top10PlayButton") == "NEW GAME");
+    second.tap("backButton");
+    CHECK(second.screen() == "title");
+    CHECK(second.visible("continueButton"));
+
     // 6. CONTINUE: the pause screen with the same game, and the run is deleted from the save as soon as it loads.
     second.tap("continueButton");
     REQUIRE(second.screen() == "play");
@@ -712,6 +720,7 @@ TEST_CASE("Journey: Settings switches, the gate for Game Center and for a link, 
         // 4. A gate left open when the app is switched away from is closed, and its link does not open later.
         j.tap("sourceButton");
         REQUIRE(j.c().gate_active());
+        CHECK_FALSE(j.enabled("privacyButton")); // the page under the gate takes no taps
         j.background();
         CHECK_FALSE(j.c().gate_active());
         CHECK_FALSE(j.has("gateScreen"));
