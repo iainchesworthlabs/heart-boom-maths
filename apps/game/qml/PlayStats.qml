@@ -129,7 +129,7 @@ ColumnLayout {
             // "x2 -> x1": the change, drawn.
             Row {
                 visible: root.falling
-                spacing: 6
+                spacing: root.metrics.badgeFont * 0.4
 
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
@@ -139,10 +139,14 @@ ColumnLayout {
                     font.pixelSize: root.metrics.badgeFont * 0.92
                     font.letterSpacing: 1
                 }
+                // The board's arrow is a thin text arrow, about as wide as half the numerals are tall, a little below their middle.
                 ArrowIcon {
+                    objectName: "multiplierArrow"
                     anchors.verticalCenter: parent.verticalCenter
-                    width: root.metrics.badgeFont * 0.8
-                    height: root.metrics.badgeFont * 0.5
+                    anchors.verticalCenterOffset: root.metrics.badgeFont * 0.17
+                    width: root.metrics.badgeFont * 0.5
+                    height: root.metrics.badgeFont * 0.29
+                    strokeWidth: 3
                 }
                 Text {
                     anchors.verticalCenter: parent.verticalCenter

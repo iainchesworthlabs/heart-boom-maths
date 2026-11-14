@@ -111,7 +111,8 @@ Item {
             x: root.fillWidth - width / 2
             width: root.starSize
             height: root.starSize
-            visible: root.fraction > 0
+            // The red stretch a wrong answer took replaces the star while it shows, as on the board.
+            visible: root.fraction > 0 && root.lostFraction <= 0
         }
     }
 

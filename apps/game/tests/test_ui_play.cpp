@@ -387,6 +387,16 @@ TEST_CASE("A wrong answer turns the tile red with a cross, shows the right one a
     CHECK(s.visible("timeFlash"));
     CHECK(s.text_of("timeFlash") == QString::fromUtf8("−3 s"));
     CHECK(s.visible("fuseLost"));
+    // The red stretch stands in for the star at the burning end, and the arrow of x2 -> x1 is a thin one.
+    CHECK_FALSE(s.visible("fuseSpark"));
+    {
+        QQuickItem* arrow = s.h.find_item("multiplierArrow");
+        REQUIRE(arrow != nullptr);
+        CHECK(arrow->isVisible());
+        const double drawn_stroke = property_of(arrow, "strokeWidth").toDouble() * arrow->width() / 24.0;
+        CHECK(drawn_stroke <= 1.6);
+        CHECK(arrow->width() <= 14.0);
+    }
     CHECK(property_of(s.h.find("multiplierBadge"), "dashed").toBool());
     CHECK(s.rig.controller.multiplier() == 1);
     // The question card keeps the question that was answered, with its slot empty.
@@ -394,6 +404,7 @@ TEST_CASE("A wrong answer turns the tile red with a cross, shows the right one a
     CHECK(property_of(s.h.find("questionCard"), "slotValue").toString().isEmpty());
 
     s.wait_out_holds();
+    CHECK(s.visible("fuseSpark"));
     CHECK(s.look(wrong) == "normal");
     CHECK_FALSE(s.visible("wrongTag"));
     CHECK_FALSE(s.visible("timeFlash"));
