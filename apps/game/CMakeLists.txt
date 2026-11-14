@@ -255,7 +255,8 @@ if(HEART_BOOM_MATHS_BUILD_TESTS)
         tests/ui_support.cpp
         tests/test_answer_feedback.cpp
         tests/test_ui_components.cpp
-        tests/test_ui_play.cpp)
+        tests/test_ui_play.cpp
+        tests/test_ui_scores.cpp)
     target_link_libraries(heart_boom_maths_ui_tests
         PRIVATE heart_boom_maths_app heart_boom_maths_appplugin Qt6::Test Catch2::Catch2 icl::warnings icl::coverage)
     target_include_directories(heart_boom_maths_ui_tests PRIVATE tests)

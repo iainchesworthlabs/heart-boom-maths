@@ -19,6 +19,7 @@
 #include <QTemporaryDir>
 #include <QVariant>
 #include <memory>
+#include <string>
 
 namespace hbm_test
 {
@@ -27,6 +28,9 @@ namespace hbm_test
 struct UiRig
 {
     explicit UiRig(std::uint64_t seed = 20261114);
+
+    /// A rig whose device already holds a save, such as a top 10 with entries in it.
+    UiRig(std::uint64_t seed, std::string save_text);
 
     /// Plays real time in 50 ms frames, the length of one tick, as a running level would.
     void play_for_ms(int milliseconds);

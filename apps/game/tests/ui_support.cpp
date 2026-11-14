@@ -18,6 +18,7 @@
 #include <QVariantMap>
 #include <algorithm>
 #include <set>
+#include <utility>
 #include <vector>
 
 using namespace heart_boom_maths;
@@ -50,6 +51,11 @@ GameOptions make_options(std::uint64_t seed)
 } // namespace
 
 UiRig::UiRig(std::uint64_t seed) : controller(make_services(*this), make_options(seed)) {}
+
+UiRig::UiRig(std::uint64_t seed, std::string save_text)
+    : store(std::move(save_text)), controller(make_services(*this), make_options(seed))
+{
+}
 
 void UiRig::play_for_ms(int milliseconds)
 {
