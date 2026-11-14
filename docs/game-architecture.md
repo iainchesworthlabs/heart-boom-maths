@@ -211,7 +211,7 @@ The platform layer holds everything that touches the operating system. Each serv
 |---|---|---|
 | `SaveStore` | `FileSaveStore`, `WebSaveStore`, `MemorySaveStore` | See Persistence |
 | `ScoreService` | `GameCenterScoreService` on iOS and iPadOS, `NullScoreService` elsewhere | Submits a finished score. The local top 10 does not depend on it |
-| `AudioService` | Qt Multimedia implementation, `NullAudioService` for tests | Effects and music, with the two Settings switches |
+| `AudioService` | `BackedAudioService` over Qt Multimedia, or over AVFoundation on iOS (`ClipAudioBackend`); `NullAudioService` for tests | Effects and music, with the two Settings switches |
 | `LinkOpener` | System browser | Reached only through the parental gate |
 | `BuildInfo` | Generated at configure time | Version, build number, commit and Qt version |
 | Notices | Generated at build time | Third-party licence texts for the About screen |

@@ -58,14 +58,17 @@ qt_add_resources(heart_boom_maths_app notices
 target_sources(heart_boom_maths_app PRIVATE
     src/services/audio_assets.cpp
     src/services/audio_factory.cpp
+    src/services/audio_resource.cpp
     src/services/backed_audio_service.cpp
+    src/services/clip_audio_backend.cpp
     src/services/first_gesture_filter.cpp)
-# HEART_BOOM_MATHS_USE_QT_MULTIMEDIA=OFF builds the silent fallback even when the kit has the module. The iOS preset sets it:
-# the module's FFmpeg backend cannot link there, and iOS sound is meant to be a native AVFoundation backend (docs/audio.md).
-option(HEART_BOOM_MATHS_USE_QT_MULTIMEDIA "Link Qt Multimedia for sound when the kit has it" ON)
+# HEART_BOOM_MATHS_USE_QT_MULTIMEDIA=OFF builds the silent fallback even when the kit has the module. iOS never uses the
+# module: its FFmpeg backend cannot link there, so the iPhone and iPad sound is the AVFoundation backend of
+# src/platform/ios/avf_audio_backend.mm (docs/audio.md), whatever this option says.
+option(HEART_BOOM_MATHS_USE_QT_MULTIMEDIA "Link Qt Multimedia for sound when the kit has it (not on iOS)" ON)
 # A variable of our own decides, because a Qt kit can set Qt6Multimedia_FOUND itself while the other packages load.
 set(hbm_use_qt_audio OFF)
-if(HEART_BOOM_MATHS_USE_QT_MULTIMEDIA)
+if(HEART_BOOM_MATHS_USE_QT_MULTIMEDIA AND NOT IOS)
     find_package(Qt6Multimedia "${Qt6_VERSION}" QUIET CONFIG HINTS "${Qt6_DIR}/..")
     if(Qt6Multimedia_FOUND)
         set(hbm_use_qt_audio ON)
@@ -74,6 +77,10 @@ endif()
 if(hbm_use_qt_audio)
     target_sources(heart_boom_maths_app PRIVATE src/services/qt_audio_backend.cpp)
     target_link_libraries(heart_boom_maths_app PRIVATE Qt6::Multimedia)
+elseif(IOS)
+    # make_device_audio_backend() is defined by the platform file of the application (icl_platform_sources below), over
+    # AVFoundation, which ios/ios.cmake links.
+    message(STATUS "Sound on iOS: the AVFoundation backend")
 else()
     message(STATUS "Qt Multimedia is not used: the game will be silent (install the qtmultimedia module of the Qt kit, or turn HEART_BOOM_MATHS_USE_QT_MULTIMEDIA on)")
     target_sources(heart_boom_maths_app PRIVATE src/services/no_audio_backend.cpp)
@@ -277,7 +284,7 @@ if(HEART_BOOM_MATHS_BUILD_TESTS)
     target_sources(heart_boom_maths_game_tests PRIVATE tests/test_web_save_store.cpp)
 
     # The sound rules over a recording backend, the factory, the first-gesture filter and the placeholder sound files.
-    target_sources(heart_boom_maths_game_tests PRIVATE tests/test_audio.cpp)
+    target_sources(heart_boom_maths_game_tests PRIVATE tests/test_audio.cpp tests/test_clip_audio.cpp)
     find_package(Python3 QUIET COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)
         add_test(NAME game.audio_placeholders

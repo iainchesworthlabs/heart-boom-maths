@@ -59,7 +59,8 @@ program answers `--version` and, for tests, `--smoke-test` (it exits after the f
 
 Sound needs the `qtmultimedia` module of the Qt kit, which is an add-on in aqtinstall (`--modules qtmultimedia`) and a
 selectable component of the official installer. The configure looks for it and, when it is missing, prints a
-status line and builds a game that starts silent. See [Audio](audio.md).
+status line and builds a game that starts silent. iPhone and iPad take their sound from AVFoundation and need no module.
+See [Audio](audio.md).
 
 The build information (version, build number, short commit, branch or tag, date, Qt version) is written at configure
 time by `cmake/HbmBuildInfo.cmake`. The build number is `ICL_BUILD_NUMBER`, then `GITHUB_RUN_NUMBER`, and 0 when
@@ -112,7 +113,7 @@ sets `CFBundleVersion`. The identifier is `HEART_BOOM_MATHS_APPLICATION_ID` in `
 `apps/ios/packaging/verify_app.sh <app> --bundle-id <id> --executable heart-boom-maths`.
 
 `cmake --preset ios-game-release` builds the game itself. It is a cross-build with two Qt kits of the pinned version: the iOS
-kit (with `qtmultimedia`), whose root is the environment variable `HEART_BOOM_MATHS_QT_IOS_ROOT` and whose
+kit (the module `qtmultimedia` is not needed), whose root is the environment variable `HEART_BOOM_MATHS_QT_IOS_ROOT` and whose
 `qt.toolchain.cmake` is the preset's toolchain file, and the macOS desktop kit in `ICL_QT_ROOT`, which Qt uses as its host
 tools (`QT_HOST_PATH`). It does not use vcpkg, builds no tests and does not build `apps/ios`. The bundle is described in
 `apps/game/ios/` (`Info.plist.in`, the entitlements, the asset catalogue) and checked with
