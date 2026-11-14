@@ -3,6 +3,7 @@
 #include "heart_boom_maths/save_store.hpp"
 #include "heart_boom_maths/version.hpp"
 #include "platform/platform.hpp"
+#include "platform/score_platform.hpp"
 #include "services/audio_factory.hpp"
 #include "services/clock.hpp"
 #include "services/file_save_store.hpp"
@@ -21,6 +22,7 @@
 #include <QVariant>
 #include <QtLogging>
 #include <cstdio>
+#include <memory>
 #include <string>
 #include <string_view>
 
@@ -75,7 +77,8 @@ int main(int argc, char* argv[])
     qInfo("%s", std::string(game::describe(audio.choice)).c_str());
     game::FirstGestureFilter first_gesture(*audio.service);
     app.installEventFilter(&first_gesture);
-    game::NullScoreService scores;
+    // The Game Center service on an Apple device, which stays idle until its Settings switch is on, and none elsewhere.
+    const std::unique_ptr<game::ScoreService> scores = game::platform::make_score_service();
     game::SystemLinkOpener links;
     game::FileSaveStore file_store(game::FileSaveStore::default_directory());
     MemorySaveStore memory_store;
@@ -84,7 +87,7 @@ int main(int argc, char* argv[])
     services.store = &store;
     services.quarantine = smoke_test ? nullptr : &file_store;
     services.audio = audio.service.get();
-    services.scores = &scores;
+    services.scores = scores.get();
     services.links = &links;
     services.clock = &clock;
     game::GameController controller(services, game::GameOptions::with_random_seed());

@@ -21,6 +21,7 @@ add_library(heart_boom_maths_app STATIC
     src/tick_driver.cpp
     src/services/build_info.cpp
     src/services/file_save_store.cpp
+    src/services/game_center_score_service.cpp
     src/services/notices.cpp
     src/services/system_link_opener.cpp)
 target_include_directories(heart_boom_maths_app PUBLIC src "${CMAKE_CURRENT_BINARY_DIR}/generated")
@@ -173,6 +174,11 @@ set_target_properties(heart_boom_maths_game PROPERTIES QT_QML_ROOT_PATH "${CMAKE
 # One directory per operating system holds the code that cannot be shared; CMake adds the one that matches the target.
 icl_platform_sources(heart_boom_maths_game)
 
+# The iOS bundle (property list, entitlements, icon, GameKit) is described beside the files it names.
+if(IOS)
+    include("${CMAKE_CURRENT_SOURCE_DIR}/ios/ios.cmake")
+endif()
+
 target_include_directories(heart_boom_maths_game PRIVATE src)
 # The static QML module needs its backing library and its plugin, which registers the types and the QML files.
 target_link_libraries(heart_boom_maths_game
@@ -210,6 +216,7 @@ if(HEART_BOOM_MATHS_BUILD_TESTS)
         tests/test_build_info.cpp
         tests/test_event_sounds.cpp
         tests/test_file_save_store.cpp
+        tests/test_game_center.cpp
         tests/test_game_controller.cpp
         tests/test_level_text.cpp
         tests/test_parental_gate.cpp
@@ -237,6 +244,11 @@ if(HEART_BOOM_MATHS_BUILD_TESTS)
             COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/assets/make_placeholder_sounds.py" --check
                 --output-dir "${CMAKE_CURRENT_SOURCE_DIR}/audio")
         set_tests_properties(game.audio_placeholders PROPERTIES LABELS unit TIMEOUT 120)
+        # The placeholder icon of the iOS bundle, drawn by a script, is the picture the script draws.
+        add_test(NAME game.icon_placeholder
+            COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/assets/make_placeholder_icon.py" --check
+                --output "${CMAKE_CURRENT_SOURCE_DIR}/ios/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png")
+        set_tests_properties(game.icon_placeholder PROPERTIES LABELS unit TIMEOUT 120)
     else()
         message(STATUS "No Python 3 found: game.audio_placeholders is not added")
     endif()

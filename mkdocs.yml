@@ -19,6 +19,7 @@ nav:
       - Milestones: MILESTONES.md
       - Compliance: COMPLIANCE.md
       - Audio: audio.md
+      - iOS and Game Center: ios.md
   - Release:
       - Privacy policy: privacy-policy.md
       - Release checklist: release-checklist.md

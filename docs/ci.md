@@ -11,7 +11,7 @@ commit SHA. Dependabot proposes the SHA bump; the pull request also needs
 | Draft pull request | Policy, Plan, Project rules, workflow analysis, dependency scan |
 | Ready pull request | Above, plus Linux release and sanitizer builds and coverage |
 | Merge queue, push to `develop` | Above, plus Linux debug and TSan, macOS, Windows release and ASan |
-| Change to what the iOS build reads (a path filter), or a manual run | iOS compile check (`ios-build.yml`, not required) |
+| Change to what the iOS build reads (a path filter), or a manual run | iOS compile checks (`ios-build.yml` for the stub, `ios-game-build.yml` for the game; not required) |
 | Nightly | CodeQL |
 | Tag `v*` | Release |
 
@@ -62,6 +62,11 @@ job name as a prefix.
 filter keeps from running never reports. It compiles `apps/ios` unsigned with the `ios-release` preset and looks inside
 the bundle; it needs no secret. The signed build and the TestFlight upload are the `ios` job of `release.yml`
 (`docs/releasing.md`).
+
+`ios-game-build.yml` is the same kind of workflow for the whole game: it installs the macOS and iOS Qt kits, configures the
+`ios-game-release` preset, builds unsigned, and checks the bundle with `apps/game/ios/verify_game_app.sh` (orientations,
+capabilities, Game Center entitlement file, frameworks, size in the job summary). It keeps its logs for a week when it
+fails. See [iOS and Game Center](ios.md).
 
 ## Run the checks locally
 

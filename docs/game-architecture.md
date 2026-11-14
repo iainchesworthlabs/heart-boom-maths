@@ -248,7 +248,7 @@ public:
 
 The local top 10 is part of the save data and the core ranks it, so it works with the service absent. `GameController` calls `ScoreService::submit` once when a run ends, with the final score. The call returns nothing. A failure is logged and never shown to the child.
 
-`GameCenterScoreService` is Objective-C++, compiled only for the iOS target. It sends the score and nothing else, and never reads the player's alias, friends or avatar. It stays idle until the Settings switch is on. The switch is off by default and sits behind the parental gate. The sign-in handler is installed only after the switch is turned on, so a default install never shows a Game Center sign-in sheet. If the player is not signed in, or Screen Time restricts Game Center, `submit` does nothing. Android uses `NullScoreService` in v1.
+`GameCenterScoreService` holds the rules in plain C++ over a small `GameCenterBackend`, and only the GameKit calls are Objective-C++, compiled only for the iOS target (`src/platform/ios/`); each platform directory returns its own service from `make_score_service()`. See [iOS and Game Center](ios.md). It sends the score and nothing else, and never reads the player's alias, friends or avatar. It stays idle until the Settings switch is on. The switch is off by default and sits behind the parental gate. The sign-in handler is installed only after the switch is turned on, so a default install never shows a Game Center sign-in sheet. If the player is not signed in, or Screen Time restricts Game Center, `submit` does nothing. Android uses `NullScoreService` in v1.
 
 ### Lifecycle and screen time
 

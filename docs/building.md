@@ -41,6 +41,7 @@ ctest --preset linux-debug
 | `linux-coverage` | Instrumented build for gcovr |
 | `macos-release`, `windows-msvc-release`, `windows-msvc-asan` | Platform builds |
 | `ios-release` | The iPhone and iPad application (`apps/ios`), unsigned, on a Mac with Xcode; no tests and no Qt application |
+| `ios-game-release` | The whole game on an iPhone or iPad, linked statically against Qt for iOS, unsigned, on a Mac with Xcode. See iOS below and [iOS and Game Center](ios.md) |
 | `wasm-release` | The game in a browser (`apps/game`), single-threaded. See WebAssembly below |
 
 On Windows, run `pwsh -NoProfile -File tools/dev/test.ps1` to load the Visual Studio environment, build
@@ -96,5 +97,14 @@ build, which is the release workflow's (`docs/releasing.md`, "iOS and TestFlight
 `HEART_BOOM_MATHS_IOS_SIGNING_PROFILE` go together (CMake stops when only one is given), and `HEART_BOOM_MATHS_IOS_BUILD_NUMBER`
 sets `CFBundleVersion`. The identifier is `HEART_BOOM_MATHS_APPLICATION_ID` in `CMakeLists.txt`. Check the bundle with
 `apps/ios/packaging/verify_app.sh <app> --bundle-id <id> --executable heart-boom-maths`.
+
+`cmake --preset ios-game-release` builds the game itself. It is a cross-build with two Qt kits of the pinned version: the iOS
+kit (with `qtmultimedia`), whose root is the environment variable `HEART_BOOM_MATHS_QT_IOS_ROOT` and whose
+`qt.toolchain.cmake` is the preset's toolchain file, and the macOS desktop kit in `ICL_QT_ROOT`, which Qt uses as its host
+tools (`QT_HOST_PATH`). It does not use vcpkg, builds no tests and does not build `apps/ios`. The bundle is described in
+`apps/game/ios/` (`Info.plist.in`, the entitlements, the asset catalogue) and checked with
+`apps/game/ios/verify_game_app.sh <app> --bundle-id <id> --executable heart-boom-maths --entitlements apps/game/ios/heart-boom-maths.entitlements`.
+`HEART_BOOM_MATHS_IOS_BUILD_NUMBER`, `HEART_BOOM_MATHS_IOS_SIGNING_TEAM` and `HEART_BOOM_MATHS_IOS_SIGNING_PROFILE` work as
+for `ios-release`.
 
 Put personal settings in `CMakeUserPresets.json`, which is ignored by git.

@@ -98,6 +98,30 @@
       }
     },
     {
+      "name": "ios-game-release",
+      "displayName": "iOS game (device, Release, unsigned, Qt static)",
+      "description": "The whole game on an iPhone or iPad (arm64), built by Xcode on a Mac against Qt's static iOS kit. Unsigned: it needs no Apple account (a signed build is the owner's, docs/ios.md). Needs HEART_BOOM_MATHS_QT_IOS_ROOT (the ios kit of the pinned Qt version, with qtmultimedia) and ICL_QT_ROOT (the macOS desktop kit of the same version, which Qt uses as its host tools). No tests are built: vcpkg is not used and nothing runs on a device here. apps/ios, the one-screen stub, is not built.",
+      "inherits": "base",
+      "generator": "Xcode",
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" },
+      "toolchainFile": "$env{HEART_BOOM_MATHS_QT_IOS_ROOT}/lib/cmake/Qt6/qt.toolchain.cmake",
+      "cacheVariables": {
+        "QT_HOST_PATH": "$env{ICL_QT_ROOT}",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "OFF",
+        "CMAKE_OSX_SYSROOT": "iphoneos",
+        "CMAKE_OSX_ARCHITECTURES": "arm64",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "18.0",
+        "CMAKE_XCODE_GENERATE_SCHEME": "ON",
+        "CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED": "NO",
+        "CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED": "NO",
+        "CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY": "",
+        "HEART_BOOM_MATHS_BUILD_TESTS": "OFF",
+        "HEART_BOOM_MATHS_BUILD_GAME": "ON",
+        "HEART_BOOM_MATHS_BUILD_IOS_APP": "OFF",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
       "name": "wasm-release",
       "displayName": "WebAssembly, Release, single-threaded",
       "description": "The game in a browser, built with Qt's single-threaded WebAssembly kit and the pinned Emscripten. Needs EMSDK (an activated emsdk), HEART_BOOM_MATHS_QT_WASM_ROOT (the wasm_singlethread kit) and ICL_QT_ROOT (the desktop kit of the same Qt version, which Qt uses as its host tools). No tests are built: vcpkg is not used and a browser cannot run them.",
@@ -124,6 +148,7 @@
     { "name": "windows-msvc-release", "configurePreset": "windows-msvc-release", "configuration": "Release" },
     { "name": "windows-msvc-asan", "configurePreset": "windows-msvc-asan" },
     { "name": "ios-release", "configurePreset": "ios-release", "configuration": "Release" },
+    { "name": "ios-game-release", "configurePreset": "ios-game-release", "configuration": "Release" },
     { "name": "wasm-release", "configurePreset": "wasm-release" }
   ],
   "testPresets": [
