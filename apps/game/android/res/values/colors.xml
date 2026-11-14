@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- The yellow of the page (Theme.background in apps/game/qml/Theme.qml): the colour behind the first frame, so a launch is
+     not a flash of the system's default window colour, and behind the launcher icon's mark. -->
+<resources>
+    <color name="hbm_launch_background">#FFE14D</color>
+    <color name="hbm_icon_background">#FFE14D</color>
+    <!-- PLACEHOLDER icon colours (Theme.heartPink and Theme.ink): see drawable/ic_launcher_foreground.xml. -->
+    <color name="hbm_icon_heart">#FF5FA2</color>
+    <color name="hbm_icon_outline">#111111</color>
+</resources>

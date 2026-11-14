@@ -112,6 +112,35 @@
         "HEART_BOOM_MATHS_BUILD_GAME": "ON",
         "HEART_BOOM_MATHS_BUILD_IOS_APP": "OFF"
       }
+    },
+    {
+      "name": "android-base",
+      "hidden": true,
+      "inherits": "base",
+      "description": "An Android phone or tablet, built from any host with Qt's Android kit (HEART_BOOM_MATHS_QT_ANDROID_ROOT, for example Qt/6.12.0/android_arm64_v8a: the kit names the architecture), a desktop kit of the same Qt version for the host tools and androiddeployqt (ICL_QT_ROOT), the Android SDK (ANDROID_SDK_ROOT), the NDK that kit was built with (ANDROID_NDK_ROOT) and a JDK 17 or later. `cmake --build --preset <name>` makes the packages. No tests are built: vcpkg is not used and nothing runs on a device here. The C++ module dependency scan is off: nothing here uses modules.",
+      "condition": { "type": "notEquals", "lhs": "$env{HEART_BOOM_MATHS_QT_ANDROID_ROOT}", "rhs": "" },
+      "toolchainFile": "$env{HEART_BOOM_MATHS_QT_ANDROID_ROOT}/lib/cmake/Qt6/qt.toolchain.cmake",
+      "cacheVariables": {
+        "QT_HOST_PATH": "$env{ICL_QT_ROOT}",
+        "CMAKE_CXX_SCAN_FOR_MODULES": "OFF",
+        "HEART_BOOM_MATHS_BUILD_TESTS": "OFF",
+        "HEART_BOOM_MATHS_BUILD_GAME": "ON",
+        "HEART_BOOM_MATHS_BUILD_IOS_APP": "OFF"
+      }
+    },
+    {
+      "name": "android-arm64-release",
+      "displayName": "Android (arm64-v8a, Release, unsigned)",
+      "description": "What a release is made from: an unsigned APK and AAB. A package signed with the upload key needs QT_ANDROID_SIGN_AAB (or QT_ANDROID_SIGN_APK) and the QT_ANDROID_KEYSTORE_* environment variables, which only the tag build has (docs/releasing.md).",
+      "inherits": "android-base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    },
+    {
+      "name": "android-arm64-debug",
+      "displayName": "Android (arm64-v8a, Debug, debug-signed)",
+      "description": "A debuggable APK signed with Android's own debug key, which installs on any device that allows apps from outside the store.",
+      "inherits": "android-base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "QT_ANDROID_DEPLOYMENT_TYPE": "Debug" }
     }
   ],
   "buildPresets": [
@@ -124,7 +153,9 @@
     { "name": "windows-msvc-release", "configurePreset": "windows-msvc-release", "configuration": "Release" },
     { "name": "windows-msvc-asan", "configurePreset": "windows-msvc-asan" },
     { "name": "ios-release", "configurePreset": "ios-release", "configuration": "Release" },
-    { "name": "wasm-release", "configurePreset": "wasm-release" }
+    { "name": "wasm-release", "configurePreset": "wasm-release" },
+    { "name": "android-arm64-release", "configurePreset": "android-arm64-release", "targets": ["apk", "aab"] },
+    { "name": "android-arm64-debug", "configurePreset": "android-arm64-debug", "targets": ["apk"] }
   ],
   "testPresets": [
     { "name": "linux-debug", "configurePreset": "linux-debug", "output": { "outputOnFailure": true } },

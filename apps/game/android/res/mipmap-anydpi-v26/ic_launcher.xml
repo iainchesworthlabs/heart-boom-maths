@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- PLACEHOLDER launcher icon. The real icon is not designed yet; this is a flat heart drawn in code so that the package
+     has an adaptive icon at all (the Play listing and the device tests need one). Replace this file and
+     drawable/ic_launcher_foreground.xml with the designer's artwork, and add a monochrome layer for themed icons then.
+     Every Android this game installs on (28 and later) draws adaptive icons, so there are no bitmap fallbacks. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/hbm_icon_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>
