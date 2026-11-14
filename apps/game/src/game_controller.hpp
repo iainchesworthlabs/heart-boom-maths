@@ -129,6 +129,13 @@ class GameController final : public QObject
 
     // The saved run that CONTINUE offers on the title screen.
     Q_PROPERTY(bool hasSavedRun READ has_saved_run NOTIFY savedRunChanged FINAL)
+    // What the saved run was when it was saved, for the caption under CONTINUE: keys level and secondsLeft. Empty when
+    // there is no run, or when it is not a state the core would restore.
+    Q_PROPERTY(QVariantMap savedRun READ saved_run NOTIFY savedRunChanged FINAL)
+
+    // The numbers of the title screen's tagline, from the tuning: the questions of a level and the seconds of level 1.
+    Q_PROPERTY(int firstLevelQuestions READ first_level_questions CONSTANT FINAL)
+    Q_PROPERTY(int firstLevelSeconds READ first_level_seconds CONSTANT FINAL)
 
     // Settings.
     Q_PROPERTY(bool soundEnabled READ sound_enabled NOTIFY settingsChanged FINAL)
@@ -140,6 +147,10 @@ class GameController final : public QObject
     Q_PROPERTY(bool gateActive READ gate_active NOTIFY gateChanged FINAL)
     Q_PROPERTY(GatePurpose gatePurpose READ gate_purpose NOTIFY gateChanged FINAL)
     Q_PROPERTY(QString gateWords READ gate_words NOTIFY gateChanged FINAL)
+    // The address a Link gate is for, so the screen can say what it opens. Empty for any other purpose.
+    Q_PROPERTY(QString gateUrl READ gate_url NOTIFY gateChanged FINAL)
+    // How many digits the number has.
+    Q_PROPERTY(int gateDigits READ gate_digits CONSTANT FINAL)
 
     // True when the save on disk came from a newer build: it is left alone, and nothing of this session is saved.
     Q_PROPERTY(bool saveBlocked READ save_blocked CONSTANT FINAL)
@@ -148,6 +159,9 @@ class GameController final : public QObject
     Q_PROPERTY(QString versionText READ version_text CONSTANT FINAL)
     Q_PROPERTY(QVariantMap buildInfo READ build_info CONSTANT FINAL)
     Q_PROPERTY(QString noticesText READ notices CONSTANT FINAL)
+    // The two addresses About can open (see external_links.hpp). Each goes to requestLink, never to the system.
+    Q_PROPERTY(QString privacyPolicyUrl READ privacy_policy_url CONSTANT FINAL)
+    Q_PROPERTY(QString repositoryUrl READ repository_url CONSTANT FINAL)
 
 public:
     // The enumerators are PascalCase because QML requires a capital letter and these are the names it sees.
@@ -221,6 +235,10 @@ public:
     Q_INVOKABLE bool submitGate(const QString& typed);
     Q_INVOKABLE void cancelGate();
 
+    /// True when the typed text is the number now asked for. The screen enables OPEN with it, so the number itself
+    /// never reaches QML. False when no gate is open.
+    [[nodiscard]] Q_INVOKABLE bool gateMatches(const QString& typed) const;
+
     // ---- Hooks for the app and the tests ----------------------------------------------------------------------------
 
     /// Called when the application leaves or returns to the Active state (QGuiApplication::applicationStateChanged).
@@ -278,6 +296,9 @@ public:
     [[nodiscard]] qint64 best_score() const;
     [[nodiscard]] int highlight_rank() const;
     [[nodiscard]] bool has_saved_run() const;
+    [[nodiscard]] QVariantMap saved_run() const;
+    [[nodiscard]] int first_level_questions() const;
+    [[nodiscard]] int first_level_seconds() const;
     [[nodiscard]] bool sound_enabled() const;
     [[nodiscard]] bool music_enabled() const;
     [[nodiscard]] bool game_center_enabled() const;
@@ -285,10 +306,14 @@ public:
     [[nodiscard]] bool gate_active() const;
     [[nodiscard]] GatePurpose gate_purpose() const;
     [[nodiscard]] QString gate_words() const;
+    [[nodiscard]] QString gate_url() const;
+    [[nodiscard]] int gate_digits() const;
     [[nodiscard]] bool save_blocked() const;
     [[nodiscard]] QString version_text() const;
     [[nodiscard]] QVariantMap build_info() const;
     [[nodiscard]] QString notices() const;
+    [[nodiscard]] QString privacy_policy_url() const;
+    [[nodiscard]] QString repository_url() const;
 
 signals:
     // Property changes.

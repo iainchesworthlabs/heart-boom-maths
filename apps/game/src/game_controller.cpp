@@ -2,6 +2,7 @@
 #include "game_controller.hpp"
 
 #include "event_sounds.hpp"
+#include "external_links.hpp"
 #include "services/notices.hpp"
 
 #include <QLoggingCategory>
@@ -362,6 +363,11 @@ void GameController::cancelGate()
     {
         end_gate();
     }
+}
+
+bool GameController::gateMatches(const QString& typed) const
+{
+    return m_GatePurpose != GatePurpose::None && gate_answer_matches(m_GateChallenge, typed.toStdString());
 }
 
 // ---- Hooks -------------------------------------------------------------------------------------------------------
@@ -921,6 +927,36 @@ bool GameController::has_saved_run() const
     return m_Save.run.has_value();
 }
 
+QVariantMap GameController::saved_run() const
+{
+    if (!m_Save.run.has_value())
+    {
+        return {};
+    }
+    // Asking the core is the only way to read the snapshot without knowing its layout. A scratch session takes it, so
+    // the one in play is untouched, and a run the core would refuse shows no caption.
+    GameSession scratch(*m_Tuning, 0);
+    if (!scratch.restore(*m_Save.run))
+    {
+        return {};
+    }
+    const SessionView& v = scratch.view();
+    return {
+        {QStringLiteral("level"), v.level},
+        {QStringLiteral("secondsLeft"), v.seconds_left},
+    };
+}
+
+int GameController::first_level_questions() const
+{
+    return m_Tuning->questions_per_level;
+}
+
+int GameController::first_level_seconds() const
+{
+    return m_Tuning->level_seconds;
+}
+
 bool GameController::sound_enabled() const
 {
     return m_Save.sound;
@@ -956,6 +992,16 @@ QString GameController::gate_words() const
     return to_qstring(m_GateChallenge.words);
 }
 
+QString GameController::gate_url() const
+{
+    return to_qstring(m_GateUrl);
+}
+
+int GameController::gate_digits() const
+{
+    return GATE_NUMBER_DIGITS;
+}
+
 bool GameController::save_blocked() const
 {
     return m_SaveBlocked;
@@ -982,6 +1028,16 @@ QVariantMap GameController::build_info() const
 QString GameController::notices() const
 {
     return notices_text();
+}
+
+QString GameController::privacy_policy_url() const
+{
+    return QString::fromLatin1(PRIVACY_POLICY_URL);
+}
+
+QString GameController::repository_url() const
+{
+    return QString::fromLatin1(REPOSITORY_URL);
 }
 
 } // namespace heart_boom_maths::game
