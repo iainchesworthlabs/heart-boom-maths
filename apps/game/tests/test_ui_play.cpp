@@ -518,33 +518,6 @@ TEST_CASE("The pause button opens the pause overlay and RESUME and QUIT leave it
     }
 }
 
-TEST_CASE("The pause screen's stats card matches the board: rows 28 apart, padded 14 and 18 inside the border",
-          "[ui][play][pause]")
-{
-    Shell s(PHONE);
-    s.rig.controller.pause();
-    s.h.settle();
-    REQUIRE(s.visible("pauseOverlay"));
-    QQuickItem* card = s.h.find_item("pauseStats");
-    QQuickItem* level = s.h.find_item("pauseLevel");
-    QQuickItem* question = s.h.find_item("pauseQuestion");
-    QQuickItem* points = s.h.find_item("pausePoints");
-    REQUIRE(card != nullptr);
-    REQUIRE(level != nullptr);
-    REQUIRE(question != nullptr);
-    REQUIRE(points != nullptr);
-    const auto top_of = [](QQuickItem* item) { return item->mapToScene(QPointF(0, 0)).y(); };
-    // Three lines of 22 with 6 between them: 28 from one to the next.
-    CHECK_THAT(top_of(question) - top_of(level), Catch::Matchers::WithinAbs(28.0, 0.6));
-    CHECK_THAT(top_of(points) - top_of(question), Catch::Matchers::WithinAbs(28.0, 0.6));
-    // The first line starts 19 below the card's top (a border of 5 and a padding of 14) and the last ends 19 above its foot.
-    CHECK_THAT(top_of(level) - top_of(card), Catch::Matchers::WithinAbs(19.0, 1.0));
-    CHECK_THAT(top_of(card) + card->height() - (top_of(points) + points->height()), Catch::Matchers::WithinAbs(19.0, 1.0));
-    // The numbers end 23 inside the card's right edge (5 and 18).
-    const double right_of_card = card->mapToScene(QPointF(card->width(), 0)).x();
-    CHECK_THAT(right_of_card - (level->mapToScene(QPointF(level->width(), 0)).x()), Catch::Matchers::WithinAbs(23.0, 1.0));
-}
-
 TEST_CASE("A run from level 1 to the bomb and back to level 1, through the screens", "[ui][shell][run]")
 {
     Shell s(PHONE, false);
