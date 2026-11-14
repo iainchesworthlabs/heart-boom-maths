@@ -15,6 +15,7 @@ nav:
   - Game:
       - Specification: SPEC.md
       - Game architecture: game-architecture.md
+      - User journeys: user-journeys.md
       - Decisions: DECISIONS.md
       - Milestones: MILESTONES.md
       - Compliance: COMPLIANCE.md
