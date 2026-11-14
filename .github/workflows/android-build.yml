@@ -1,0 +1,241 @@
+name: Android build
+
+# An unsigned compile check of the Android application: the `android-arm64-release` preset (an unsigned APK and AAB) and the
+# `android-arm64-debug` preset (an APK signed with Android's debug key, which installs on a phone that allows apps from
+# outside the store), and a look inside each package (apps/game/android/verify_package.sh: the application id, the version,
+# the platform levels, NO permission, one architecture, the icon, not debuggable in the release). It needs no secret. A
+# package signed with the upload key is the tag build's, with the owner's key (docs/releasing.md, "Android and Google Play").
+#
+# Not a required check, and not on the merge queue: it runs only when something the Android build reads changes (a required
+# check that a path filter keeps from running never reports, which would hold every unrelated pull request), and the Qt kits
+# are a download of several gigabytes. Dispatch it by hand to run it anywhere:
+#   gh workflow run android-build.yml --ref <branch>
+#
+# Nothing here runs the program: there is no device and no emulator job, because a hosted emulator needs hardware
+# acceleration and an image download that is not reliable enough to stand behind a green tick. What a device has to show is
+# listed in docs/android.md ("What only a device shows").
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "libs/**"
+      - "apps/**"
+      - "cmake/**"
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - ".github/toolchain-versions.json"
+      - ".github/workflows/android-build.yml"
+  push:
+    branches: [main, develop]
+    paths:
+      - "libs/**"
+      - "apps/**"
+      - "cmake/**"
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - ".github/toolchain-versions.json"
+      - ".github/workflows/android-build.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: android-build-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/develop' && github.ref != 'refs/heads/main' }}
+
+# No job gets more than it names below.
+permissions: {}
+
+jobs:
+  android-build:
+    name: Android (arm64-v8a, unsigned release and debug-signed APK)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      # The version code of the package: the number of this run, which only grows (cmake/HbmAndroid.cmake).
+      ICL_BUILD_NUMBER: ${{ github.run_number }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # One place holds the versions: .github/toolchain-versions.json (qt, aqtsource and the android block).
+      - name: Read the pinned versions
+        id: pins
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          pins = json.load(open(".github/toolchain-versions.json"))
+          android = pins["android"]
+          print(f"qt={pins['qt']}")
+          print(f"aqtsource={pins.get('aqtsource', '')}")
+          print(f"ndk={android['ndk']}")
+          print(f"platform={android['platform']}")
+          print(f"build_tools={android['build_tools']}")
+          print(f"jdk={android['jdk']}")
+          PY
+          cat "$GITHUB_OUTPUT"
+
+      - name: Set up CMake
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-cmake@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+
+      # Gradle (androiddeployqt runs it) needs a JDK 17 or later; the runner image carries one and says where, so no
+      # action is added to the supply chain for it.
+      - name: Use the runner's JDK
+        shell: bash
+        env:
+          JDK: ${{ steps.pins.outputs.jdk }}
+        run: |
+          set -euo pipefail
+          variable="JAVA_HOME_${JDK}_X64"
+          jdk="${!variable:-}"
+          [ -x "$jdk/bin/java" ] || { echo "::error::the runner image has no JDK $JDK ($variable is '$jdk'); pick an image that has one or add an action that installs it"; exit 1; }
+          echo "JAVA_HOME=$jdk" >> "$GITHUB_ENV"
+          "$jdk/bin/java" -version
+
+      # The SDK on the runner image, with the exact NDK, platform and build tools this build is pinned to added to it: the
+      # image's own NDKs are other versions, and Qt's kit is built with one of them only.
+      - name: Install the Android SDK parts
+        shell: bash
+        env:
+          NDK: ${{ steps.pins.outputs.ndk }}
+          PLATFORM: ${{ steps.pins.outputs.platform }}
+          BUILD_TOOLS: ${{ steps.pins.outputs.build_tools }}
+        run: |
+          set -euo pipefail
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          [ -d "$sdk" ] || { echo "::error::the runner image has no Android SDK (ANDROID_HOME is '$sdk')"; exit 1; }
+          sdkmanager="$sdk/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$sdkmanager" ] || { echo "::error::$sdkmanager is not there"; exit 1; }
+          "$sdkmanager" --sdk_root="$sdk" --install "ndk;$NDK" "platforms;$PLATFORM" "build-tools;$BUILD_TOOLS"
+          echo "ANDROID_SDK_ROOT=$sdk" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$sdk" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$sdk/ndk/$NDK" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$sdk/ndk/$NDK" >> "$GITHUB_ENV"
+          echo "$sdk/build-tools/$BUILD_TOOLS" >> "$GITHUB_PATH"
+
+      # Two kits: Qt's Android kit, and, installed beside it by aqtinstall's autodesktop (the action turns it on for an
+      # Android target), the Linux kit that supplies the host tools a cross build runs (moc, rcc, qmlcachegen, qsb,
+      # androiddeployqt). From Qt 6.7 the Android repository is `all_os`, not the host's own name. Sound is Qt Multimedia, an
+      # add-on module of the Android kit. The aqtinstall of PyPI cannot read Qt 6.11 and later, so the pinned one is given.
+      - name: Set up Qt (Android kit and Linux host kit)
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-qt@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+        with:
+          version: ${{ steps.pins.outputs.qt }}
+          aqtsource: ${{ steps.pins.outputs.aqtsource }}
+          host: all_os
+          target: android
+          arch: android_arm64_v8a
+          modules: qtmultimedia
+
+      # Where the action put the two kits, which the presets read. QT_ROOT_DIR names the Android kit; the host kit is its
+      # neighbour.
+      - name: Name the Qt kits
+        shell: bash
+        run: |
+          set -euo pipefail
+          android_kit="${QT_ROOT_DIR:-}"
+          [ -d "$android_kit" ] || { echo "::error::QT_ROOT_DIR is '$android_kit': the Qt install put its Android kit somewhere else (look at the install step's log)"; exit 1; }
+          host_kit="$(dirname "$android_kit")/gcc_64"
+          for file in "$android_kit/lib/cmake/Qt6/qt.toolchain.cmake" "$host_kit/lib/cmake/Qt6/Qt6Config.cmake" "$host_kit/bin/androiddeployqt"; do
+            [ -e "$file" ] || { echo "::error::$file is not there: the Qt install put its kits somewhere else (look at the install step's log)"; exit 1; }
+          done
+          echo "HEART_BOOM_MATHS_QT_ANDROID_ROOT=$android_kit" >> "$GITHUB_ENV"
+          echo "ICL_QT_ROOT=$host_kit" >> "$GITHUB_ENV"
+          echo "Android kit: $android_kit"
+          echo "Host kit:    $host_kit"
+          ls "$android_kit/lib/cmake" | grep -i -E 'multimedia$' || echo "::warning::the Android kit has no Qt Multimedia: the game would be silent"
+
+      - name: Show the toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --version | head -n 1
+          java -version
+          grep -E 'Pkg.Revision' "$ANDROID_NDK_ROOT/source.properties"
+          ls "$ANDROID_SDK_ROOT/platforms" "$ANDROID_SDK_ROOT/build-tools"
+          aapt2 version
+          echo "Version code (the run number): $ICL_BUILD_NUMBER"
+          # Two Qt kits, Gradle's caches and the builds are several gigabytes of a runner's disk.
+          df -h "$RUNNER_TEMP" .
+
+      # The unsigned release: an APK and an AAB, which androiddeployqt makes with Gradle.
+      - name: Configure (release)
+        run: cmake --preset android-arm64-release
+
+      - name: Build the release APK and AAB
+        run: cmake --build --preset android-arm64-release
+
+      # What androiddeployqt made, from the packages alone. A release must not be debuggable, and no package may ask for a
+      # permission. The sizes are printed so that a jump shows in the log.
+      - name: Check the release packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^ *VERSION \([0-9][0-9.]*\)$/\1/p' CMakeLists.txt | head -n 1)"
+          [ -n "$version" ] || { echo "::error::could not read the project version from CMakeLists.txt"; exit 1; }
+          apk="$(find build/android-arm64-release -path '*outputs/apk/release/*' -name '*.apk' -type f | head -n 1)"
+          aab="$(find build/android-arm64-release -path '*outputs/bundle/release/*' -name '*.aab' -type f | head -n 1)"
+          [ -n "$apk" ] || { echo "::error::no release APK under build/android-arm64-release"; find build/android-arm64-release -name '*.apk' -o -name '*.aab'; exit 1; }
+          [ -n "$aab" ] || { echo "::error::no release AAB under build/android-arm64-release"; find build/android-arm64-release -name '*.apk' -o -name '*.aab'; exit 1; }
+          mkdir -p android-dist
+          cp "$apk" "android-dist/heart-boom-maths-$version-android-arm64-release-unsigned.apk"
+          cp "$aab" "android-dist/heart-boom-maths-$version-android-arm64-release-unsigned.aab"
+          ls -l android-dist
+          {
+            echo "### Android package sizes"
+            echo ""
+            echo "| Package | Bytes |"
+            echo "|---|---|"
+            for file in android-dist/*; do echo "| $(basename "$file") | $(wc -c < "$file") |"; done
+          } >> "$GITHUB_STEP_SUMMARY"
+          apps/game/android/verify_package.sh "android-dist/heart-boom-maths-$version-android-arm64-release-unsigned.apk" --version "$version" --release
+          apps/game/android/verify_package.sh "android-dist/heart-boom-maths-$version-android-arm64-release-unsigned.aab"
+          # The version code is this run's number: it is what Google Play compares.
+          code="$(aapt2 dump badging "android-dist/heart-boom-maths-$version-android-arm64-release-unsigned.apk" | sed -n "1s/.* versionCode='\([0-9]*\)'.*/\1/p")"
+          [ "$code" = "$ICL_BUILD_NUMBER" ] || { echo "::error::the version code is '$code', not the run number $ICL_BUILD_NUMBER"; exit 1; }
+          echo "The version code is the run number: $code"
+
+      # The debug-signed APK: the one a person can install to try the game. It is made in its own build directory.
+      - name: Configure (debug)
+        run: cmake --preset android-arm64-debug
+
+      - name: Build the debug-signed APK
+        run: cmake --build --preset android-arm64-debug
+
+      - name: Check the debug-signed APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^ *VERSION \([0-9][0-9.]*\)$/\1/p' CMakeLists.txt | head -n 1)"
+          apk="$(find build/android-arm64-debug -path '*outputs/apk/debug/*' -name '*.apk' -type f | head -n 1)"
+          [ -n "$apk" ] || { echo "::error::no debug APK under build/android-arm64-debug"; find build/android-arm64-debug -name '*.apk'; exit 1; }
+          mkdir -p android-dist
+          cp "$apk" "android-dist/heart-boom-maths-$version-android-arm64-debug-signed.apk"
+          ls -l "android-dist/heart-boom-maths-$version-android-arm64-debug-signed.apk"
+          echo "| heart-boom-maths-$version-android-arm64-debug-signed.apk | $(wc -c < "android-dist/heart-boom-maths-$version-android-arm64-debug-signed.apk") |" >> "$GITHUB_STEP_SUMMARY"
+          apps/game/android/verify_package.sh "android-dist/heart-boom-maths-$version-android-arm64-debug-signed.apk" --version "$version"
+          apksigner verify --print-certs "android-dist/heart-boom-maths-$version-android-arm64-debug-signed.apk" | head -n 3
+
+      - name: Upload the debug-signed APK
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: android-apk-debug-signed
+          path: android-dist/*-debug-signed.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      # Unsigned: they cannot be installed. They are kept to look at (the size, the contents), and are not a release.
+      - name: Upload the unsigned release packages
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: android-release-unsigned
+          path: |
+            android-dist/*-release-unsigned.apk
+            android-dist/*-release-unsigned.aab
+          if-no-files-found: error
+          retention-days: 7
