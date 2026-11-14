@@ -237,7 +237,7 @@ Item {
             text: qsTr("BOOM!")
             textSize: 38
             letterSpacing: 1
-            variant: "boom"
+            spikes: 10
         }
 
         Repeater {

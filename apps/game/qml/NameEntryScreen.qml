@@ -96,9 +96,6 @@ Item {
             Layout.alignment: Qt.AlignHCenter
             Layout.preferredWidth: page.columnWidth
             Layout.preferredHeight: 130 * page.unit
-            variant: "wide"
-            outerOutline: 4 * page.unit
-            innerOutline: 3 * page.unit
             outerColor: Theme.orange
             text: qsTr("TOP 10!")
             textSize: 50 * page.unit

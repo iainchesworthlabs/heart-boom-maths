@@ -42,9 +42,6 @@ Item {
             Layout.alignment: Qt.AlignHCenter
             Layout.preferredWidth: root.contentWidth
             Layout.preferredHeight: root.contentWidth * 150 / 342
-            variant: "wide"
-            outerOutline: 4 * root.unit
-            innerOutline: 3 * root.unit
             text: qsTr("PAUSED")
             textSize: 58 * root.unit
             letterSpacing: 3 * root.unit
