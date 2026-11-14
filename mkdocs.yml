@@ -18,6 +18,11 @@ nav:
       - Decisions: DECISIONS.md
       - Milestones: MILESTONES.md
       - Compliance: COMPLIANCE.md
+  - Release:
+      - Privacy policy: privacy-policy.md
+      - Release checklist: release-checklist.md
+      - App Store listing: store/app-store.md
+      - Google Play listing: store/google-play.md
   - Decision records:
       - "0001 Test framework and JSON": adr/0001-test-framework-and-json.md
   - Testing: testing.md

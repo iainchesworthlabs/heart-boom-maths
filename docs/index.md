@@ -16,3 +16,7 @@ Cross-platform app and game for iOS, Android, WebAssembly and desktop. It builds
 | [Decisions](DECISIONS.md) | Accepted decisions, open gaps G1 to G8, risks |
 | [Milestones](MILESTONES.md) | M0 to M7 and the M0 and M1 briefs |
 | [Compliance](COMPLIANCE.md) | Children's privacy, screen time, store rules |
+| [Privacy policy](privacy-policy.md) | What the game saves and sends (draft) |
+| [Release checklist](release-checklist.md) | By-hand checks, signing prerequisites and owner decisions before a release |
+| [App Store listing](store/app-store.md) | Draft listing, age rating and privacy answers |
+| [Google Play listing](store/google-play.md) | Draft listing, content rating and Data safety answers |
