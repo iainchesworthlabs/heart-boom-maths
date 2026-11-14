@@ -5,21 +5,21 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/icl" "${CMAKE_C
 
 # Chooses the vcpkg checkout for this configure. Must run before project().
 include(IclVcpkgRoot)
-icl_resolve_vcpkg("${CMAKE_CURRENT_SOURCE_DIR}" ICL_TEMPLATE)
+icl_resolve_vcpkg("${CMAKE_CURRENT_SOURCE_DIR}" HEART_BOOM_MATHS)
 
-project(icl_template
+project(heart_boom_maths
     VERSION 0.1.0
-    DESCRIPTION "Template for new C++23 projects"
-    HOMEPAGE_URL "https://github.com/iainchesworthlabs/icl-cpp-template"
+    DESCRIPTION "Cross-platform app and game for iOS, Android, WebAssembly and desktop"
+    HOMEPAGE_URL "https://github.com/iainchesworthlabs/heart-boom-maths"
     LANGUAGES CXX)
 
-set(ICL_PROJECT_PREFIX ICL_TEMPLATE)
+set(ICL_PROJECT_PREFIX HEART_BOOM_MATHS)
 
 # The application id on Android and the bundle identifier on iOS: com.iainchesworthlabs.<app>, the App ID registered with
 # Apple and what the provisioning profile names. Defined once; the iOS workflows repeat it as BUNDLE_ID and
 # apps/ios/packaging/verify_app.sh checks that the two agree.
-set(ICL_TEMPLATE_APPLICATION_ID "com.iainchesworthlabs.icltemplate")
-set(ICL_TEMPLATE_DISPLAY_NAME "ICL Template")
+set(HEART_BOOM_MATHS_APPLICATION_ID "com.iainchesworthlabs.heartboommaths")
+set(HEART_BOOM_MATHS_DISPLAY_NAME "Heart Boom Maths")
 
 # The iOS application's code is Objective-C++ (apps/ios).
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
@@ -39,11 +39,11 @@ include(IclTracy)
 include(IclCoverage)
 include(IclPlatform)
 
-option(ICL_TEMPLATE_BUILD_TESTS "Build the tests" ON)
-option(ICL_TEMPLATE_BUILD_CLI "Build the command-line application" ON)
-option(ICL_TEMPLATE_BUILD_IOS_APP "Build the iPhone and iPad application (iOS only)" ON)
+option(HEART_BOOM_MATHS_BUILD_TESTS "Build the tests" ON)
+option(HEART_BOOM_MATHS_BUILD_CLI "Build the command-line application" ON)
+option(HEART_BOOM_MATHS_BUILD_IOS_APP "Build the iPhone and iPad application (iOS only)" ON)
 
-if(ICL_TEMPLATE_BUILD_TESTS)
+if(HEART_BOOM_MATHS_BUILD_TESTS)
     include(CTest)
     find_package(Catch2 3 CONFIG REQUIRED)
     include(Catch)
@@ -51,10 +51,10 @@ endif()
 
 add_subdirectory(libs/core)
 
-if(ICL_TEMPLATE_BUILD_CLI)
+if(HEART_BOOM_MATHS_BUILD_CLI)
     add_subdirectory(apps/cli)
 endif()
 
-if(CMAKE_SYSTEM_NAME STREQUAL "iOS" AND ICL_TEMPLATE_BUILD_IOS_APP)
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS" AND HEART_BOOM_MATHS_BUILD_IOS_APP)
     add_subdirectory(apps/ios)
 endif()
