@@ -42,6 +42,36 @@ radii, the hard offset shadow and the two fonts come from the `Theme` singleton 
 | `PauseOverlay` | `game`, `showSettings` (false); signal `settingsRequested` | The pause screen over the play screen. The gear is hidden until a Settings screen exists |
 | `Placeholder` | `title`, `subtitle`; children are the buttons | Marked in its own comment as a stand-in; each real screen replaces its use in `AppShell.qml` |
 
+## Result and score screens
+
+All of them stand on `ScorePage`, whose content column is 342 wide at `unit` 1 (the phone boards). `unit` grows with the
+window up to a column of `maxWidth` and shrinks when the window is short, so every size inside a screen is a number times
+`unit` and nothing is cut off. None of them works out a rule: they show what the controller gives.
+
+| Component | Properties | Notes |
+|---|---|---|
+| `ScorePage` | `designHeight` (the content's height at unit 1), `maxWidth` (480), `topMax`, `reservedBottom`, `columnSpacing`; read-only `unit`, `columnWidth`, `compact`; children go in the column | Halftone page and one centred column. A phone's content starts `topMax` from the top, a wider window centres it |
+| `StatRow` | `label`, `value`, `textColor`, `pixelSize`, `display` (Bangers for a total); children sit between label and number | A line of a score card. Its two texts are `<objectName>Label` and `<objectName>Value` |
+| `CoinCard` | `text`, `note`, `coinSize`, `pixelSize`, `notePixelSize`, `borderWidth`, `radius`, `shadowOffset`, `centered` | The white card with a coin: `+17 COINS` and the wallet, `+1,000 COINS`, `WALLET 61 saved` |
+| `LevelClearScreen` | `game` | CP6. Rows from `game.levelClear`: answer points, a PERFECT LEVEL row only when perfect, time bonus, LEVEL POINTS; then the coins card, NEXT LEVEL and the next-up line. When `levelClear.complete` is false (the level came back from a saved run part way) the answer points are left out and the total row reads SCORE |
+| `WinScreen` | `game` | CP8. The bonus card reads `+1,000 COINS` from `game.winBonus`, or `BONUS WON BEFORE` when the core paid nothing; KEEP GOING and FINISH |
+| `GameOverScreen` | `game`; signals `top10Requested`, `homeRequested` | CP7. The BOOM! burst shows only for `endReason` Bomb. NEW BEST! tags the best-score row after a saved best; COINS EARNED is left out after CONTINUE. PLAY AGAIN calls `startGame()` |
+| `NameEntryScreen` | `game`, `name`, `keyboardMode` (`auto`, `on`, `off`); read-only `keyboardShown`, `canSave`; signal `saveStarted` | CP11. A drawn field fed by a hardware keyboard and `NameKeyboard`; every character goes through `game.normaliseName` and SAVE through `game.canSaveName`, so the screen holds no letter set and no length. `auto` shows the keyboard in a compact window, on iOS and Android and after a touch |
+| `NameKeyboard` | `lettersEnabled`, `rows`; signals `letterTyped`, `deleteTyped` | A to Z, SPACE and DEL in the grey area the board reserves for a keyboard |
+| `Top10Screen` | `game`, `highlightRank`, `playText`; signals `backRequested`, `playRequested` | CP12. One `ScoreRow` per entry, an empty-list card, a back arrow and the play button |
+| `ScoreRow` | `rank`, `name`, `scoreText`, `highlighted`, `unit` | Medal for the first three, a plain number after. The highlighted row is blue with white text and a NEW tag |
+| `ChevronIcon` | `color`, `strokeWidth` | The back arrow, drawn |
+
+`StarBurst` also takes `textRotation` (the lean of the title in degrees) and centres a title of more than one line.
+
+### Navigation of these screens
+
+`AppShell` shows the name screen when the core is in game over with `nameEntryPending`, and the game-over card once it is
+dealt with (SAVE or SKIP). Two screens are not core states, so the shell keeps an `overlay`, cleared whenever the core's
+state changes: the Top 10, and Title after HOME on the game-over card (the core has no state for that). The functions the
+screens call are `showTop10()` (from the Title's TOP 10 button, the game-over card, and after SAVE), `closeTop10()` and
+`showTitle()`. The Top 10 marks the new entry only while it follows the game that earned it.
+
 ## AnswerFeedback
 
 The core deals the next question the moment an answer is given, so the right or wrong look is held in the app layer.

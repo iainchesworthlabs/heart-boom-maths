@@ -293,6 +293,13 @@ Deviations from the sketches above, all small:
 - The controller gains `ticksPerSecond`, `alertTicks` (the alert zone, a different share of the fuse in endless levels) and `answered`: the question as it stood when the child tapped. The core deals the next question at once, so the play screen draws `answered` for the second that `AnswerFeedback` holds a right or wrong look. The core is never paused or delayed by it, and taps are ignored while a look is held.
 - Navigation is in `AppShell.qml`. The play screen stays up after the last answer of a level or after the bomb until the hold ends.
 
+### As built (result and score screens)
+
+- `levelClear` carries more than the core's LEVEL_CLEARED event: the answer points, answer coins and streak coins of the level, added up by the controller from the answer events, plus `levelPoints`, `levelCoins`, `timeBonusPerSecond`, `nextUp` (words from `level_text.hpp`, read from the tuning table) and `complete`. The session snapshot does not hold those sums, so a level that CONTINUE brings back part way reports `complete` false and the card leaves its sums out. The same goes for `coinsEarned` of a resumed game (`coinsEarnedKnown`).
+- `winBonus` is the coins of the last GAME_WON event (0 when the bonus was paid before), `campaignLevels` and `top10Size` come from the tuning, and `canSaveName(typed)` says whether the name has a letter. The core accepts a name of spaces only; the screen does not offer SAVE for one.
+- SKIP also clears `newBest`, because a skipped score is not in the list.
+- HOME on the game-over card is a shell overlay, not a core state (see `ui-components.md`).
+
 ## Tests
 
 Nearly all behaviour lives in `libs/core`, so nearly all tests run there, without Qt, a window or a clock.
