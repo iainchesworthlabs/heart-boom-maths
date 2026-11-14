@@ -12,6 +12,7 @@ commit SHA. Dependabot proposes the SHA bump; the pull request also needs
 | Ready pull request | Above, plus Linux release and sanitizer builds and coverage |
 | Merge queue, push to `develop` | Above, plus Linux debug and TSan, macOS, Windows release and ASan |
 | Change to what the iOS build reads (a path filter), or a manual run | iOS compile check (`ios-build.yml`, not required) |
+| Change to what the browser build reads (a path filter), or a manual run | WebAssembly build (`wasm-build.yml`, not required) |
 | Nightly | CodeQL |
 | Tag `v*` | Release |
 
@@ -62,6 +63,13 @@ job name as a prefix.
 filter keeps from running never reports. It compiles `apps/ios` unsigned with the `ios-release` preset and looks inside
 the bundle; it needs no secret. The signed build and the TestFlight upload are the `ios` job of `release.yml`
 (`docs/releasing.md`).
+
+`wasm-build.yml` is separate for the same reason. Its three jobs build the rules for Node and compare eight games with
+the native build, build the game for the browser and check the site and its size against a budget
+(`WASM_GZIP_BUDGET_BYTES`, a placeholder to confirm), and open the site in Chrome. It installs two Emscripten releases
+(the repository pin for the rules, the one Qt's kit demands for the game) and two Qt kits (desktop for the host tools,
+WebAssembly). `docs/web.md` has the detail. The Project rules job of `ci.yml` also checks that the page template
+reaches nothing outside itself.
 
 ## Run the checks locally
 

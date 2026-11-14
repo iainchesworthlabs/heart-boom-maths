@@ -19,6 +19,7 @@ nav:
       - Milestones: MILESTONES.md
       - Compliance: COMPLIANCE.md
       - Audio: audio.md
+      - Browser build: web.md
   - Release:
       - Privacy policy: privacy-policy.md
       - Release checklist: release-checklist.md

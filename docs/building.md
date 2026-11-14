@@ -42,6 +42,7 @@ ctest --preset linux-debug
 | `macos-release`, `windows-msvc-release`, `windows-msvc-asan` | Platform builds |
 | `ios-release` | The iPhone and iPad application (`apps/ios`), unsigned, on a Mac with Xcode; no tests and no Qt application |
 | `wasm-release` | The game in a browser (`apps/game`), single-threaded. See WebAssembly below |
+| `wasm-core` | The rules and the text harness for Node, to check the golden replays on WebAssembly. See WebAssembly below |
 
 On Windows, run `pwsh -NoProfile -File tools/dev/test.ps1` to load the Visual Studio environment, build
 `windows-msvc-release` and run the tests (`-Filter <regex>` runs some of them).
@@ -66,24 +67,35 @@ stops when one has no licence file, so list a test-only package in `EXCLUDE`) an
 
 ### WebAssembly
 
-`wasm-release` builds `apps/game` for a browser with the Emscripten version pinned in
-`.github/toolchain-versions.json` and Qt's single-threaded kit, so the page needs no cross-origin isolation headers.
-The preset is listed only when `EMSDK` is set. It needs three things in the environment:
+`wasm-release` builds `apps/game` for a browser with Qt's single-threaded kit, so the page needs no cross-origin isolation
+headers. The preset is listed only when `EMSDK` is set. It needs three things in the environment:
 
 | Variable | Meaning |
 |---|---|
-| `EMSDK` | An activated emsdk of the pinned version (`emsdk install` then `emsdk activate`, then its environment script) |
-| `HEART_BOOM_MATHS_QT_WASM_ROOT` | Qt's `wasm_singlethread` kit of the pinned Qt version (installed with aqtinstall or the Qt installer) |
+| `EMSDK` | An activated emsdk of the Emscripten release the Qt kit was built with: **5.0.5 for Qt 6.12.0**. The kit stops the configure with any other. (The `emscripten` key of `.github/toolchain-versions.json`, 6.0.6, is for builds without Qt, such as `wasm-core` below.) |
+| `HEART_BOOM_MATHS_QT_WASM_ROOT` | Qt's `wasm_singlethread` kit of the pinned Qt version. With aqtinstall: `aqt install-qt all_os wasm 6.12.0 wasm_singlethread` (the kit is under the host `all_os` and the target `wasm`) |
 | `ICL_QT_ROOT` | The desktop kit of the same Qt version, which Qt uses for its host tools |
 
 ```bash
 cmake --preset wasm-release
 cmake --build --preset wasm-release
+python3 -m http.server --directory build/wasm-release/site 8000   # then open http://localhost:8000
 ```
 
-The result is `build/wasm-release/apps/game/heart-boom-maths.html` with its `.js` and `.wasm`; serve the folder over
-HTTP to try it. No tests are built for it and vcpkg is not used. CI has no WebAssembly job yet: the web spike (M2)
-decides that.
+The result is the folder `build/wasm-release/site`: the page, its script and style, Qt's loader, the module and the
+licence and notices, with nothing else, ready for any static host. `docs/web.md` describes the page, the save, the size
+and the checks. No tests are built for it and vcpkg is not used. `python3 tools/ci/check_web_site.py --site
+build/wasm-release/site` checks the site and reports its size.
+
+`wasm-core` builds only `libs/core` and the text harness with a plain Emscripten (the `emscripten` pin, no Qt), to run under
+Node:
+
+```bash
+cmake --preset wasm-core && cmake --build --preset wasm-core
+node build/wasm-core/libs/core/heart_boom_maths_harness.js --check libs/core/tests/data/replays
+```
+
+The harness is built without the tests when `HEART_BOOM_MATHS_BUILD_HARNESS=ON` and `HEART_BOOM_MATHS_BUILD_TESTS=OFF`.
 
 Sanitizers, Tracy, coverage and fuzzing exclude each other. The configure step stops with a
 message when two are enabled.
