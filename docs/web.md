@@ -19,10 +19,10 @@ needs in the environment.
 | `heart-boom-maths.js`, `heart-boom-maths.wasm` | Emscripten's glue and the game with Qt linked in |
 | `LICENSE.txt`, `notices.txt` | The licence, and the Qt, dependency and font notices About shows |
 
-**Two Emscripten releases.** Qt 6.12.0's kit was built with Emscripten 5.0.5 and refuses to configure with any other
-(`QT_EMCC_VERSION` in its `qconfig.h`). The `emscripten` pin of `.github/toolchain-versions.json` (6.0.6) is the
-repository's current release, and builds the rules and the text harness, which need no Qt. The game build therefore
-uses 5.0.5 until a Qt release moves; `wasm-build.yml` names it (`QT_EMSCRIPTEN_VERSION`) and checks it against the kit.
+**One Emscripten release.** Qt 6.12.0's kit was built with Emscripten 5.0.5 and refuses to configure with any other
+(`QT_EMCC_VERSION` in its `qconfig.h`). The `emscripten` pin of `.github/toolchain-versions.json` is therefore 5.0.5, and
+both the game build and the rules and text harness build use it. It stays there until a Qt release is built against a
+newer Emscripten; `wasm-build.yml` names it (`QT_EMSCRIPTEN_VERSION`) and checks it against the kit.
 
 **The page.** Qt's own page is not used. It starts the game from a script inside the page, shows Qt's logo and has no
 content security policy. The project's page has a loading message, a viewport for phones, a message when the module

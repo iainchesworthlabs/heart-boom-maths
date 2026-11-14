@@ -74,7 +74,7 @@ headers. The preset is listed only when `EMSDK` is set. It needs three things in
 
 | Variable | Meaning |
 |---|---|
-| `EMSDK` | An activated emsdk of the Emscripten release the Qt kit was built with: **5.0.5 for Qt 6.12.0**. The kit stops the configure with any other. (The `emscripten` key of `.github/toolchain-versions.json`, 6.0.6, is for builds without Qt, such as `wasm-core` below.) |
+| `EMSDK` | An activated emsdk of the Emscripten release the Qt kit was built with: **5.0.5 for Qt 6.12.0**. The kit stops the configure with any other. (The `emscripten` key of `.github/toolchain-versions.json` holds the same release, which `wasm-core` below uses too.) |
 | `HEART_BOOM_MATHS_QT_WASM_ROOT` | Qt's `wasm_singlethread` kit of the pinned Qt version. With aqtinstall: `aqt install-qt all_os wasm 6.12.0 wasm_singlethread` (the kit is under the host `all_os` and the target `wasm`) |
 | `ICL_QT_ROOT` | The desktop kit of the same Qt version, which Qt uses for its host tools |
 

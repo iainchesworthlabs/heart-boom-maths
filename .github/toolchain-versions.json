@@ -5,7 +5,7 @@
   "gcc": "16",
   "llvm": "23",
   "msvc_toolset": "14.51",
-  "emscripten": "6.0.6",
+  "emscripten": "5.0.5",
   "android": {
     "ndk": "27.2.12479018",
     "platform": "android-36",

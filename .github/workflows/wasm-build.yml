@@ -60,8 +60,9 @@ env:
   # once the size of the finished game (sound, more screens) is known; the measured size is in each run's summary.
   WASM_GZIP_BUDGET_BYTES: "12582912"
   # Qt 6.12.0's WebAssembly kit is built with one Emscripten release and refuses to configure with any other (it records
-  # QT_EMCC_VERSION in qconfig.h). That release is older than the `emscripten` pin of .github/toolchain-versions.json,
-  # which the `rules` job uses. Change the two together when Qt moves; the "Check the kit" step names the one Qt wants.
+  # QT_EMCC_VERSION in qconfig.h). The `emscripten` pin of .github/toolchain-versions.json is that release, and both jobs
+  # install it. Move the pin and these two values together when Qt moves; the "Check the kit" step names the one Qt wants,
+  # and the rules job fails if the installed Emscripten is not the pin.
   QT_EMSCRIPTEN_VERSION: "5.0.5"
   # The commit of the emsdk manager repository at the tag above (git ls-remote --tags https://github.com/emscripten-core/emsdk.git).
   QT_EMSDK_COMMIT: "c9ef2c9d6000341d667a32a807ba47ca489d1e1b"
@@ -85,9 +86,13 @@ jobs:
       - name: Set up CMake
         uses: iainchesworthlabs/icl-common-infra/actions/setup-cmake@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
 
-      # The Emscripten release of .github/toolchain-versions.json (the action's default is the same pin).
+      # The Emscripten release of .github/toolchain-versions.json. The action's own default is a newer release, so the
+      # version and the matching emsdk commit are passed in.
       - name: Install Emscripten
         uses: iainchesworthlabs/icl-common-infra/actions/setup-emscripten@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+        with:
+          emsdk-version: ${{ env.QT_EMSCRIPTEN_VERSION }}
+          emsdk-repo-commit: ${{ env.QT_EMSDK_COMMIT }}
 
       - name: Show the toolchain
         shell: bash
