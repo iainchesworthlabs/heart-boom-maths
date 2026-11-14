@@ -35,11 +35,16 @@ QtObject {
     readonly property int shadowLarge: 8 // the hard offset shadow: no blur, ink coloured
 
     // ---- Fonts: loaded from application resources, never from a network ----------------------------------------------
+    // A switch for trying the numerals that tell 1 and 7 apart: on, the two fonts below are the same fonts with a crossbar
+    // through the 7 (tools/assets/make_numeral_fonts.py), under the names HBM Display and HBM Body. Every screen follows,
+    // because they all take their family from displayFont and bodyFont. Off until the owner has seen it on a device.
+    property bool crossedSeven: false
+
     readonly property FontLoader displayLoader: FontLoader {
-        source: "qrc:/heart_boom_maths/fonts/Bangers-Regular.ttf"
+        source: theme.crossedSeven ? "qrc:/heart_boom_maths/fonts/HBMDisplay-Regular.ttf" : "qrc:/heart_boom_maths/fonts/Bangers-Regular.ttf"
     }
     readonly property FontLoader bodyLoader: FontLoader {
-        source: "qrc:/heart_boom_maths/fonts/LilitaOne-Regular.ttf"
+        source: theme.crossedSeven ? "qrc:/heart_boom_maths/fonts/HBMBody-Regular.ttf" : "qrc:/heart_boom_maths/fonts/LilitaOne-Regular.ttf"
     }
     readonly property string displayFont: displayLoader.name // headings, big numbers, the timer
     readonly property string bodyFont: bodyLoader.name // everything else
