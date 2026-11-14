@@ -120,11 +120,9 @@ Item {
                 width: 262 * root.unit
                 height: 262 * root.unit
                 outerColor: Theme.red
+                variant: "hero"
                 outerOutline: 4 * root.unit
                 innerOutline: 3 * root.unit
-                spikes: 12
-                valleyDepth: 0.74
-                innerShare: 0.8
             }
 
             HeartBomb {

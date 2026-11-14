@@ -22,6 +22,9 @@ ScorePage {
         Layout.alignment: Qt.AlignHCenter
         Layout.preferredWidth: 252 * root.unit
         Layout.preferredHeight: 252 * root.unit
+        variant: "squashed"
+        outerOutline: 4 * root.unit
+        innerOutline: 3 * root.unit
         outerColor: Theme.orange
         textColor: Theme.blue
         text: qsTr("YOU\nWIN!")

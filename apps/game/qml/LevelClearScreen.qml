@@ -24,6 +24,9 @@ ScorePage {
         Layout.alignment: Qt.AlignHCenter
         Layout.preferredWidth: root.columnWidth
         Layout.preferredHeight: 172 * root.unit
+        variant: "wide"
+        outerOutline: 4 * root.unit
+        innerOutline: 3 * root.unit
         text: qsTr("CLEAR!")
         subText: qsTr("LEVEL %1").arg(root.card.level)
         textSize: 56 * root.unit

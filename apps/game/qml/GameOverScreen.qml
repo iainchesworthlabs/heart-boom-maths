@@ -28,6 +28,9 @@ ScorePage {
         Layout.preferredWidth: 190 * root.unit
         Layout.preferredHeight: 190 * root.unit
         visible: root.bombWentOff
+        variant: "squashed"
+        outerOutline: 4 * root.unit
+        innerOutline: 3 * root.unit
         outerColor: Theme.red
         innerColor: Theme.background
         textColor: Theme.ink
