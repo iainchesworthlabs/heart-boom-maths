@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # The iPhone and iPad bundle of the game. Included by apps/game/CMakeLists.txt when the target is iOS (the
 # `ios-game-release` preset), after the heart_boom_maths_game target exists. Qt's qt_add_executable already makes the target
-# a bundle on iOS; this file gives it the property list, the entitlements, the asset catalogue and the one framework the
-# game links on its own (GameKit, for the Game Center score).
+# a bundle on iOS; this file gives it the property list, the entitlements, the asset catalogue and the frameworks the game
+# links on its own (GameKit for the Game Center score, AVFoundation for sound).
 #
 # Unsigned by default: the build needs no Apple account. A signed build is the release workflow's, with the owner's
 # certificate and provisioning profile (docs/ios.md, docs/releasing.md).
@@ -40,10 +40,11 @@ set_target_properties(heart_boom_maths_game PROPERTIES
     # The Game Center capability. Xcode embeds the file only into a signed build.
     XCODE_ATTRIBUTE_CODE_SIGN_ENTITLEMENTS "${hbm_ios_entitlements}")
 
-# Objective-C++ with reference counting, like the platform sources of apps/ios. GameKit is the only Apple framework the
-# game links itself: UIKit and Foundation come with Qt, and Qt's own frameworks come with its static libraries.
+# Objective-C++ with reference counting, like the platform sources of apps/ios. GameKit and AVFoundation are the Apple
+# frameworks the game links itself (src/platform/ios/score_platform.mm and avf_audio_backend.mm): Qt's own frameworks come
+# with its static libraries.
 set_property(TARGET heart_boom_maths_game APPEND PROPERTY COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>")
-target_link_libraries(heart_boom_maths_game PRIVATE "-framework GameKit" "-framework UIKit" "-framework Foundation")
+target_link_libraries(heart_boom_maths_game PRIVATE "-framework GameKit" "-framework AVFoundation" "-framework UIKit" "-framework Foundation")
 
 # Signing, for a build that is signed. They sign the application target alone: signing every Xcode target forces Xcode to
 # sign static libraries, which have no bundle identifier and were never meant to be signed.
