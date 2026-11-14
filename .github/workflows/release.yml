@@ -140,25 +140,32 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
-  # The iPhone and iPad application, signed with the Apple Distribution certificate (organisation secrets) and this
-  # repository's own App Store provisioning profile, through the shared signing actions (docs/ios-signing.md in
-  # icl-common-infra), and sent to TestFlight. It runs only when the repository variable SIGN_IOS_UPLOAD is `true`; with
-  # it unset the release is made without iOS. The build number is the number of this run. A tag, or a manual run with
-  # `upload_testflight`, uploads the build; any other run has Apple validate it and stops there. The IPA is a workflow
-  # artifact for 7 days and is never put on the release: Testers install from the TestFlight app (docs/releasing.md).
+  # The iPhone and iPad game (apps/game, linked statically against Qt for iOS), signed with the Apple Distribution
+  # certificate (organisation secrets) and this repository's own App Store provisioning profile, through the shared signing
+  # actions (docs/ios-signing.md in icl-common-infra), and sent to TestFlight. It runs only when the repository variable
+  # SIGN_IOS_UPLOAD is `true`; with it unset the release is made without iOS. The build number is the number of this run.
+  # A tag, or a manual run with `upload_testflight`, uploads the build; any other run has Apple validate it and stops there.
+  # The IPA is a workflow artifact for 7 days and is never put on the release: Testers install from the TestFlight app
+  # (docs/releasing.md, docs/ios.md). The build that needs no secret is ios-game-build.yml; the one-screen stub of apps/ios
+  # and ios-build.yml stay as a template to copy.
+  #
+  # Game Center follows the provisioning profile: the entitlement is requested only when the profile carries it, because
+  # Xcode refuses to sign a bundle that asks for an entitlement its profile lacks. When the owner turns the capability on
+  # for the App ID and makes the profile again, the next run builds with it, with no change here.
   ios:
     name: Package (iOS)
     needs: version
     if: ${{ !cancelled() && (needs.version.result == 'success' || needs.version.result == 'skipped') && vars.SIGN_IOS_UPLOAD == 'true' }}
     runs-on: macos-26
-    timeout-minutes: 90
+    timeout-minutes: 120
     permissions:
       contents: read
     env:
       # HEART_BOOM_MATHS_APPLICATION_ID in CMakeLists.txt; the check of the IPA fails if the two differ.
       BUNDLE_ID: com.iainchesworthlabs.heartboommaths
       EXECUTABLE: heart-boom-maths
-      VCPKG_DISABLE_METRICS: "1"
+      # The target of apps/game, whose scheme CMake makes (CMAKE_XCODE_GENERATE_SCHEME is ON in the preset).
+      SCHEME: heart_boom_maths_game
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -176,26 +183,112 @@ jobs:
           bundle-id: ${{ env.BUNDLE_ID }}
           method: app-store
 
-      - name: Set up vcpkg
-        uses: iainchesworthlabs/icl-common-infra/actions/setup-vcpkg@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+      # Reads the profile the action put where Xcode looks for it. Only names, dates and counts are printed. The Game
+      # Center entitlement is asked for only if the profile has it; a profile that expires within 14 days stops the run
+      # here, with a sentence, and not as a build that fails an hour in or a TestFlight build that stops working.
+      - name: Read the provisioning profile
+        id: profile
+        shell: bash
+        env:
+          PROFILE_UUID: ${{ steps.signing.outputs.profile-uuid }}
+          TEAM_ID: ${{ steps.signing.outputs.team-id }}
+        run: |
+          set -euo pipefail
+          profile="$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+          [ -f "$profile" ] || { echo "::error title=iOS signing::the profile is not at $profile"; exit 1; }
+          plist="$RUNNER_TEMP/profile-read.plist"
+          trap 'rm -f "$plist"' EXIT
+          security cms -D -i "$profile" > "$plist"
+          pb() { /usr/libexec/PlistBuddy -c "Print :$1" "$plist" 2>/dev/null || true; }
+          name="$(pb Name)"
+          appid="$(pb Entitlements:application-identifier)"
+          expires="$(plutil -extract ExpirationDate raw -o - "$plist")"
+          devices="$(/usr/libexec/PlistBuddy -c 'Print :ProvisionedDevices' "$plist" 2>/dev/null | grep -c '^    ' || true)"
+          limit="$(date -u -v+14d +%Y-%m-%dT%H:%M:%SZ)"
+
+          echo "profile name:        $name"
+          echo "application id:      $appid"
+          echo "team:                $TEAM_ID"
+          echo "expires:             $expires"
+          echo "devices:             $devices"
+          echo "entitlements in it:"
+          /usr/libexec/PlistBuddy -c 'Print :Entitlements' "$plist" | grep -E '^    [^ ]' | sed -E 's/ = .*//; s/^ +/  /' || true
+
+          [ "$appid" = "$TEAM_ID.$BUNDLE_ID" ] \
+            || { echo "::error title=iOS signing::the profile is for '$appid', not $TEAM_ID.$BUNDLE_ID: make a profile for this App ID"; exit 1; }
+          [[ "$expires" > "$limit" ]] \
+            || { echo "::error title=iOS signing::the profile '$name' expires on $expires, within 14 days: make it again in the Apple developer portal and set IOS_PROVISIONING_PROFILE_BASE64 again"; exit 1; }
+
+          if [ "$(pb 'Entitlements:com.apple.developer.game-center')" = "true" ]; then
+            cmake_value=ON; verify_value=on
+          else
+            cmake_value=OFF; verify_value=off
+          fi
+          echo "Game Center entitlement: $cmake_value (the profile does$([ "$cmake_value" = ON ] || echo ' not') carry com.apple.developer.game-center)"
+          {
+            echo "game-center-cmake=$cmake_value"
+            echo "game-center-verify=$verify_value"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Set up CMake
         uses: iainchesworthlabs/icl-common-infra/actions/setup-cmake@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
 
-      # Signed for the application alone (apps/ios/CMakeLists.txt says why). CMake makes no Xcode scheme unless asked,
-      # and `xcodebuild archive` takes only a scheme.
+      # Qt for iOS is cross-compiled, as in ios-game-build.yml: the iOS kit holds the libraries that are linked, and the
+      # macOS desktop kit of the same version holds the tools that run on the build machine (moc, rcc, qmlcachegen,
+      # qmlimportscanner), which the iOS toolchain file finds through QT_HOST_PATH. Qt Multimedia is not installed: sound on
+      # iOS is AVFoundation (docs/audio.md). No vcpkg: the game has no dependency on iOS.
+      - name: Set up Qt (the desktop kit, for the host tools)
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-qt@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+      - name: Remember the desktop kit
+        id: host-kit
+        shell: bash
+        run: echo "root=$QT_ROOT_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Qt (the iOS kit)
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-qt@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+        with:
+          target: ios
+      - name: Remember the iOS kit
+        id: ios-kit
+        shell: bash
+        run: echo "root=$QT_ROOT_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Show the toolchain
+        shell: bash
+        env:
+          HOST_KIT: ${{ steps.host-kit.outputs.root }}
+          IOS_KIT: ${{ steps.ios-kit.outputs.root }}
+        run: |
+          cmake --version | head -n 1
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+          echo "desktop kit: $HOST_KIT"
+          echo "iOS kit:     $IOS_KIT"
+          for kit in "$HOST_KIT" "$IOS_KIT"; do
+            [ -f "$kit/lib/cmake/Qt6/Qt6Config.cmake" ] || { echo "::error::no Qt6Config.cmake under $kit"; exit 1; }
+          done
+          [ -f "$IOS_KIT/lib/cmake/Qt6/qt.toolchain.cmake" ] || { echo "::error::no qt.toolchain.cmake in the iOS kit"; exit 1; }
+          echo "Apple Distribution identities in the keychains: $(security find-identity -v -p codesigning | grep -c 'Apple Distribution' || true)"
+
+      # The signing variables sign the application target alone (apps/game/ios/ios.cmake says why), over the preset's
+      # unsigned defaults. The preset makes the Xcode scheme, which `xcodebuild archive` takes.
       - name: Configure (signed)
         shell: bash
         env:
+          HEART_BOOM_MATHS_QT_IOS_ROOT: ${{ steps.ios-kit.outputs.root }}
+          ICL_QT_ROOT: ${{ steps.host-kit.outputs.root }}
           TEAM_ID: ${{ steps.signing.outputs.team-id }}
           PROFILE_NAME: ${{ steps.signing.outputs.profile-name }}
           BUILD_NUMBER: ${{ github.run_number }}
-        run: >
-          cmake --preset ios-release
-          -DCMAKE_XCODE_GENERATE_SCHEME=ON
-          -DHEART_BOOM_MATHS_IOS_BUILD_NUMBER="$BUILD_NUMBER"
-          -DHEART_BOOM_MATHS_IOS_SIGNING_TEAM="$TEAM_ID"
-          -DHEART_BOOM_MATHS_IOS_SIGNING_PROFILE="$PROFILE_NAME"
+          GAME_CENTER: ${{ steps.profile.outputs.game-center-cmake }}
+        run: |
+          set -o pipefail
+          echo "build number $BUILD_NUMBER, Game Center $GAME_CENTER, profile '$PROFILE_NAME'"
+          cmake --preset ios-game-release \
+            -DHEART_BOOM_MATHS_IOS_BUILD_NUMBER="$BUILD_NUMBER" \
+            -DHEART_BOOM_MATHS_IOS_SIGNING_TEAM="$TEAM_ID" \
+            -DHEART_BOOM_MATHS_IOS_SIGNING_PROFILE="$PROFILE_NAME" \
+            -DHEART_BOOM_MATHS_IOS_GAME_CENTER="$GAME_CENTER" 2>&1 | tee configure.log
 
       - name: Name the package
         id: name
@@ -207,37 +300,47 @@ jobs:
           set -euo pipefail
           label=dry-run
           if [ "$REF_TYPE" = tag ]; then label="$REF_NAME"; fi
-          project="$(find build/ios-release -maxdepth 1 -name '*.xcodeproj' | head -n 1)"
-          [ -n "$project" ] || { echo "::error::CMake made no .xcodeproj under build/ios-release"; exit 1; }
+          project="$(find build/ios-game-release -maxdepth 1 -name '*.xcodeproj' | head -n 1)"
+          [ -n "$project" ] || { echo "::error::CMake made no .xcodeproj under build/ios-game-release"; exit 1; }
+          listing="$(xcodebuild -list -project "$project")"
+          echo "$listing"
+          grep -E "^[[:space:]]+$SCHEME\$" <<<"$listing" >/dev/null \
+            || { echo "::error::the project has no scheme $SCHEME (CMAKE_XCODE_GENERATE_SCHEME): see the list above"; exit 1; }
           echo "project=$project" >> "$GITHUB_OUTPUT"
           echo "ipa=dist-ios/heart-boom-maths-$label-ios-appstore.ipa" >> "$GITHUB_OUTPUT"
           echo "version=${label#v}" >> "$GITHUB_OUTPUT"
 
+      # The long step: it compiles the game (static Qt and all) in the archive. Its output is Xcode's own, in this log.
       - name: Archive and export the IPA
         id: export
         uses: iainchesworthlabs/icl-common-infra/actions/export-ios-ipa@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
         with:
           project: ${{ steps.name.outputs.project }}
-          scheme: heart_boom_maths_ios
+          scheme: ${{ env.SCHEME }}
           bundle-id: ${{ env.BUNDLE_ID }}
           team-id: ${{ steps.signing.outputs.team-id }}
           profile-name: ${{ steps.signing.outputs.profile-name }}
           method: app-store
           output: ${{ steps.name.outputs.ipa }}
 
-      # The signed IPA, opened as a device would: identifier, version, the icon, no permission text, arm64, a valid
-      # signature, and an App Store profile for this identifier.
+      # The signed IPA, opened as a device would: everything verify_app.sh checks (identifier, version, the icon, no
+      # permission text, arm64, a valid signature, an App Store profile for this identifier) and what only the game
+      # promises (orientations, the Game Center entitlement in the state the profile allowed, the frameworks, the sound
+      # files, the size). It prints the state it found.
       - name: Check the IPA
         shell: bash
         env:
           IPA: ${{ steps.export.outputs.ipa }}
           VERSION: ${{ steps.name.outputs.version }}
           REF_TYPE: ${{ github.ref_type }}
+          GAME_CENTER: ${{ steps.profile.outputs.game-center-verify }}
         run: |
           set -euo pipefail
-          args=(--bundle-id "$BUNDLE_ID" --executable "$EXECUTABLE" --signed --store)
+          ls -l "$IPA"
+          args=(--bundle-id "$BUNDLE_ID" --executable "$EXECUTABLE" --signed --store \
+            --game-center "$GAME_CENTER" --entitlements apps/game/ios/heart-boom-maths.entitlements)
           if [ "$REF_TYPE" = tag ]; then args+=(--version "${VERSION%%-*}"); fi
-          apps/ios/packaging/verify_app.sh "$IPA" "${args[@]}"
+          apps/game/ios/verify_game_app.sh "$IPA" "${args[@]}"
 
       # Apple's own check of the icon, the property list, the signature and the privacy declarations; and, for a tag or a
       # manual run that asks, the upload to TestFlight.
@@ -256,6 +359,16 @@ jobs:
         with:
           remove: "true"
 
+      # The configure log, when something failed: the Xcode log is in the step above, and nothing here holds a secret.
+      - name: Keep the configure log
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ios-release-logs
+          path: configure.log
+          retention-days: 7
+          if-no-files-found: ignore
+
       # Named ios-appstore, not release-*: only an artifact named release-* goes to the release (the publish job's pattern).
       - name: Upload
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -270,9 +383,11 @@ jobs:
         env:
           UPLOADED: ${{ github.ref_type == 'tag' || inputs.upload_testflight == true }}
           BUILD_NUMBER: ${{ github.run_number }}
+          GAME_CENTER: ${{ steps.profile.outputs.game-center-cmake }}
         run: |
           {
             echo "### iOS build for TestFlight"
+            echo "Game Center entitlement: $GAME_CENTER (it follows the provisioning profile; docs/ios.md)."
             if [ "$UPLOADED" = true ]; then
               echo "Uploaded as build $BUILD_NUMBER. Apple processes it for a few minutes; then it is in the TestFlight app for the internal testers."
             else
