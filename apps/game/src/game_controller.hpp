@@ -77,6 +77,8 @@ class GameController final : public QObject
     Q_PROPERTY(bool endless READ endless NOTIFY levelChanged FINAL)
     Q_PROPERTY(int questionsPerLevel READ questions_per_level NOTIFY levelChanged FINAL)
     Q_PROPERTY(int ticksTotal READ ticks_total NOTIFY levelChanged FINAL)
+    Q_PROPERTY(int ticksPerSecond READ ticks_per_second CONSTANT FINAL)
+    Q_PROPERTY(int alertTicks READ alert_ticks NOTIFY levelChanged FINAL)
     Q_PROPERTY(int secondsPerRightAnswer READ seconds_per_right_answer NOTIFY levelChanged FINAL)
     Q_PROPERTY(int secondsPerWrongAnswer READ seconds_per_wrong_answer NOTIFY levelChanged FINAL)
     Q_PROPERTY(int correctAnswers READ correct_answers NOTIFY correctAnswersChanged FINAL)
@@ -90,6 +92,12 @@ class GameController final : public QObject
     Q_PROPERTY(bool hintUsed READ hint_used NOTIFY hintAvailableChanged FINAL)
     Q_PROPERTY(bool hintAvailable READ hint_available NOTIFY hintAvailableChanged FINAL)
     Q_PROPERTY(int hintCost READ hint_cost CONSTANT FINAL)
+
+    // The question the last answer was given to, as it stood when the child tapped: the core deals the next question at
+    // once, so a screen that holds the right or wrong feedback for a moment draws this and not the properties above.
+    // Keys: questionNumber, parts, tiles, removedTiles (bit i set means tile i was gone), tile, correctTile, correct.
+    // Empty before the first answer. Set before answerCorrect and answerWrong are emitted.
+    Q_PROPERTY(QVariantMap answered READ answered NOTIFY answeredChanged FINAL)
 
     // The timer.
     Q_PROPERTY(int ticksLeft READ ticks_left NOTIFY timeChanged FINAL)
@@ -237,6 +245,8 @@ public:
     [[nodiscard]] bool endless() const;
     [[nodiscard]] int questions_per_level() const;
     [[nodiscard]] int ticks_total() const;
+    [[nodiscard]] int ticks_per_second() const;
+    [[nodiscard]] int alert_ticks() const;
     [[nodiscard]] int seconds_per_right_answer() const;
     [[nodiscard]] int seconds_per_wrong_answer() const;
     [[nodiscard]] int correct_answers() const;
@@ -248,6 +258,7 @@ public:
     [[nodiscard]] bool hint_used() const;
     [[nodiscard]] bool hint_available() const;
     [[nodiscard]] int hint_cost() const;
+    [[nodiscard]] QVariantMap answered() const;
     [[nodiscard]] int ticks_left() const;
     [[nodiscard]] int seconds_left() const;
     [[nodiscard]] bool alert() const;
@@ -287,6 +298,7 @@ signals:
     void questionChanged();
     void removedTilesChanged();
     void hintAvailableChanged();
+    void answeredChanged();
     void timeChanged();
     void alertChanged();
     void pointsChanged();
@@ -323,6 +335,7 @@ private:
     void process();
     void refresh_view();
     void handle_event(const Event& event);
+    void remember_answer(const Event& event, bool correct);
     void finish_game(const Event& event);
     void sync_driver();
     void update_music();
@@ -345,7 +358,9 @@ private:
     QTimer m_Timer;
     bool m_Active = true;
 
-    SessionView m_Shown; // what the signals last reported
+    SessionView m_Shown;  // what the signals last reported
+    SessionView m_Before; // the view before the command being processed: the question an answer was given to
+    QVariantMap m_Answered;
     bool m_TickingPlaying = false;
     MusicId m_Music = MusicId::NONE;
 

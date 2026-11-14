@@ -13,6 +13,7 @@ flaky tests stay visible. A phase that matches no tests fails, unless the phase 
 | unit, integration | `apps/game/tests` | `heart_boom_maths_game_tests`, Catch2 on the offscreen platform: the tick driver, the parental gate, the controller with a manual clock, the file save store. A case tagged `[unit]` or `[integration]` gets that label, and a Qt warning outside the game's own `hbm.game` log category aborts the test |
 | unit | `apps/game` (in `CMakeLists.txt`) | `game.audio_placeholders` runs `tools/assets/make_placeholder_sounds.py --check`; it is added only when Python 3 is found |
 | ui | `apps/game` (in `CMakeLists.txt`) | `game.smoke` starts the program on the offscreen platform and waits for the first frame; `game.qmllint` |
+| ui, unit | `apps/game/tests` | `heart_boom_maths_ui_tests`, Catch2 with a `QGuiApplication` on the offscreen platform and the software renderer. It loads the shell and the play screen at phone, tablet and desktop sizes, drives the controller with a manual clock and reads the QML object tree. A Qt or QML warning aborts the test. A case tagged `[ui]` or `[unit]` gets that label. `heart_boom_maths_ui_tests "[shots]"` with `HBM_SHOT_DIR` set writes screenshots for the hand check against the boards; they are not committed |
 
 The `game.*` tests exist only when a Qt kit was found. On Windows the Qt `bin` directory must be on `PATH`;
 `tools/dev/test.ps1` adds the `bin` directory of `ICL_QT_ROOT`. The scripts in `tools/ci/` carry their own tests: run
