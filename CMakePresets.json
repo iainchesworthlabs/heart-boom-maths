@@ -163,6 +163,8 @@
       "inherits": "windows-msvc-release",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
+        "ICL_ENABLE_TRACY": "OFF",
+        "VCPKG_MANIFEST_FEATURES": "",
         "CMAKE_CXX_FLAGS": "/DWIN32 /D_WINDOWS /EHsc /GR /wd4702 /wd26446 /wd26472 /wd26481 /wd26482 /wd26821 /analyze /analyze:WX- /analyze:plugin EspXEngine.dll /analyze:external- /external:anglebrackets /external:W0"
       }
     },
