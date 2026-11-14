@@ -143,8 +143,8 @@ jobs:
     with:
       legs: >-
         [
-          {"name": "linux-gcc-release", "runner": ${{ needs.plan.outputs.linux_runner }}, "compiler": "gcc", "preset": "linux-release", "qt": true},
-          {"name": "linux-clang-asan-ubsan", "runner": ${{ needs.plan.outputs.linux_runner }}, "compiler": "clang", "preset": "linux-asan-ubsan", "qt": true}
+          {"name": "linux-gcc-release", "runner": ${{ needs.plan.outputs.linux_runner }}, "compiler": "gcc", "preset": "linux-release", "qt": true, "qt_modules": "qtmultimedia"},
+          {"name": "linux-clang-asan-ubsan", "runner": ${{ needs.plan.outputs.linux_runner }}, "compiler": "clang", "preset": "linux-asan-ubsan", "qt": true, "qt_modules": "qtmultimedia"}
         ]
 
   build-full:
@@ -157,12 +157,12 @@ jobs:
     with:
       legs: >-
         [
-          {"name": "linux-gcc-debug", "runner": ${{ needs.plan.outputs.linux_runner }}, "compiler": "gcc", "preset": "linux-debug", "qt": true, "vcpkg_features": "profiling"},
-          {"name": "linux-clang-tsan", "runner": ${{ needs.plan.outputs.linux_runner }}, "compiler": "clang", "preset": "linux-tsan", "qt": true},
-          {"name": "macos-release", "runner": ["macos-26"], "preset": "macos-release", "qt": true},
-          {"name": "macos-xcode27-release", "runner": ["xcode-27"], "preset": "macos-release", "qt": true, "experimental": true},
-          {"name": "windows-msvc-release", "runner": ${{ needs.plan.outputs.windows_runner }}, "preset": "windows-msvc-release", "qt": true, "config": "Release", "msvc": true},
-          {"name": "windows-msvc-asan", "runner": ${{ needs.plan.outputs.windows_runner }}, "preset": "windows-msvc-asan", "qt": true, "config": "Debug", "msvc": true}
+          {"name": "linux-gcc-debug", "runner": ${{ needs.plan.outputs.linux_runner }}, "compiler": "gcc", "preset": "linux-debug", "qt": true, "qt_modules": "qtmultimedia", "vcpkg_features": "profiling"},
+          {"name": "linux-clang-tsan", "runner": ${{ needs.plan.outputs.linux_runner }}, "compiler": "clang", "preset": "linux-tsan", "qt": true, "qt_modules": "qtmultimedia"},
+          {"name": "macos-release", "runner": ["macos-26"], "preset": "macos-release", "qt": true, "qt_modules": "qtmultimedia"},
+          {"name": "macos-xcode27-release", "runner": ["xcode-27"], "preset": "macos-release", "qt": true, "qt_modules": "qtmultimedia", "experimental": true},
+          {"name": "windows-msvc-release", "runner": ${{ needs.plan.outputs.windows_runner }}, "preset": "windows-msvc-release", "qt": true, "qt_modules": "qtmultimedia", "config": "Release", "msvc": true},
+          {"name": "windows-msvc-asan", "runner": ${{ needs.plan.outputs.windows_runner }}, "preset": "windows-msvc-asan", "qt": true, "qt_modules": "qtmultimedia", "config": "Debug", "msvc": true}
         ]
 
   coverage:
@@ -184,6 +184,8 @@ jobs:
         uses: iainchesworthlabs/icl-common-infra/actions/setup-gcc@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
       - name: Set up Qt
         uses: iainchesworthlabs/icl-common-infra/actions/setup-qt@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+        with:
+          modules: qtmultimedia
       - name: Set up CMake
         uses: iainchesworthlabs/icl-common-infra/actions/setup-cmake@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
       - name: Set up vcpkg
