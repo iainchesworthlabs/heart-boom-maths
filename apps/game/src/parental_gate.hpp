@@ -14,6 +14,11 @@ namespace heart_boom_maths::game
 inline constexpr int GATE_NUMBER_MIN = 100;
 inline constexpr int GATE_NUMBER_MAX = 999;
 
+/// How many digits the number has. The keypad stops here, and a wrong number of this length is a wrong answer at once.
+inline constexpr int GATE_NUMBER_DIGITS = 3;
+static_assert(GATE_NUMBER_MIN == 100 && GATE_NUMBER_MAX == 999 && GATE_NUMBER_DIGITS == 3,
+              "every number has three digits");
+
 /// Longest answer read. Anything longer cannot be a valid answer.
 inline constexpr std::size_t GATE_ANSWER_MAX_LENGTH = 8;
 

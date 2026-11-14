@@ -23,6 +23,7 @@ QtObject {
     readonly property color coin: "#F5B800"
     readonly property color disabledFill: "#E8E8E8"
     readonly property color disabledText: "#4A4A4A"
+    readonly property color switchOff: "#D9D9D9" // the track of a switch that is off
 
     // ---- Shape (compact; a screen scales these up for the regular size class) --------------------------------------
     readonly property int outlineSmall: 4 // small controls
@@ -62,6 +63,21 @@ QtObject {
     // 3860 reads 3,860 whatever the language of the device.
     function formatNumber(value) {
         return Number(value).toLocaleString(Qt.locale("en_US"), "f", 0);
+    }
+
+    // The build date as About shows it: 2026-11-14 reads 14 Nov 2026. Anything that is not a date (a local build says
+    // "dev") is shown as it is.
+    function formatBuildDate(text) {
+        const months = [qsTr("Jan"), qsTr("Feb"), qsTr("Mar"), qsTr("Apr"), qsTr("May"), qsTr("Jun"), qsTr("Jul"), qsTr("Aug"), qsTr("Sep"), qsTr("Oct"), qsTr("Nov"), qsTr("Dec")];
+        const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+        if (match === null) {
+            return text;
+        }
+        const month = parseInt(match[2], 10);
+        if (month < 1 || month > 12) {
+            return text;
+        }
+        return parseInt(match[3], 10) + " " + months[month - 1] + " " + match[1];
     }
 
     // The core writes a take-away as "-"; the fonts have a real minus sign.

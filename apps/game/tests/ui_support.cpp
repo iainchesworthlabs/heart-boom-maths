@@ -18,6 +18,7 @@
 #include <QVariantMap>
 #include <algorithm>
 #include <set>
+#include <utility>
 #include <vector>
 
 using namespace heart_boom_maths;
@@ -40,16 +41,28 @@ GameServices make_services(UiRig& rig)
     return services;
 }
 
-GameOptions make_options(std::uint64_t seed)
-{
-    GameOptions options;
-    options.session_seed = seed;
-    return options;
-}
+constexpr std::uint64_t FIRST_GATE_SEED = 1000;
 
 } // namespace
 
-UiRig::UiRig(std::uint64_t seed) : controller(make_services(*this), make_options(seed)) {}
+GateChallenge UiRig::gate_challenge(int nth)
+{
+    return make_gate_challenge(FIRST_GATE_SEED + static_cast<std::uint64_t>(nth));
+}
+
+UiRig::UiRig(std::uint64_t seed, bool scores_available, std::string saved_text)
+    : scores(scores_available), store(saved_text.empty() ? MemorySaveStore() : MemorySaveStore(std::move(saved_text))),
+      controller(make_services(*this),
+                 [this, seed]
+                 {
+                     GameOptions options;
+                     options.session_seed = seed;
+                     options.gate_seed_source = [this]
+                     { return FIRST_GATE_SEED + static_cast<std::uint64_t>(gate_seeds_used++); };
+                     return options;
+                 }())
+{
+}
 
 void UiRig::play_for_ms(int milliseconds)
 {

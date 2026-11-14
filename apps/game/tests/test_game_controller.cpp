@@ -896,19 +896,141 @@ TEST_CASE("Commands in the wrong state do nothing", "[integration][controller]")
 TEST_CASE("The controller registers its types and properties with Qt", "[integration][controller]")
 {
     const QMetaObject& meta = GameController::staticMetaObject;
-    for (const char* name :
-         {"state",     "level",       "questionText", "questionParts", "tiles",       "removedTiles",  "secondsLeft",
-          "alert",     "points",      "wallet",       "run",           "multiplier",  "hintAvailable", "top10",
-          "bestScore", "hasSavedRun", "gateActive",   "gateWords",     "versionText", "noticesText",   "levelClear"})
+    for (const char* name : {"state",
+                             "level",
+                             "questionText",
+                             "questionParts",
+                             "tiles",
+                             "removedTiles",
+                             "secondsLeft",
+                             "alert",
+                             "points",
+                             "wallet",
+                             "run",
+                             "multiplier",
+                             "hintAvailable",
+                             "top10",
+                             "bestScore",
+                             "hasSavedRun",
+                             "gateActive",
+                             "gateWords",
+                             "versionText",
+                             "noticesText",
+                             "levelClear",
+                             "savedRun",
+                             "gateUrl",
+                             "gateDigits",
+                             "privacyPolicyUrl",
+                             "repositoryUrl",
+                             "firstLevelQuestions",
+                             "firstLevelSeconds"})
     {
         INFO(name);
         CHECK(meta.indexOfProperty(name) >= 0);
     }
     for (const char* name :
          {"startGame()", "continueGame()", "answer(int)", "useHint()", "pause()", "resume()", "quit()", "nextLevel()",
-          "keepGoing()", "finish()", "requestLink(QString)", "submitGate(QString)", "saveName(QString)", "skipName()"})
+          "keepGoing()", "finish()", "requestLink(QString)", "submitGate(QString)", "saveName(QString)", "skipName()",
+          "gateMatches(QString)", "cancelGate()"})
     {
         INFO(name);
         CHECK(meta.indexOfMethod(name) >= 0);
     }
+}
+
+TEST_CASE("The saved run says its level and the time left for the title screen", "[integration][controller]")
+{
+    MemorySaveStore memory;
+    int level = 0;
+    int seconds = 0;
+    {
+        Rig first(memory);
+        CHECK(first.controller.saved_run().isEmpty());
+        first.controller.startGame();
+        first.play_level_right();
+        first.controller.nextLevel();
+        first.answer_right();
+        first.play_for_ms(3000);
+        first.controller.pause();
+        level = first.controller.level();
+        seconds = first.controller.seconds_left();
+        const QVariantMap now = first.controller.saved_run();
+        CHECK(now.value(QStringLiteral("level")).toInt() == level);
+        CHECK(now.value(QStringLiteral("secondsLeft")).toInt() == seconds);
+    }
+    CHECK(level == 2);
+
+    Rig second(memory);
+    QSignalSpy spy(&second.controller, &GameController::savedRunChanged);
+    const QVariantMap saved_run = second.controller.saved_run();
+    CHECK(saved_run.value(QStringLiteral("level")).toInt() == level);
+    CHECK(saved_run.value(QStringLiteral("secondsLeft")).toInt() == seconds);
+
+    // Reading it changes nothing in the controller's own game.
+    CHECK(second.controller.state() == State::Idle);
+    CHECK(second.controller.has_saved_run());
+
+    // A new game spends the run, and the caption goes with it.
+    second.controller.startGame();
+    CHECK(second.controller.saved_run().isEmpty());
+    CHECK(spy.count() >= 1);
+}
+
+TEST_CASE("A saved run the core would refuse shows no caption", "[integration][controller]")
+{
+    SaveData data;
+    data.run = std::vector<std::int64_t>{1, 2, 3};
+    MemorySaveStore memory(*serialise(data));
+    Rig rig(memory);
+    CHECK(rig.controller.has_saved_run());
+    CHECK(rig.controller.saved_run().isEmpty());
+}
+
+TEST_CASE("The gate says what it opens and checks the typed number without telling it", "[integration][controller]")
+{
+    MemorySaveStore memory;
+    Rig rig(memory);
+    GameController& c = rig.controller;
+    CHECK_FALSE(c.gateMatches(QStringLiteral("123"))); // no gate open
+    CHECK(c.gate_url().isEmpty());
+    CHECK(c.gate_digits() == 3);
+
+    REQUIRE(c.requestLink(c.privacy_policy_url()));
+    CHECK(c.gate_url() == c.privacy_policy_url());
+    const GateChallenge first = make_gate_challenge(FIRST_GATE_SEED);
+    const QString right = QString::number(first.number);
+    CHECK(c.gateMatches(right));
+    CHECK(c.gateMatches(QStringLiteral(" ") + right + QStringLiteral(" ")));
+    CHECK_FALSE(c.gateMatches(QString::number(first.number + 1)));
+    CHECK_FALSE(c.gateMatches(right.left(2)));
+    CHECK_FALSE(c.gateMatches(QString()));
+    CHECK(rig.links.opened.empty()); // asking never opens
+
+    c.cancelGate();
+    CHECK(c.gate_url().isEmpty());
+    CHECK_FALSE(c.gateMatches(right));
+}
+
+TEST_CASE("The two addresses About opens are https and written once", "[integration][controller]")
+{
+    MemorySaveStore memory;
+    Rig rig(memory);
+    GameController& c = rig.controller;
+    CHECK(c.privacy_policy_url() ==
+          QStringLiteral("https://iainchesworthlabs.github.io/heart-boom-maths/privacy-policy/"));
+    CHECK(c.repository_url() == QStringLiteral("https://github.com/iainchesworthlabs/heart-boom-maths"));
+    // Each is accepted by requestLink, which needs https.
+    CHECK(c.requestLink(c.privacy_policy_url()));
+    c.cancelGate();
+    CHECK(c.requestLink(c.repository_url()));
+    c.cancelGate();
+    CHECK(rig.links.opened.empty());
+}
+
+TEST_CASE("The title tagline numbers come from the tuning", "[integration][controller]")
+{
+    MemorySaveStore memory;
+    Rig rig(memory);
+    CHECK(rig.controller.first_level_questions() == Tuning::defaults().questions_per_level);
+    CHECK(rig.controller.first_level_seconds() == Tuning::defaults().level_seconds);
 }

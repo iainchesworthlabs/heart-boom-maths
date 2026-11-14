@@ -7,6 +7,7 @@
 #include "fakes.hpp"
 #include "game_controller.hpp"
 #include "heart_boom_maths/save_store.hpp"
+#include "parental_gate.hpp"
 #include "services/clock.hpp"
 
 #include <QByteArray>
@@ -19,6 +20,7 @@
 #include <QTemporaryDir>
 #include <QVariant>
 #include <memory>
+#include <string>
 
 namespace hbm_test
 {
@@ -26,7 +28,14 @@ namespace hbm_test
 /// A controller with every service recorded and a clock that moves only when told to.
 struct UiRig
 {
-    explicit UiRig(std::uint64_t seed = 20261114);
+    /// `scores_available` makes the score service report a leaderboard, which shows Game Center in Settings.
+    /// `saved_text` is the save file the store starts with: a controller reads it at once, so a saved run shows on
+    /// Title.
+    explicit UiRig(std::uint64_t seed = 20261114, bool scores_available = false, std::string saved_text = {});
+
+    /// The words and the number the parental gate asks for the n-th time it deals one (from 0). The rig's gate seeds
+    /// are fixed, so a test knows what to type.
+    [[nodiscard]] static heart_boom_maths::game::GateChallenge gate_challenge(int nth);
 
     /// Plays real time in 50 ms frames, the length of one tick, as a running level would.
     void play_for_ms(int milliseconds);
@@ -39,6 +48,7 @@ struct UiRig
     RecordingScores scores;
     RecordingLinks links;
     heart_boom_maths::MemorySaveStore store;
+    int gate_seeds_used = 0;
     heart_boom_maths::game::GameController controller;
 };
 
