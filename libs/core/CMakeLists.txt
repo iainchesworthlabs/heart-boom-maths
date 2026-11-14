@@ -16,6 +16,7 @@ hbm_generate_tuning_header(
 
 add_library(heart_boom_maths_core
     src/greeting.cpp
+    src/json.cpp
     src/question_generator.cpp
     src/rng.cpp
     src/tuning.cpp

@@ -8,6 +8,7 @@ add_executable(heart_boom_maths_core_tests
     test_contract.cpp
     test_endless.cpp
     test_greeting.cpp
+    test_json.cpp
     test_parse.cpp
     test_platform.cpp
     test_tuning.cpp)
