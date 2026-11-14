@@ -27,6 +27,22 @@ Iain accepted all twelve proposals from the Implementation Plan. The PRD and the
 | Repository layout | The organisation template's: `libs/core` for the rules and `apps/game` for the Qt and QML application, not the handover's five top-level folders |
 | What is published | Neutral documentation is committed and published through GitHub Pages. The design spec, boards and handover notes stay local in `private/`, which Git ignores |
 
+## Approved differences from the design boards (15 Nov 2026)
+
+The boards are the reference for every screen. After a side-by-side review of the built screens, the project owner approved these differences, so they are not defects:
+
+| Screen | Difference | Decision |
+|---|---|---|
+| Game over | A HOME button beside TOP 10, which the board does not show | Keep. HOME returns to Title, as `game-architecture.md` says |
+| About | A fourth row, "Source code", for the repository link | Keep |
+| Play, last 10 seconds | The hint button stays on screen during the alert | Keep. A hint is allowed in the alert zone |
+| Play, wrong answer | The dimmed tiles look khaki, where the board shows cream | Keep |
+| All screens | The halftone dots are smaller than on the board | Keep |
+| Title, Level clear, Win, Game over, Name entry, Pause | The star bursts are regular shapes, not the board's hand-drawn polygons | Keep |
+| Win | Spacing inside the coin card | Keep |
+
+Everything else that differs from a board is treated as a defect and fixed, for example the width ratio of the gate and name-entry buttons, the height of the question digits and the layout of endless questions.
+
 ## Earlier decisions (7 and 14 Nov)
 
 Alert is the last 10 s of the 60 and gives no extra time. Correct answers keep adding time during the alert. Coins survive the bomb. Wrong answers cost time with clear feedback. When the bomb goes off the game is over, and a new game starts at level 1. 12 levels, then endless mode. Four answer tiles on every level, and a hint removes two wrong ones (removing one is the alternative to playtest). Look is Comic Pop. Name is Heart Boom Maths (first chosen as Star Bomb, then changed because Star Boom was already taken). The bomb is a pink heart (option A on the design canvas) and the explosion is a star burst. The game-over card shows a best score, and a high score earns a typed name on a top 10 that stays on the device. Settings (sound, music) and About exist. Game Center is integrated on Apple devices and assumed allowed at this rating. Target age rating is the lowest in each store. Diamonds, characters and the bonus animal are parked. The ESP32-P4 handheld is v2.
