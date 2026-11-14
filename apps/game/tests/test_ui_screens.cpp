@@ -230,6 +230,15 @@ TEST_CASE("The title screen in a window of the phone's shape matches the board's
     CHECK(s.item("settingsButton")->width() == 64);
     CHECK(s.item("hero")->width() == 342);
     CHECK(s.item("hero")->height() == 262);
+    // The two chips are 46 high and start at y 56; the burst, the name card and the tagline follow at the board's heights.
+    CHECK(s.item("bestScore")->height() == 46);
+    CHECK(s.item("walletPill")->height() == 46);
+    const auto top_of = [&](const char* name) { return s.item(name)->mapToScene(QPointF(0, 0)).y(); };
+    CHECK_THAT(top_of("bestScore"), Catch::Matchers::WithinAbs(56.0, 0.6));
+    CHECK_THAT(top_of("hero"), Catch::Matchers::WithinAbs(118.0, 0.6));
+    CHECK_THAT(top_of("tagline"), Catch::Matchers::WithinAbs(550.4, 3.0));
+    // The coin pill is 28 plus the border wide around its content: 14 each side, 10 between the coin and the count.
+    CHECK_THAT(s.item("walletPill")->width(), Catch::Matchers::WithinAbs(92.0, 3.0));
 }
 
 TEST_CASE("With a saved run the title offers CONTINUE and NEW GAME and says what was saved", "[ui][title][saved]")

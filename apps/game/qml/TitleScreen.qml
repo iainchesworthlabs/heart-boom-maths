@@ -56,7 +56,7 @@ Item {
             ComicCard {
                 objectName: "bestScore"
                 Layout.preferredWidth: bestRow.implicitWidth + 28 * root.unit + 8
-                Layout.preferredHeight: 48 * root.unit
+                Layout.preferredHeight: 46 * root.unit
                 borderWidth: Theme.outlineSmall
                 radius: 16
                 shadowOffset: 0
@@ -94,10 +94,12 @@ Item {
 
             CoinWallet {
                 objectName: "walletPill"
-                Layout.preferredHeight: 48 * root.unit
+                Layout.preferredHeight: 46 * root.unit
                 value: root.game.wallet
                 coinSize: 22 * root.unit
                 pixelSize: 28 * root.unit
+                horizontalPadding: 14 * root.unit
+                spacing: 10 * root.unit
                 displayNumerals: true
                 borderWidth: Theme.outlineSmall
                 radius: 16
