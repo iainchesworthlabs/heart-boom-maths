@@ -476,3 +476,44 @@ Item {
     CHECK_THAT(probe->width(), WithinAbs(820.0, 0.5));
     CHECK_THAT(probe->height(), WithinAbs(1180.0, 0.5));
 }
+
+TEST_CASE("The halftone page is a tiled picture that loads at once, for every grid", "[ui][halftone]")
+{
+    auto h = QmlHarness::from_source(R"(
+import QtQuick
+import HeartBoomMaths
+Item {
+    objectName: "host"
+    HalftoneBackground { objectName: "page12"; x: 0; width: 100; height: 100 }
+    HalftoneBackground { objectName: "page14"; x: 100; width: 100; height: 100; gridSize: 14; dotRadius: 2 }
+    HalftoneBackground { objectName: "page16"; x: 200; width: 100; height: 100; gridSize: 16; dotRadius: 2.2 }
+}
+)",
+                                     QSize(300, 100));
+    h.settle();
+    for (const char* name : {"page12", "page14", "page16"})
+    {
+        INFO(name);
+        QQuickItem* page = h.find_item(name);
+        REQUIRE(page != nullptr);
+        QQuickItem* dots = nullptr;
+        for (QQuickItem* child : page->childItems())
+        {
+            if (child->objectName() == QStringLiteral("halftoneDots"))
+            {
+                dots = child;
+            }
+        }
+        REQUIRE(dots != nullptr);
+        // Ready the moment the page exists: no first frame without the dots (status 1 is Image.Ready).
+        CHECK(property_of(dots, "status").toInt() == 1);
+        CHECK(property_of(dots, "fillMode").toInt() == 3); // Image.Tile
+        // The picture covers the page and one tile beyond each edge.
+        CHECK(dots->width() > page->width());
+        CHECK(dots->height() > page->height());
+    }
+    // The grid follows the grid size: a tile of 12, 14 and 16 pixels.
+    CHECK(property_of(h.find("page12"), "tileGrid").toInt() == 12);
+    CHECK(property_of(h.find("page14"), "tileGrid").toInt() == 14);
+    CHECK(property_of(h.find("page16"), "tileGrid").toInt() == 16);
+}

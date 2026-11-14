@@ -110,6 +110,23 @@ qt_add_resources(heart_boom_maths_app audio
     BASE "${CMAKE_CURRENT_SOURCE_DIR}/audio"
     FILES ${HEART_BOOM_MATHS_AUDIO_FILES})
 
+# The tiles of the halftone page, made by tools/assets/make_halftone_tiles.py: one dot per tile, at 1x, 2x and 3x for each of
+# the three grids. Qt picks the @2x or @3x file that matches the screen.
+set(HEART_BOOM_MATHS_IMAGE_FILES
+    images/halftone/dots-12.png
+    images/halftone/dots-12@2x.png
+    images/halftone/dots-12@3x.png
+    images/halftone/dots-14.png
+    images/halftone/dots-14@2x.png
+    images/halftone/dots-14@3x.png
+    images/halftone/dots-16.png
+    images/halftone/dots-16@2x.png
+    images/halftone/dots-16@3x.png)
+qt_add_resources(heart_boom_maths_app images
+    PREFIX /heart_boom_maths/images
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/images"
+    FILES ${HEART_BOOM_MATHS_IMAGE_FILES})
+
 # The QML files sit at the root of the module (HeartBoomMaths/Main.qml), as the tools expect: qmllint finds the types of
 # the other files in the directory only then. One file per line, so two branches that each add a screen rarely collide.
 set(HEART_BOOM_MATHS_QML_FILES
@@ -298,6 +315,10 @@ if(HEART_BOOM_MATHS_BUILD_TESTS)
             COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/assets/make_placeholder_icon.py" --check
                 --output "${CMAKE_CURRENT_SOURCE_DIR}/ios/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png")
         set_tests_properties(game.icon_placeholder PROPERTIES LABELS unit TIMEOUT 120)
+        # The halftone tiles are the pictures their script draws.
+        add_test(NAME game.halftone_tiles
+            COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/assets/make_halftone_tiles.py" --check)
+        set_tests_properties(game.halftone_tiles PROPERTIES LABELS unit TIMEOUT 120)
     else()
         message(STATUS "No Python 3 found: game.audio_placeholders is not added")
     endif()

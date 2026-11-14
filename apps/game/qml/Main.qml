@@ -15,6 +15,10 @@ Window {
     minimumWidth: 320
     minimumHeight: 480
     visible: true
+    // Qt 6.9 and later keep an iOS window inside the safe area unless it asks to be expanded under the cut-out and the home
+    // indicator; SafeAreaFrame then lays the content out inside SafeArea.margins and the page runs under the edges. Other
+    // platforms ignore the hint or already draw edge to edge, and a desktop window keeps its title bar.
+    flags: Qt.platform.os === "ios" ? (Qt.Window | Qt.ExpandedClientAreaHint) : Qt.Window
     title: qsTr("Heart Boom Maths")
     color: Theme.background
 

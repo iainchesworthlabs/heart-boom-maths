@@ -119,11 +119,16 @@ are then removed.
 
 ## Safe area and the privacy manifest
 
-- **Safe area.** Qt 6.9 and later draw a window edge to edge on iOS, so the cut-out of an iPhone, its rounded corners and the
+- **Safe area.** Qt 6.9 and later keep an iOS window inside the safe area unless it asks to be expanded: `Main.qml` sets
+  `Qt.ExpandedClientAreaHint` on iOS, and without it the cut-out and home-indicator bars stay black. With the hint the
+  cut-out of an iPhone, its rounded corners and the
   home indicator are the application's to keep clear. `apps/game/qml/SafeAreaFrame.qml` (used by `Main.qml`) reads
   `SafeArea.margins` and lays the application shell out inside them; the yellow halftone page runs under the unsafe edges,
   with its dots in step with the page inside. Desktop windows report zero margins. The tests stand in for a phone's
   margins with `SafeArea.additionalMargins`.
+- **The halftone page** is a repeated picture of one dot (`apps/game/images/halftone/`, drawn by
+  `tools/assets/make_halftone_tiles.py`), not a Canvas. A Canvas fills in after the screen appears, and on a phone that was
+  a flash of black on every screen change.
 - **Privacy manifest.** `apps/game/ios/PrivacyInfo.xcprivacy` goes into the root of the bundle. It says the game does not
   track, has no tracking domains and collects no data type, and declares the required-reason APIs that the game and the
   statically linked Qt call: UserDefaults (CA92.1), FileTimestamp (C617.1), SystemBootTime (35F9.1) and DiskSpace (E174.1).
