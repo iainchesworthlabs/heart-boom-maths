@@ -46,6 +46,8 @@ hbm_generate_notices_text("${CMAKE_CURRENT_BINARY_DIR}/generated/notices.txt"
     LICENCE_FILES
         "${CMAKE_CURRENT_SOURCE_DIR}/fonts/Bangers-OFL.txt"
         "${CMAKE_CURRENT_SOURCE_DIR}/fonts/LilitaOne-OFL.txt"
+        "${CMAKE_CURRENT_SOURCE_DIR}/fonts/HBMDisplay-OFL.txt"
+        "${CMAKE_CURRENT_SOURCE_DIR}/fonts/HBMBody-OFL.txt"
         "${CMAKE_CURRENT_SOURCE_DIR}/audio/Sounds.txt")
 qt_add_resources(heart_boom_maths_app notices
     PREFIX /heart_boom_maths
@@ -201,13 +203,16 @@ qt_add_qml_module(heart_boom_maths_app
     QML_FILES ${HEART_BOOM_MATHS_QML_FILES})
 
 # The fonts are application resources, never fetched from a network. Their licence texts travel with them. They sit in the
-# library so the tests that load the QML find them too.
+# library so the tests that load the QML find them too. The two HBM fonts are the same fonts with a crossed 7; Theme.qml
+# loads them instead of the originals while its `crossedSeven` switch is on.
 qt_add_resources(heart_boom_maths_app fonts
     PREFIX /heart_boom_maths/fonts
     BASE "${CMAKE_CURRENT_SOURCE_DIR}/fonts"
     FILES
         fonts/Bangers-Regular.ttf
-        fonts/LilitaOne-Regular.ttf)
+        fonts/LilitaOne-Regular.ttf
+        fonts/HBMDisplay-Regular.ttf
+        fonts/HBMBody-Regular.ttf)
 
 qt_add_executable(heart_boom_maths_game src/main.cpp)
 # The program is named heart-boom-maths while the target is heart_boom_maths_game, so the QML module and the target stay
@@ -262,7 +267,7 @@ if(NOT (ANDROID OR IOS OR EMSCRIPTEN))
     else()
         set(font_licence_dir "share/doc/heart-boom-maths")
     endif()
-    install(FILES fonts/Bangers-OFL.txt fonts/LilitaOne-OFL.txt DESTINATION "${font_licence_dir}")
+    install(FILES fonts/Bangers-OFL.txt fonts/LilitaOne-OFL.txt fonts/HBMDisplay-OFL.txt fonts/HBMBody-OFL.txt DESTINATION "${font_licence_dir}")
 endif()
 
 if(HEART_BOOM_MATHS_BUILD_TESTS)
