@@ -264,8 +264,7 @@ Item {
 
                     Item {
                         width: parent.width
-                        // The line under the card is as tall as the caption it holds, so the card sits where the board has it.
-                        height: root.wrongHeld ? Math.max(sizes.hintHeight, wrongTag.implicitHeight) : (root.rightHeld ? Math.max(sizes.hintHeight, rightTag.implicitHeight) : sizes.hintHeight)
+                        height: sizes.hintHeight
 
                         PlayHint {
                             objectName: "hintButton"
@@ -280,8 +279,6 @@ Item {
                         }
 
                         FeedbackTag {
-                            id: wrongTag
-
                             objectName: "wrongTag"
                             anchors.centerIn: parent
                             visible: root.wrongHeld
@@ -293,8 +290,6 @@ Item {
                         }
 
                         FeedbackTag {
-                            id: rightTag
-
                             objectName: "rightTag"
                             anchors.centerIn: parent
                             visible: root.rightHeld
