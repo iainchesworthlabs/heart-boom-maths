@@ -21,6 +21,7 @@ add_library(heart_boom_maths_app STATIC
     src/tick_driver.cpp
     src/services/build_info.cpp
     src/services/file_save_store.cpp
+    src/services/game_center_score_service.cpp
     src/services/notices.cpp
     src/services/system_link_opener.cpp)
 target_include_directories(heart_boom_maths_app PUBLIC src "${CMAKE_CURRENT_BINARY_DIR}/generated")
@@ -210,6 +211,7 @@ if(HEART_BOOM_MATHS_BUILD_TESTS)
         tests/test_build_info.cpp
         tests/test_event_sounds.cpp
         tests/test_file_save_store.cpp
+        tests/test_game_center.cpp
         tests/test_game_controller.cpp
         tests/test_level_text.cpp
         tests/test_parental_gate.cpp
