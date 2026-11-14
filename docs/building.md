@@ -40,6 +40,7 @@ ctest --preset linux-debug
 | `linux-tsan` | ThreadSanitizer |
 | `linux-coverage` | Instrumented build for gcovr |
 | `macos-release`, `windows-msvc-release`, `windows-msvc-asan` | Platform builds |
+| `linux-release-perf`, `windows-msvc-release-perf` | The release build with the performance tests built (`HEART_BOOM_MATHS_BUILD_PERF_TESTS=ON`), in a build directory of their own. See [Performance tests](testing.md#performance-tests) |
 | `ios-release` | The iPhone and iPad application (`apps/ios`), unsigned, on a Mac with Xcode; no tests and no Qt application |
 | `ios-game-release` | The whole game on an iPhone or iPad, linked statically against Qt for iOS, unsigned, on a Mac with Xcode. See iOS below and [iOS and Game Center](ios.md) |
 | `wasm-release` | The game in a browser (`apps/game`), single-threaded. See WebAssembly below |
@@ -47,7 +48,8 @@ ctest --preset linux-debug
 | `wasm-core` | The rules and the text harness for Node, to check the golden replays on WebAssembly. See WebAssembly below |
 
 On Windows, run `pwsh -NoProfile -File tools/dev/test.ps1` to load the Visual Studio environment, build
-`windows-msvc-release` and run the tests (`-Filter <regex>` runs some of them).
+`windows-msvc-release` and run the tests (`-Filter <regex>` runs some of them). `-Perf` builds
+`windows-msvc-release-perf` and runs only the performance tests.
 
 ### The game
 
