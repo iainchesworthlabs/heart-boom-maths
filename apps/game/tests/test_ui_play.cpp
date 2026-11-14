@@ -370,7 +370,8 @@ TEST_CASE("The last ten seconds turn the play screen into the alert", "[ui][play
 
 TEST_CASE("In the alert nothing of the play column overlaps another part, at every size", "[ui][play][alert]")
 {
-    // From a 667 high phone (the shortest the column's minimum heights allow) to the tablets in portrait and the desktop.
+    // From a 667 high phone (the shortest the column's minimum heights allow) to the tablets in portrait and the
+    // desktop.
     const QSize size =
         GENERATE(PHONE, QSize{375, 667}, TABLET, QSize{768, 1024}, QSize{744, 1133}, DESKTOP, QSize{1024, 600});
     CAPTURE(size.width(), size.height());
@@ -380,7 +381,8 @@ TEST_CASE("In the alert nothing of the play column overlaps another part, at eve
     REQUIRE(s.rig.controller.alert());
     REQUIRE(s.visible("alertBanner"));
 
-    const auto top_of = [&](const char* name) { return s.h.find_item(QLatin1String(name))->mapToScene(QPointF(0, 0)).y(); };
+    const auto top_of = [&](const char* name)
+    { return s.h.find_item(QLatin1String(name))->mapToScene(QPointF(0, 0)).y(); };
     const auto bottom_of = [&](const char* name)
     {
         QQuickItem* item = s.h.find_item(QLatin1String(name));

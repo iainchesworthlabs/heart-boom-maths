@@ -551,9 +551,51 @@ TEST_CASE("About shows the version, the build, the font licences and four rows",
     QQuickItem* flick = s.item("aboutFlick");
     CHECK(flick->width() > 0);
     CHECK(s.inside(flick));
-    if (arrangement.size == PHONE)
+    if (arrangement.size != TABLET)
     {
         CHECK_FALSE(property_of(flick, "interactive").toBool());
+        CHECK_FALSE(s.visible("aboutScrollBar"));
+        // Every row, the last one too, is whole inside the window.
+        CHECK(s.inside(s.item("sourceButton")));
+    }
+}
+
+TEST_CASE("About never cuts a card flat: it fits, or scrolls with a bar and reaches the last row", "[ui][about]")
+{
+    // Phone, the desktop sizes (the board's 1280 by 800 and a taller one), and windows too short for the rows.
+    const QSize size = GENERATE(PHONE, DESKTOP, QSize{1280, 960}, QSize{1280, 720}, QSize{390, 560}, QSize{390, 420});
+    CAPTURE(size.width(), size.height());
+    Screens s(PHONE);
+    s.tap("settingsButton");
+    s.tap("aboutButton");
+    REQUIRE(s.visible("aboutScreen"));
+    s.window_size = size;
+    s.h.resize(size);
+    s.h.settle();
+
+    QQuickItem* flick = s.item("aboutFlick");
+    QQuickItem* last = s.item("sourceButton");
+    const bool scrolls = property_of(flick, "interactive").toBool();
+    CHECK(s.visible("aboutScrollBar") == scrolls);
+    if (!scrolls)
+    {
+        // Everything fits: the last card, with its shadow, is inside the window.
+        CHECK(s.inside(last));
+        CHECK(last->mapToScene(QPointF(0, last->height())).y() + 6 <= size.height());
+    }
+    else
+    {
+        // The thumb is shorter than the track by as much as the content is longer than the window, and at the top of
+        // it.
+        QQuickItem* bar = s.item("aboutScrollBar");
+        CHECK(bar->height() < flick->height());
+        CHECK(bar->y() == 0);
+        // Scrolled to the end, the last card is whole inside the window and the thumb is at the foot.
+        flick->setProperty("contentY", property_of(flick, "contentHeight").toDouble() - flick->height());
+        s.h.settle();
+        CHECK(s.inside(last));
+        CHECK(bar->y() + bar->height() <= flick->height() + 0.5);
+        CHECK(bar->y() > 0);
     }
 }
 
@@ -958,6 +1000,12 @@ TEST_CASE("Screenshots of the title, settings, about and gate screens for the ha
             CHECK(s.h.grab(prefix + "settings.png")); // CP14
             s.tap("aboutButton");
             CHECK(s.h.grab(prefix + "about.png")); // CP15
+            // The same page in a window too short for it: it scrolls, with a bar.
+            s.h.resize(QSize{size.size.width(), 480});
+            s.h.settle();
+            CHECK(s.h.grab(prefix + "about-short.png"));
+            s.h.resize(size.size);
+            s.h.settle();
             s.tap("privacyButton");
             s.keypad(Screens::answer(0).left(2));
             CHECK(s.h.grab(prefix + "gate.png")); // CP17
