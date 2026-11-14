@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "tick_driver.hpp"
 
+#include "heart_boom_maths/profile.hpp"
+
 #include <algorithm>
 
 namespace heart_boom_maths::game
@@ -26,6 +28,7 @@ void TickDriver::stop() noexcept
 
 int TickDriver::ticks_due(std::int64_t now_ns) noexcept
 {
+    HBM_ZONE("tick_driver.ticks_due");
     if (!m_Running)
     {
         return 0;

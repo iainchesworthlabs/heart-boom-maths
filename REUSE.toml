@@ -48,3 +48,17 @@ path = "apps/game/audio/*.wav"
 precedence = "override"
 SPDX-FileCopyrightText = "Iain Chesworth Labs contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
+
+# The overlay of the vcpkg registry's tracy port: the registry's port files with two features added, and the registry's
+# patches to Tracy's own sources.
+[[annotations]]
+path = ["vcpkg-overlay-ports/tracy/portfile.cmake", "vcpkg-overlay-ports/tracy/vcpkg.json"]
+precedence = "override"
+SPDX-FileCopyrightText = "Microsoft Corporation and the vcpkg contributors"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "vcpkg-overlay-ports/tracy/*.patch"
+precedence = "override"
+SPDX-FileCopyrightText = "The Tracy Profiler contributors (https://github.com/wolfpld/tracy)"
+SPDX-License-Identifier = "BSD-3-Clause"

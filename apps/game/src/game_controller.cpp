@@ -4,6 +4,7 @@
 #include "event_haptics.hpp"
 #include "event_sounds.hpp"
 #include "external_links.hpp"
+#include "heart_boom_maths/profile.hpp"
 #include "level_text.hpp"
 #include "services/notices.hpp"
 
@@ -100,6 +101,7 @@ GameController::GameController(GameServices services, GameOptions options, QObje
     m_Timer.setTimerType(Qt::PreciseTimer);
     connect(&m_Timer, &QTimer::timeout, this, &GameController::advance_time);
 
+    HBM_ZONE("controller.construct");
     LoadResult loaded = m_SaveManager.load();
     switch (loaded.status)
     {
@@ -132,6 +134,7 @@ GameController::GameController(GameServices services, GameOptions options, QObje
 
 void GameController::startGame()
 {
+    HBM_ZONE("controller.start_game");
     const SessionState before = m_Session.view().state;
     if (before != SessionState::IDLE && before != SessionState::GAME_OVER)
     {
@@ -158,6 +161,7 @@ void GameController::startGame()
 
 bool GameController::continueGame()
 {
+    HBM_ZONE("controller.continue_game");
     const SessionState before = m_Session.view().state;
     if ((before != SessionState::IDLE && before != SessionState::GAME_OVER) || !m_Save.run.has_value())
     {
@@ -203,6 +207,7 @@ void GameController::arm_tile_guard()
 
 void GameController::answer(int tile)
 {
+    HBM_ZONE("controller.answer");
     if (m_Services.clock->now_ns() < m_TileGuardUntilNs)
     {
         return;
@@ -213,12 +218,14 @@ void GameController::answer(int tile)
 
 void GameController::useHint()
 {
+    HBM_ZONE("controller.use_hint");
     m_Session.use_hint();
     process();
 }
 
 void GameController::pause()
 {
+    HBM_ZONE("controller.pause");
     m_Session.pause();
     process();
     if (m_Session.view().state == SessionState::PAUSED)
@@ -250,6 +257,7 @@ void GameController::quit()
 
 void GameController::nextLevel()
 {
+    HBM_ZONE("controller.next_level");
     m_Session.next_level();
     arm_tile_guard();
     process();
@@ -270,6 +278,7 @@ void GameController::finish()
 
 int GameController::saveName(const QString& typed)
 {
+    HBM_ZONE("controller.save_name");
     if (m_NameRank == 0)
     {
         return 0;
@@ -387,6 +396,7 @@ bool GameController::requestLink(const QString& url)
 
 bool GameController::submitGate(const QString& typed)
 {
+    HBM_ZONE("controller.submit_gate");
     if (m_GatePurpose == GatePurpose::None)
     {
         return false;
@@ -434,6 +444,7 @@ bool GameController::gateMatches(const QString& typed) const
 
 void GameController::on_application_state(bool active)
 {
+    HBM_ZONE("controller.on_application_state");
     m_Active = active;
     if (active)
     {
@@ -461,11 +472,13 @@ void GameController::on_application_state(bool active)
 
 void GameController::advance_time()
 {
+    HBM_ZONE("controller.advance_time");
     if (!m_Driver.running())
     {
         return;
     }
     const int due = m_Driver.ticks_due(m_Services.clock->now_ns());
+    HBM_PLOT("controller.ticks_due", due);
     for (int i = 0; i < due && m_Session.view().state == SessionState::PLAYING; ++i)
     {
         m_Session.tick();
@@ -477,6 +490,7 @@ void GameController::advance_time()
 
 void GameController::process()
 {
+    HBM_ZONE("controller.process");
     const std::vector<Event> events = m_Session.take_events();
     refresh_view();
     for (const Event& event : events)
@@ -494,6 +508,7 @@ void GameController::process()
 
 void GameController::refresh_view()
 {
+    HBM_ZONE("controller.refresh_view");
     const SessionView& v = m_Session.view();
     const SessionView old = m_Shown;
     m_Before = old;
@@ -571,6 +586,7 @@ void GameController::refresh_view()
 
 void GameController::handle_event(const Event& event)
 {
+    HBM_ZONE("controller.handle_event");
     for (const SoundId sound : sounds_for_event(event))
     {
         m_Services.audio->play_effect(sound);
@@ -653,6 +669,7 @@ void GameController::handle_event(const Event& event)
 
 void GameController::remember_answer(const Event& event, bool correct)
 {
+    HBM_ZONE("controller.remember_answer");
     const Question& q = m_Before.question;
     const QList<int> tiles = tiles_for(q);
     QVariantList tile_values;
@@ -674,6 +691,7 @@ void GameController::remember_answer(const Event& event, bool correct)
 
 void GameController::finish_game(const Event& event)
 {
+    HBM_ZONE("controller.finish_game");
     m_Save.run.reset();
     emit savedRunChanged();
 
@@ -699,6 +717,7 @@ void GameController::finish_game(const Event& event)
 
 void GameController::sync_driver()
 {
+    HBM_ZONE("controller.sync_driver");
     const bool should_run = m_Active && m_Session.view().state == SessionState::PLAYING;
     if (should_run && !m_Driver.running())
     {
@@ -715,6 +734,7 @@ void GameController::sync_driver()
 
 void GameController::update_music()
 {
+    HBM_ZONE("controller.update_music");
     MusicId wanted = MusicId::MENU;
     switch (m_Session.view().state)
     {
@@ -737,6 +757,7 @@ void GameController::update_music()
 
 void GameController::persist()
 {
+    HBM_ZONE("controller.persist");
     const SessionView& v = m_Session.view();
     m_Save.coins = v.wallet;
     m_Save.won_once = v.won_once;
@@ -757,6 +778,7 @@ void GameController::persist()
 
 void GameController::remember_run()
 {
+    HBM_ZONE("controller.remember_run");
     const bool had_run = m_Save.run.has_value();
     if (m_Session.view().state == SessionState::PAUSED)
     {
@@ -787,6 +809,7 @@ void GameController::end_gate()
 
 void GameController::apply_settings()
 {
+    HBM_ZONE("controller.apply_settings");
     m_Services.audio->set_enabled(m_Save.sound, m_Save.music);
     m_Services.scores->set_enabled(m_Save.game_center && m_Services.scores->available());
     if (m_Services.haptics != nullptr)

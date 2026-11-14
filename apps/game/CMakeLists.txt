@@ -32,6 +32,10 @@ target_link_libraries(heart_boom_maths_app
     PRIVATE icl::warnings icl::hardening icl::coverage)
 icl_relax_generated_warnings(heart_boom_maths_app)
 
+# The profiling marks of the app layer, and in a build with Tracy the scene graph's zones and the scripted run. With
+# Tracy off the marks are empty and nothing of Tracy is built (cmake/HbmProfiling.cmake, docs/profiling.md).
+hbm_add_profiling(heart_boom_maths_app)
+
 # Version, build number, commit and Qt version, written at configure time (see cmake/HbmBuildInfo.cmake).
 hbm_generate_build_info("${CMAKE_CURRENT_BINARY_DIR}/generated/build_info_data.hpp"
     TEMPLATE "${CMAKE_CURRENT_SOURCE_DIR}/src/services/build_info_data.hpp.in"
@@ -39,9 +43,16 @@ hbm_generate_build_info("${CMAKE_CURRENT_BINARY_DIR}/generated/build_info_data.h
     QT_VERSION "${Qt6_VERSION}")
 
 # One notices text for About: Qt, the dependencies (the configure fails when one has no licence file) and the fonts.
+# Tracy is part of what ships when the build has it (dormant, a DLL or a library in the program), so its licence is in the
+# notices; it is a feature of the manifest and not a dependency of it.
+set(hbm_notice_packages)
+if(ICL_ENABLE_TRACY)
+    set(hbm_notice_packages tracy)
+endif()
 hbm_generate_notices_text("${CMAKE_CURRENT_BINARY_DIR}/generated/notices.txt"
     NAME "${HEART_BOOM_MATHS_DISPLAY_NAME}"
     QT_VERSION "${Qt6_VERSION}"
+    PACKAGES ${hbm_notice_packages}
     EXCLUDE catch2
     LICENCE_FILES
         "${CMAKE_CURRENT_SOURCE_DIR}/fonts/Bangers-OFL.txt"
@@ -272,7 +283,13 @@ if(NOT (ANDROID OR IOS OR EMSCRIPTEN))
     icl_install_qt_app(heart_boom_maths_game
         BUNDLE_IDENTIFIER "${HEART_BOOM_MATHS_APPLICATION_ID}"
         DISPLAY_NAME "${HEART_BOOM_MATHS_DISPLAY_NAME}"
+        NOTICE_PACKAGES ${hbm_notice_packages}
         NOTICE_EXCLUDE catch2)
+    # Tracy's client is a DLL beside the program on Windows (vcpkg's x64-windows triplet), and it is there in a release too,
+    # dormant: the program needs it to start (docs/profiling.md).
+    if(ICL_ENABLE_TRACY AND WIN32)
+        install(FILES "$<TARGET_FILE:Tracy::TracyClient>" DESTINATION bin)
+    endif()
     # The font licence asks for its notice and text to travel with the font.
     if(APPLE)
         set(font_licence_dir "heart-boom-maths.app/Contents/Resources/doc")
@@ -361,6 +378,75 @@ if(HEART_BOOM_MATHS_BUILD_TESTS)
         TIMEOUT 30
         ENVIRONMENT "QT_QPA_PLATFORM=there-is-no-such-plugin"
         PASS_REGULAR_EXPRESSION "heart-boom-maths ${PROJECT_VERSION} \\(")
+
+    # Profiling (docs/profiling.md). The run-time switch is plain code and is tested in every build; what only a build with
+    # Tracy contains (the scripted run, the reader of the scene graph's log) is tested in that build.
+    target_sources(heart_boom_maths_game_tests PRIVATE tests/test_profile_switch.cpp)
+    if(ICL_ENABLE_TRACY)
+        target_sources(heart_boom_maths_game_tests PRIVATE tests/test_profile_run.cpp)
+    endif()
+    if(Python3_Interpreter_FOUND)
+        # A build without Tracy has no Tracy in it, in the program or in the core (whose only Tracy include is profile.hpp,
+        # tools/ci/check_core_includes.py), and a build with it does and says so, which keeps the check from going blind.
+        if(ICL_ENABLE_TRACY)
+            set(hbm_tracy_expectation --present)
+        else()
+            set(hbm_tracy_expectation --absent)
+        endif()
+        add_test(NAME game.tracy_binary
+            COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/ci/check_binary_tracy.py" ${hbm_tracy_expectation}
+                "$<TARGET_FILE:heart_boom_maths_game>")
+        add_test(NAME game.tracy_in_core
+            COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/ci/check_binary_tracy.py" ${hbm_tracy_expectation}
+                "$<TARGET_FILE:heart_boom_maths_core>")
+        set_tests_properties(game.tracy_binary game.tracy_in_core PROPERTIES LABELS unit TIMEOUT 120)
+    endif()
+    if(ICL_ENABLE_TRACY)
+        # The dormant rule of the standard: a build that has Tracy starts nothing unless it is asked to, by a flag or by the
+        # environment. A profile preset is asked by its own default, so it has no test for the quiet start.
+        if(NOT HEART_BOOM_MATHS_PROFILE_AUTOSTART)
+            add_test(NAME game.profiler_dormant COMMAND heart_boom_maths_game --smoke-test)
+            set_tests_properties(game.profiler_dormant PROPERTIES
+                LABELS integration TIMEOUT 60 ENVIRONMENT "${game_test_environment}"
+                FAIL_REGULAR_EXPRESSION "Tracy profiler started")
+        endif()
+        add_test(NAME game.profiler_declined COMMAND heart_boom_maths_game --smoke-test --no-profile)
+        set_tests_properties(game.profiler_declined PROPERTIES
+            LABELS integration TIMEOUT 60 ENVIRONMENT "${game_test_environment};HBM_PROFILE=1"
+            FAIL_REGULAR_EXPRESSION "Tracy profiler started")
+        add_test(NAME game.profiler_asked_by_flag COMMAND heart_boom_maths_game --smoke-test --profile)
+        set_tests_properties(game.profiler_asked_by_flag PROPERTIES
+            LABELS integration TIMEOUT 60 ENVIRONMENT "${game_test_environment}"
+            PASS_REGULAR_EXPRESSION "Tracy profiler started")
+        add_test(NAME game.profiler_asked_by_environment COMMAND heart_boom_maths_game --smoke-test)
+        set_tests_properties(game.profiler_asked_by_environment PROPERTIES
+            LABELS integration TIMEOUT 60 ENVIRONMENT "${game_test_environment};HBM_PROFILE=1"
+            PASS_REGULAR_EXPRESSION "Tracy profiler started")
+        if(Python3_Interpreter_FOUND)
+            # Nothing listens unless the game is asked to, and when it is, one loopback listener opens, once.
+            if(HEART_BOOM_MATHS_PROFILE_AUTOSTART)
+                set(hbm_quiet_arguments --no-profile)
+            else()
+                set(hbm_quiet_arguments)
+            endif()
+            add_test(NAME game.no_listener_when_not_asked
+                COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/ci/check_listener.py" --silent --port 18087
+                    "$<TARGET_FILE:heart_boom_maths_game>" ${hbm_quiet_arguments})
+            add_test(NAME game.loopback_listener_when_asked
+                COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/ci/check_listener.py" --listening --port 18088
+                    "$<TARGET_FILE:heart_boom_maths_game>" --profile)
+            set_tests_properties(game.no_listener_when_not_asked game.loopback_listener_when_asked PROPERTIES
+                LABELS integration TIMEOUT 120 ENVIRONMENT "${game_test_environment}")
+        endif()
+        # The scripted run plays whole games on a real window and needs a display and a GPU: a developer's machine and
+        # not CI. It is run by hand (docs/profiling.md).
+    else()
+        # Without Tracy the scripted run is refused, not silently ignored.
+        add_test(NAME game.profile_run_refused COMMAND heart_boom_maths_game --smoke-test --profile-run 5)
+        set_tests_properties(game.profile_run_refused PROPERTIES
+            LABELS integration TIMEOUT 60 ENVIRONMENT "${game_test_environment}"
+            PASS_REGULAR_EXPRESSION "needs a profiling build")
+    endif()
 
     # The screens: the shell and the play screen load offscreen at both size classes, a scripted game drives the controller
     # and the tests read the QML object tree. Its own main starts a QGuiApplication, which the tests above do not need. A

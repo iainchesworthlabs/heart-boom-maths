@@ -17,10 +17,11 @@ tests below).
 | ui | `apps/game` (in `CMakeLists.txt`) | `game.smoke` starts the program on the offscreen platform and waits for the first frame; `game.qmllint` |
 | ui, unit | `apps/game/tests` | `heart_boom_maths_ui_tests`, Catch2 with a `QGuiApplication` on the offscreen platform and the software renderer. It loads the shell and the play screen at phone, tablet and desktop sizes, drives the controller with a manual clock and reads the QML object tree. A Qt or QML warning aborts the test. A case tagged `[ui]` or `[unit]` gets that label. `heart_boom_maths_ui_tests "[shots]"` with `HBM_SHOT_DIR` set writes screenshots for the hand check against the boards; they are not committed |
 | perf | `libs/core/tests/perf`, `apps/game/tests/perf` | `heart_boom_maths_core_perf`, `heart_boom_maths_game_perf` and the optional `heart_boom_maths_game_perf_gpu`: speed and memory against budgets. Built only by the `*-perf` presets |
+| unit, integration | `libs/core/tests`, `apps/game` (in `CMakeLists.txt`) | Profiling ([Profiling](profiling.md)): the `[profile]` cases check that the profiling marks are real exactly when the build has Tracy and that a replay gives the same events and hashes with the profiler off, started and stopped; `game.tracy_binary` and `game.tracy_in_core` run `tools/ci/check_binary_tracy.py` over the program and the core (no Tracy in a build without it, Tracy in one with it); `game.no_listener_when_not_asked` and `game.loopback_listener_when_asked` run `tools/ci/check_listener.py` (with the switch unset nothing listens, with it set one listener opens, on the loopback interface only, once); `game.profiler_*` start the program with the flag and the variable. `tracy.refused_for_*` run the configure check as a WebAssembly, Android and iOS build would meet it (Tracy is refused); `tools/ci/check_presets_tracy.py`, also a project rule in CI, keeps Tracy out of the web, Android, iOS, sanitizer and coverage presets |
 
 The `game.*` tests exist only when a Qt kit was found. On Windows the Qt `bin` directory must be on `PATH`;
 `tools/dev/test.ps1` adds the `bin` directory of `ICL_QT_ROOT`. The scripts in `tools/ci/` carry their own tests: run
-`python3 tools/ci/check_core_includes.py --self-test` and the same for `check_link_open.py`.
+`python3 tools/ci/check_core_includes.py --self-test` and the same for `check_link_open.py` and `check_presets_tracy.py`.
 
 ## Golden replays and the text harness
 

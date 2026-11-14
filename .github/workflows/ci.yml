@@ -136,6 +136,10 @@ jobs:
         run: |
           python3 tools/ci/check_web_site.py --self-test
           python3 tools/ci/check_web_site.py
+      - name: Tracy is in no web, Android, iOS, sanitizer or coverage preset
+        run: |
+          python3 tools/ci/check_presets_tracy.py --self-test
+          python3 tools/ci/check_presets_tracy.py
 
   build-fast:
     name: Build (fast)
@@ -148,7 +152,8 @@ jobs:
       legs: >-
         [
           {"name": "linux-gcc-release", "runner": ${{ needs.plan.outputs.linux_runner }}, "compiler": "gcc", "preset": "linux-release", "qt": true, "qt_modules": "qtmultimedia"},
-          {"name": "linux-clang-asan-ubsan", "runner": ${{ needs.plan.outputs.linux_runner }}, "compiler": "clang", "preset": "linux-asan-ubsan", "qt": true, "qt_modules": "qtmultimedia"}
+          {"name": "linux-clang-asan-ubsan", "runner": ${{ needs.plan.outputs.linux_runner }}, "compiler": "clang", "preset": "linux-asan-ubsan", "qt": true, "qt_modules": "qtmultimedia"},
+          {"name": "linux-gcc-profile", "runner": ${{ needs.plan.outputs.linux_runner }}, "compiler": "gcc", "preset": "linux-profile", "qt": true, "qt_modules": "qtmultimedia", "vcpkg_features": "profiling"}
         ]
 
   build-full:

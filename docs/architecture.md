@@ -1,7 +1,7 @@
 # Architecture
 
 ```text
-libs/core/            the game rules: standard library only, no Qt (the layers are in game-architecture.md)
+libs/core/            the game rules: standard library only, no Qt; Tracy only through include/heart_boom_maths/profile.hpp (the layers are in game-architecture.md)
   include/heart_boom_maths/
   src/
   data/tuning.json    release values; CMake turns them into a header when it configures
@@ -35,7 +35,7 @@ fails the pull request if one appears. Other directives are counted per file aga
 
 | Rule | Check |
 |---|---|
-| `libs/core` includes the C++ standard library and nothing else, and no Qt | `tools/ci/check_core_includes.py` |
+| `libs/core` includes the C++ standard library and nothing else, and no Qt; Tracy only through `heart_boom_maths/profile.hpp`, which is empty unless profiling is built in | `tools/ci/check_core_includes.py` |
 | One call opens a URL, behind the parental gate | `tools/ci/check_link_open.py` |
 
 Both run in the `Project rules` job and in `python3 tools/ci/precheck.py`. Each has a `--self-test`.

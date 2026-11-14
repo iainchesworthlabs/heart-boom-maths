@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "services/backed_audio_service.hpp"
 
+#include "heart_boom_maths/profile.hpp"
+
 #include <utility>
 
 namespace heart_boom_maths::game
@@ -18,6 +20,7 @@ bool BackedAudioService::may_play() const
 
 void BackedAudioService::play_effect(SoundId id)
 {
+    HBM_ZONE("audio.play_effect");
     if (!m_EffectsEnabled || !may_play())
     {
         return;
@@ -35,12 +38,14 @@ void BackedAudioService::stop_effect(SoundId id)
 
 void BackedAudioService::play_music(MusicId id)
 {
+    HBM_ZONE("audio.play_music");
     m_WantedMusic = id;
     refresh_music();
 }
 
 void BackedAudioService::set_enabled(bool effects, bool music)
 {
+    HBM_ZONE("audio.set_enabled");
     m_EffectsEnabled = effects;
     m_MusicEnabled = music;
     if (!effects)
@@ -73,6 +78,7 @@ void BackedAudioService::unlock()
 // the start, which suits a loop of a few seconds.
 void BackedAudioService::refresh_music()
 {
+    HBM_ZONE("audio.refresh_music");
     MusicId wanted = MusicId::NONE;
     if (m_MusicEnabled && may_play() && clip_for(m_WantedMusic))
     {

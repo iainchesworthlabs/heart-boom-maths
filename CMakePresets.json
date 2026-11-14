@@ -26,9 +26,9 @@
     },
     {
       "name": "linux-release",
-      "displayName": "Linux, Release",
+      "displayName": "Linux, Release, Tracy dormant",
       "inherits": "linux-base",
-      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "ICL_ENABLE_TRACY": "ON", "VCPKG_MANIFEST_FEATURES": "profiling" }
     },
     {
       "name": "linux-asan-ubsan",
@@ -93,21 +93,23 @@
     },
     {
       "name": "macos-release",
-      "displayName": "macOS, Release",
+      "displayName": "macOS, Release, Tracy dormant",
       "inherits": "base",
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" },
-      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "VCPKG_TARGET_TRIPLET": "arm64-osx" }
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "VCPKG_TARGET_TRIPLET": "arm64-osx", "ICL_ENABLE_TRACY": "ON", "VCPKG_MANIFEST_FEATURES": "profiling" }
     },
     {
       "name": "windows-msvc-release",
-      "displayName": "Windows, MSVC, Release",
+      "displayName": "Windows, MSVC, Release, Tracy dormant",
       "inherits": "base",
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "VCPKG_TARGET_TRIPLET": "x64-windows",
         "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "Embedded",
-        "CMAKE_POLICY_DEFAULT_CMP0141": "NEW"
+        "CMAKE_POLICY_DEFAULT_CMP0141": "NEW",
+        "ICL_ENABLE_TRACY": "ON",
+        "VCPKG_MANIFEST_FEATURES": "profiling"
       }
     },
     {
@@ -128,7 +130,31 @@
       "name": "windows-msvc-asan",
       "displayName": "Windows, MSVC, AddressSanitizer, /O1",
       "inherits": "windows-msvc-release",
-      "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo", "ICL_SANITIZERS": "address" }
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo", "ICL_SANITIZERS": "address", "ICL_ENABLE_TRACY": "OFF", "VCPKG_MANIFEST_FEATURES": "" }
+    },
+    {
+      "name": "windows-msvc-profile",
+      "displayName": "Windows, MSVC, optimised with symbols, Tracy on",
+      "description": "The game as it ships, plus Tracy: what to build to take a profile (docs/profiling.md). Starts profiling at launch, listens on the loopback interface only, and builds tracy-capture and tracy-csvexport for the host. Never a release.",
+      "inherits": "windows-msvc-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "ICL_ENABLE_TRACY": "ON",
+        "HEART_BOOM_MATHS_PROFILE_AUTOSTART": "ON",
+        "VCPKG_MANIFEST_FEATURES": "profiling;profiling-tools"
+      }
+    },
+    {
+      "name": "linux-profile",
+      "displayName": "Linux, optimised with symbols, Tracy on",
+      "description": "As windows-msvc-profile, without the command-line tools (add profiling-tools to VCPKG_MANIFEST_FEATURES for them). CI builds and tests this to keep the instrumentation compiling.",
+      "inherits": "linux-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "ICL_ENABLE_TRACY": "ON",
+        "HEART_BOOM_MATHS_PROFILE_AUTOSTART": "ON",
+        "VCPKG_MANIFEST_FEATURES": "profiling"
+      }
     },
     {
       "name": "windows-msvc-analyze",
@@ -137,6 +163,8 @@
       "inherits": "windows-msvc-release",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
+        "ICL_ENABLE_TRACY": "OFF",
+        "VCPKG_MANIFEST_FEATURES": "",
         "CMAKE_CXX_FLAGS": "/DWIN32 /D_WINDOWS /EHsc /GR /wd4702 /wd26446 /wd26472 /wd26481 /wd26482 /wd26821 /analyze /analyze:WX- /analyze:plugin EspXEngine.dll /analyze:external- /external:anglebrackets /external:W0"
       }
     },
@@ -279,6 +307,8 @@
     { "name": "windows-msvc-asan", "configurePreset": "windows-msvc-asan" },
     { "name": "windows-msvc-analyze", "configurePreset": "windows-msvc-analyze", "configuration": "Debug" },
     { "name": "macos-asan-ubsan", "configurePreset": "macos-asan-ubsan" },
+    { "name": "windows-msvc-profile", "configurePreset": "windows-msvc-profile", "configuration": "RelWithDebInfo" },
+    { "name": "linux-profile", "configurePreset": "linux-profile" },
     { "name": "ios-release", "configurePreset": "ios-release", "configuration": "Release" },
     { "name": "ios-game-release", "configurePreset": "ios-game-release", "configuration": "Release" },
     { "name": "wasm-core", "configurePreset": "wasm-core" },
@@ -310,6 +340,7 @@
     { "name": "linux-asan-o1", "configurePreset": "linux-asan-o1", "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "perf|fuzz" } } },
     { "name": "linux-ubsan", "configurePreset": "linux-ubsan", "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "perf|fuzz" } } },
     { "name": "windows-msvc-asan", "configurePreset": "windows-msvc-asan", "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "perf|fuzz" } } },
-    { "name": "macos-asan-ubsan", "configurePreset": "macos-asan-ubsan", "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "perf|fuzz" } } }
+    { "name": "macos-asan-ubsan", "configurePreset": "macos-asan-ubsan", "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "perf|fuzz" } } },
+    { "name": "linux-profile", "configurePreset": "linux-profile", "output": { "outputOnFailure": true } }
   ]
 }
