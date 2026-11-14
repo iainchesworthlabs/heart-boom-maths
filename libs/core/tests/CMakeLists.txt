@@ -10,6 +10,7 @@ add_executable(heart_boom_maths_core_tests
     test_greeting.cpp
     test_parse.cpp
     test_platform.cpp
+    test_question_generator.cpp
     test_rng.cpp
     test_tuning.cpp)
 target_include_directories(heart_boom_maths_core_tests PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
