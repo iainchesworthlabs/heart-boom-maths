@@ -45,7 +45,7 @@ Everything else that differs from a board is treated as a defect and fixed, for 
 
 ## Tracy in the core (15 Nov 2026)
 
-The project owner allows Tracy in `libs/core`. The rule that the core includes only the C++ standard library has this one exception. Tracy is reached only through `libs/core/include/heart_boom_maths/profile.hpp`, whose macros are empty unless profiling is built in, so normal and release builds have no Tracy code and no overhead. Tracy is a profiler and takes no part in the rules: state, hashes and replays are unaffected, and a test holds that. The `ICL_ENABLE_TRACY` profiling presets are off in release, sanitizer, coverage and fuzz builds.
+The project owner allows Tracy in `libs/core`. The rule that the core includes only the C++ standard library has this one exception. Tracy is reached only through `libs/core/include/heart_boom_maths/profile.hpp`, whose macros are empty unless profiling is built in, so normal and release builds have no Tracy code and no overhead. Tracy is a profiler and takes no part in the rules: state, hashes and replays are unaffected, and a test holds that. Profiling is on in debug builds. Desktop release builds (Windows, Linux, macOS) carry Tracy dormant, as the organisation standard allows: it listens on the loopback interface only, collects nothing until a viewer connects, and starts only when a person asks at run time (an environment variable or a command line option, off by default), so a release can be profiled without rebuilding. The iOS, Android and WebAssembly builds are built without Tracy, so the shipped mobile and web apps have no profiler listener at all. Sanitizer, coverage and fuzz builds leave it off.
 
 ## Earlier decisions (7 and 14 Nov)
 
