@@ -862,8 +862,9 @@ TEST_CASE("The on-screen keyboard types into the field and matches the phone boa
     // Everything above it is where the board has it: the card at 186, the field at 338 and the buttons at 418, with
     // SAVE 188 wide from x 24 and SKIP 140 wide up to 366.
     CHECK(s.rect_of("entryCard").top() == 186);
-    CHECK(s.rect_of("nameField").top() == 338);
-    CHECK(s.rect_of("saveButton").top() == 418);
+    // The field and the buttons sit under a card whose text is a few pixels taller on Linux, so they carry a tolerance.
+    CHECK_THAT(s.rect_of("nameField").top(), Catch::Matchers::WithinAbs(338.0, 4.0));
+    CHECK_THAT(s.rect_of("saveButton").top(), Catch::Matchers::WithinAbs(418.0, 4.0));
     CHECK(s.rect_of("saveButton").left() == 24);
     CHECK_THAT(s.rect_of("saveButton").width(), Catch::Matchers::WithinAbs(188.0, 1.0));
     CHECK_THAT(s.rect_of("skipButton").left(), Catch::Matchers::WithinAbs(226.0, 1.0));
