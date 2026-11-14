@@ -83,14 +83,17 @@ qt_add_resources(heart_boom_maths_app audio
 # The QML files sit at the root of the module (HeartBoomMaths/Main.qml), as the tools expect: qmllint finds the types of
 # the other files in the directory only then. One file per line, so two branches that each add a screen rarely collide.
 set(HEART_BOOM_MATHS_QML_FILES
+    qml/AboutScreen.qml
     qml/AnswerGrid.qml
     qml/AnswerTile.qml
     qml/AppShell.qml
     qml/ArrowIcon.qml
+    qml/BackIcon.qml
     qml/Badge.qml
     qml/CoinWallet.qml
     qml/ComicButton.qml
     qml/ComicCard.qml
+    qml/ComicSwitch.qml
     qml/DashedBox.qml
     qml/FeedbackTag.qml
     qml/FuseBar.qml
@@ -98,6 +101,8 @@ set(HEART_BOOM_MATHS_QML_FILES
     qml/HalftoneBackground.qml
     qml/HeartBomb.qml
     qml/Main.qml
+    qml/MusicIcon.qml
+    qml/ParentalGateScreen.qml
     qml/PauseIcon.qml
     qml/PauseOverlay.qml
     qml/Placeholder.qml
@@ -109,9 +114,17 @@ set(HEART_BOOM_MATHS_QML_FILES
     qml/PlayStats.qml
     qml/PlayTopBar.qml
     qml/QuestionCard.qml
+    qml/RowButton.qml
+    qml/ScreenFrame.qml
+    qml/SettingRow.qml
+    qml/SettingsScreen.qml
+    qml/SoundIcon.qml
     qml/SparkStar.qml
     qml/StarBurst.qml
-    qml/Theme.qml)
+    qml/TextViewer.qml
+    qml/Theme.qml
+    qml/TitleScreen.qml
+    qml/TrophyIcon.qml)
 foreach(qml_file IN LISTS HEART_BOOM_MATHS_QML_FILES)
     get_filename_component(qml_name "${qml_file}" NAME)
     set_source_files_properties("${qml_file}" PROPERTIES QT_RESOURCE_ALIAS "${qml_name}")

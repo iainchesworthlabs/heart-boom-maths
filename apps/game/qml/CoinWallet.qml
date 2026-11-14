@@ -15,6 +15,8 @@ Item {
     property real deltaPixelSize: 15
     property real borderWidth: Theme.outlineSmall
     property real radius: Theme.radiusSmall
+    // The count in the heading font, as the title screen has it.
+    property bool displayNumerals: false
 
     implicitWidth: row.implicitWidth + 24 + 2 * borderWidth
     implicitHeight: pixelSize + 16 + 2 * borderWidth
@@ -48,8 +50,9 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 text: Theme.formatNumber(root.value)
                 color: Theme.ink
-                font.family: Theme.bodyFont
+                font.family: root.displayNumerals ? Theme.displayFont : Theme.bodyFont
                 font.pixelSize: root.pixelSize
+                font.letterSpacing: root.displayNumerals ? 1 : 0
             }
 
             Text {

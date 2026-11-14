@@ -18,6 +18,10 @@ Item {
     property bool alert: false
     property bool boom: false
     property real size: 120
+    // The seconds in the heart. Off for the title and About, where the heart is a picture and not a timer.
+    property bool showSeconds: true
+    // Two eyes and a smile, for the title screen.
+    property bool face: false
 
     readonly property string stateName: boom ? "boom" : (alert ? "alert" : "calm")
 
@@ -30,7 +34,7 @@ Item {
     implicitHeight: size
 
     Accessible.role: Accessible.Graphic
-    Accessible.name: root.boom ? qsTr("Boom") : (root.alert ? qsTr("Heart bomb with %1 seconds left, fuse sparking").arg(root.secondsLeft) : qsTr("Heart bomb with %1 seconds left").arg(root.secondsLeft))
+    Accessible.name: root.boom ? qsTr("Boom") : (!root.showSeconds ? qsTr("Heart bomb") : (root.alert ? qsTr("Heart bomb with %1 seconds left, fuse sparking").arg(root.secondsLeft) : qsTr("Heart bomb with %1 seconds left").arg(root.secondsLeft)))
 
     SequentialAnimation on wobble {
         running: root.alert && !root.boom
@@ -161,10 +165,40 @@ Item {
                         path: root.alert ? "M96 -11 L100.1 0.3 L112.2 0.7 L102.7 8.2 L106 19.8 L96 13 L86 19.8 L89.3 8.2 L79.8 0.7 L91.9 0.3 Z" : "M94 -5 L97.2 3.6 L106.4 4 L99.2 9.7 L101.6 18.5 L94 13.5 L86.4 18.5 L88.8 9.7 L81.6 4 L90.8 3.6 Z"
                     }
                 }
+
+                // The face: two eyes with a glint each, and a smile.
+                ShapePath {
+                    objectName: "eyes"
+                    fillColor: root.face ? Theme.ink : "transparent"
+                    strokeColor: "transparent"
+
+                    PathSvg {
+                        path: "M35.5 62 A6.5 8.5 0 1 0 48.5 62 A6.5 8.5 0 1 0 35.5 62 Z M63.5 62 A6.5 8.5 0 1 0 76.5 62 A6.5 8.5 0 1 0 63.5 62 Z"
+                    }
+                }
+                ShapePath {
+                    fillColor: root.face ? Theme.white : "transparent"
+                    strokeColor: "transparent"
+
+                    PathSvg {
+                        path: "M41.6 59 A2.4 2.4 0 1 0 46.4 59 A2.4 2.4 0 1 0 41.6 59 Z M69.6 59 A2.4 2.4 0 1 0 74.4 59 A2.4 2.4 0 1 0 69.6 59 Z"
+                    }
+                }
+                ShapePath {
+                    fillColor: "transparent"
+                    strokeColor: root.face ? Theme.ink : "transparent"
+                    strokeWidth: 4
+                    capStyle: ShapePath.RoundCap
+
+                    PathSvg {
+                        path: "M43 80 q13 11 26 0"
+                    }
+                }
             }
 
             Text {
                 objectName: "bombSeconds"
+                visible: root.showSeconds
                 x: 10
                 y: 49
                 width: 92
