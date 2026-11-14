@@ -7,8 +7,16 @@ configure_file(
     "${CMAKE_CURRENT_BINARY_DIR}/generated/heart_boom_maths/version.hpp"
     @ONLY)
 
+# Tuning::defaults() is built from libs/core/data/tuning.json when CMake configures, so the values are data and the
+# core needs no JSON reader.
+include(HbmTuningData)
+hbm_generate_tuning_header(
+    "${CMAKE_CURRENT_SOURCE_DIR}/data/tuning.json"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/heart_boom_maths/tuning_data.hpp")
+
 add_library(heart_boom_maths_core
     src/greeting.cpp
+    src/tuning.cpp
     src/version.cpp)
 add_library(heart_boom_maths::core ALIAS heart_boom_maths_core)
 
