@@ -32,3 +32,5 @@ Namespaces, functions and variables use `snake_case`. Types use `PascalCase`. Me
 `cmake/icl/` is a copy of `icl-common-infra/cmake/`. `cmake/icl/SOURCE` records the commit.
 CI compares the copy with the commit its workflows pin and fails on a difference. Update with
 `python3 tools/ci/sync_cmake.py --infra <checkout of icl-common-infra>`.
+
+The game's own design (core API, persistence, services, tests, CI tiers) is in [game-architecture.md](game-architecture.md).
