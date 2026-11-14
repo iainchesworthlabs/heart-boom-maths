@@ -34,7 +34,7 @@ CMAKE_NAMES = {"CMakeLists.txt"}
 CMAKE_SUFFIXES = {".cmake"}
 
 # Names the core's own headers are reached by when they are generated at configure time.
-GENERATED_HEADERS = {"tuning_data.hpp", "prd_tables.hpp", "version.hpp"}
+GENERATED_HEADERS = {"tuning_data.hpp", "prd_tables.hpp", "version.hpp", "save_fixtures.hpp"}
 
 STANDARD_HEADERS = frozenset("""
 algorithm any array atomic barrier bit bitset charconv chrono codecvt compare complex concepts condition_variable
