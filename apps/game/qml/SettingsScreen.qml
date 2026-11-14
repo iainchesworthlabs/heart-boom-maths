@@ -3,9 +3,9 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 
-// Settings (board CP14): the Sound effects and Music switches, the Game Center switch where the device has a leaderboard,
-// ABOUT, and the build line at the bottom. A switch writes through the controller, which saves it. The Game Center switch
-// turns off at once and turns on only after the parental gate.
+// Settings (board CP14): the Sound effects and Music switches, the Haptics switch where the device can buzz, the Game Center
+// switch where the device has a leaderboard, ABOUT, and the build line at the bottom. A switch writes through the
+// controller, which saves it. The Game Center switch turns off at once and turns on only after the parental gate.
 ScreenFrame {
     id: root
 
@@ -14,7 +14,8 @@ ScreenFrame {
     signal aboutRequested
 
     title: qsTr("SETTINGS")
-    designHeight: 640
+    // The content is taller by one row where the device can make haptics, so a short window shrinks it by that much more.
+    designHeight: root.game.hapticsAvailable ? 750 : 640
 
     SettingRow {
         objectName: "soundRow"
@@ -42,6 +43,23 @@ ScreenFrame {
         onToggleRequested: root.game.setMusicEnabled(!root.game.musicEnabled)
 
         MusicIcon {
+            anchors.fill: parent
+        }
+    }
+
+    // Only where the device can make a haptic (a phone, a browser on a touch screen); hidden on a desktop.
+    SettingRow {
+        objectName: "hapticsRow"
+        Layout.fillWidth: true
+        visible: root.game.hapticsAvailable
+        unit: root.unit
+        title: qsTr("Haptics")
+        hint: qsTr("Feel it as you play")
+        switchObjectName: "hapticsSwitch"
+        checked: root.game.hapticsEnabled
+        onToggleRequested: root.game.setHapticsEnabled(!root.game.hapticsEnabled)
+
+        HapticsIcon {
             anchors.fill: parent
         }
     }

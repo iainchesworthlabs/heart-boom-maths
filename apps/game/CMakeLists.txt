@@ -158,6 +158,8 @@ set(HEART_BOOM_MATHS_QML_FILES
     qml/FuseBar.qml
     qml/GameOverScreen.qml
     qml/GearIcon.qml
+    qml/Haptics.qml
+    qml/HapticsIcon.qml
     qml/HalftoneBackground.qml
     qml/HeartBomb.qml
     qml/LevelClearScreen.qml
@@ -199,8 +201,8 @@ foreach(qml_file IN LISTS HEART_BOOM_MATHS_QML_FILES)
     get_filename_component(qml_name "${qml_file}" NAME)
     set_source_files_properties("${qml_file}" PROPERTIES QT_RESOURCE_ALIAS "${qml_name}")
 endforeach()
-# Theme is a singleton: one set of tokens for every screen.
-set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+# Theme is a singleton: one set of tokens for every screen. Haptics is one too: the controls' way to the controller's tick.
+set_source_files_properties(qml/Theme.qml qml/Haptics.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
 # The URI differs from the program name: on a case-insensitive file system "HeartBoomMaths" and "heart-boom-maths" must
 # not name one directory in the build tree.
@@ -363,6 +365,7 @@ if(HEART_BOOM_MATHS_BUILD_TESTS)
         tests/ui_support.cpp
         tests/test_answer_feedback.cpp
         tests/test_ui_components.cpp
+        tests/test_ui_haptics.cpp
         tests/test_ui_journeys.cpp
         tests/test_ui_play.cpp
         tests/test_ui_scores.cpp

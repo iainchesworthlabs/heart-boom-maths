@@ -149,7 +149,10 @@ Rectangle {
 
             enabled: key.enabled
             gesturePolicy: TapHandler.ReleaseWithinBounds
-            onTapped: key.tapped()
+            onTapped: {
+                Haptics.tap();
+                key.tapped();
+            }
         }
     }
 }

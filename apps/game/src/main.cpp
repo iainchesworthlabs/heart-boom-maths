@@ -3,13 +3,17 @@
 #include "heart_boom_maths/save_store.hpp"
 #include "heart_boom_maths/version.hpp"
 #include "platform/browser.hpp"
+#include "platform/haptics_platform.hpp"
 #include "platform/platform.hpp"
 #include "platform/score_platform.hpp"
 #include "services/app_save_store.hpp"
 #include "services/audio_factory.hpp"
+#include "services/backed_haptics_service.hpp"
 #include "services/clock.hpp"
 #include "services/file_save_store.hpp"
 #include "services/first_gesture_filter.hpp"
+#include "services/haptic_backend.hpp"
+#include "services/qt_haptic_timer.hpp"
 #include "services/score_service.hpp"
 #include "services/system_link_opener.hpp"
 
@@ -81,6 +85,12 @@ int main(int argc, char* argv[])
     app.installEventFilter(&first_gesture);
     // The Game Center service on an Apple device, which stays idle until its Settings switch is on, and none elsewhere.
     const std::unique_ptr<game::ScoreService> scores = game::platform::make_score_service();
+    // Touch feedback: a phone's motor, or the browser's vibrate function. The desktop and a test run have none, and the
+    // switch in Settings is then not shown.
+    const std::unique_ptr<game::HapticBackend> haptic_backend =
+        smoke_test ? std::make_unique<game::NullHapticBackend>() : game::platform::make_haptic_backend();
+    game::QtHapticTimer haptic_timer;
+    game::BackedHapticsService haptics(*haptic_backend, clock, haptic_timer);
     game::SystemLinkOpener links;
     // The platform chooses where the save lives: a file, or the page's storage in a browser (src/platform/<os>/).
     const game::platform::SaveStorage save_storage = game::platform::save_storage();
@@ -96,6 +106,7 @@ int main(int argc, char* argv[])
     services.quarantine = app_store.get();
     services.audio = audio.service.get();
     services.scores = scores.get();
+    services.haptics = &haptics;
     services.links = &links;
     services.clock = &clock;
     game::GameController controller(services, game::GameOptions::with_random_seed());

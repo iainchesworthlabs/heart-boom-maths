@@ -15,6 +15,7 @@ ComicButton {
     text: used ? qsTr("HINT USED · %1 TILES GONE").arg(Theme.countWord(removedCount)) : qsTr("HINT · %1 COINS").arg(cost)
     accessibleName: used ? qsTr("Hint used, %1 tiles gone").arg(Theme.countWord(removedCount).toLowerCase()) : (enabled ? qsTr("Hint, costs %1 coins").arg(cost) : qsTr("Hint, not available"))
     displayLabel: false
+    hapticTap: false // the hint has its own haptic
     pixelSize: metrics.hintFont
     borderWidth: metrics.hintBorder
     radius: metrics.hintRadius

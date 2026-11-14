@@ -10,6 +10,7 @@
 #include "services/audio_service.hpp"
 #include "services/build_info.hpp"
 #include "services/clock.hpp"
+#include "services/haptics_service.hpp"
 #include "services/link_opener.hpp"
 #include "services/save_quarantine.hpp"
 #include "services/score_service.hpp"
@@ -47,6 +48,7 @@ struct GameServices
     SaveQuarantine* quarantine = nullptr; // optional: a store that is not a file has nothing to move aside
     AudioService* audio = nullptr;
     ScoreService* scores = nullptr;
+    HapticsService* haptics = nullptr; // optional: a null service is the same as a device that cannot
     LinkOpener* links = nullptr;
     Clock* clock = nullptr;
 };
@@ -168,6 +170,10 @@ class GameController final : public QObject
     Q_PROPERTY(bool musicEnabled READ music_enabled NOTIFY settingsChanged FINAL)
     Q_PROPERTY(bool gameCenterEnabled READ game_center_enabled NOTIFY settingsChanged FINAL)
     Q_PROPERTY(bool gameCenterAvailable READ game_center_available CONSTANT FINAL)
+    // Touch feedback. hapticsAvailable is true only on a device that can do it, and Settings shows the switch only
+    // then.
+    Q_PROPERTY(bool hapticsEnabled READ haptics_enabled NOTIFY settingsChanged FINAL)
+    Q_PROPERTY(bool hapticsAvailable READ haptics_available CONSTANT FINAL)
 
     // The parental gate.
     Q_PROPERTY(bool gateActive READ gate_active NOTIFY gateChanged FINAL)
@@ -251,6 +257,11 @@ public:
 
     Q_INVOKABLE void setSoundEnabled(bool enabled);
     Q_INVOKABLE void setMusicEnabled(bool enabled);
+    Q_INVOKABLE void setHapticsEnabled(bool enabled);
+
+    /// A light tick for a button, a key or a switch the player pressed. The screens call it, and the service drops it
+    /// when haptics are off, paused, too soon after another or unavailable, so QML needs no rule of its own.
+    Q_INVOKABLE void tap();
 
     /// Turning Game Center off is immediate. Turning it on opens the parental gate. Ignored where the platform has no
     /// leaderboard.
@@ -338,6 +349,8 @@ public:
     [[nodiscard]] bool music_enabled() const;
     [[nodiscard]] bool game_center_enabled() const;
     [[nodiscard]] bool game_center_available() const;
+    [[nodiscard]] bool haptics_enabled() const;
+    [[nodiscard]] bool haptics_available() const;
     [[nodiscard]] bool gate_active() const;
     [[nodiscard]] GatePurpose gate_purpose() const;
     [[nodiscard]] QString gate_words() const;
@@ -405,6 +418,8 @@ private:
     void begin_gate(GatePurpose purpose);
     void end_gate();
     void apply_settings();
+    void sync_haptics();
+    void play_haptic(HapticId id);
     void remember_run();
 
     [[nodiscard]] static State to_state(SessionState state) noexcept;
@@ -421,6 +436,7 @@ private:
     std::int64_t m_TileGuardUntilNs = 0; // answers are ignored until the clock reaches this
     QTimer m_Timer;
     bool m_Active = true;
+    bool m_HapticsQuiet = false; // the service is suspended: the app is in the background or the game is paused
 
     SessionView m_Shown;  // what the signals last reported
     SessionView m_Before; // the view before the command being processed: the question an answer was given to

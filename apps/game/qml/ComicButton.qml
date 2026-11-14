@@ -25,6 +25,9 @@ Item {
     property real radius: Theme.radiusSmall
     property real shadowOffset: 0
     property real horizontalPadding: 18
+    // A light tick in the hand as the button is pressed, where the device has one. A button whose action has a haptic of
+    // its own (the hint) turns it off, so the two do not follow each other.
+    property bool hapticTap: true
 
     // Overrides of the variant's colours, when a screen needs one.
     property color fillColor: root.enabled ? variantFill : Theme.disabledFill
@@ -105,6 +108,13 @@ Item {
 
         enabled: root.enabled
         gesturePolicy: TapHandler.ReleaseWithinBounds
-        onTapped: root.clicked()
+        onTapped: {
+            // The tick first: a button that pauses the game or changes the screen then lets the tick through before the
+            // service goes quiet.
+            if (root.hapticTap) {
+                Haptics.tap();
+            }
+            root.clicked();
+        }
     }
 }

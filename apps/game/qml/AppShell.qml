@@ -28,6 +28,13 @@ Item {
 
     required property GameController game
 
+    // The controls ask Haptics for their tick, and Haptics asks this controller.
+    Binding {
+        target: Haptics
+        property: "controller"
+        value: root.game
+    }
+
     readonly property string sizeClass: Theme.sizeClassFor(width)
     // The title screen laid over the core's game-over state after HOME: "" for none or "title".
     property string overlay: ""

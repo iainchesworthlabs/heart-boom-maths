@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "game_controller.hpp"
 
+#include "event_haptics.hpp"
 #include "event_sounds.hpp"
 #include "external_links.hpp"
 #include "level_text.hpp"
@@ -333,6 +334,23 @@ void GameController::setMusicEnabled(bool enabled)
     persist();
 }
 
+void GameController::setHapticsEnabled(bool enabled)
+{
+    if (m_Save.haptics == enabled)
+    {
+        return;
+    }
+    m_Save.haptics = enabled;
+    apply_settings();
+    emit settingsChanged();
+    persist();
+}
+
+void GameController::tap()
+{
+    play_haptic(HapticId::TAP);
+}
+
 void GameController::requestGameCenter(bool enabled)
 {
     if (!game_center_available())
@@ -421,6 +439,7 @@ void GameController::on_application_state(bool active)
     {
         m_Services.audio->resume();
         sync_driver(); // a paused run stays paused: the driver only runs while playing
+        sync_haptics();
         return;
     }
     // A grown-up's question does not wait for them to come back: whoever picks the device up next meets no open gate.
@@ -435,6 +454,7 @@ void GameController::on_application_state(bool active)
         remember_run();
     }
     sync_driver();
+    sync_haptics();
     m_Services.audio->suspend();
     persist();
 }
@@ -463,7 +483,13 @@ void GameController::process()
     {
         handle_event(event);
     }
+    // One haptic for everything this command or tick produced, before the pause that may follow it stops them.
+    if (const std::optional<HapticId> haptic = haptic_for_events(events); haptic.has_value())
+    {
+        play_haptic(*haptic);
+    }
     sync_driver();
+    sync_haptics();
 }
 
 void GameController::refresh_view()
@@ -763,6 +789,41 @@ void GameController::apply_settings()
 {
     m_Services.audio->set_enabled(m_Save.sound, m_Save.music);
     m_Services.scores->set_enabled(m_Save.game_center && m_Services.scores->available());
+    if (m_Services.haptics != nullptr)
+    {
+        m_Services.haptics->set_enabled(m_Save.haptics);
+    }
+}
+
+void GameController::sync_haptics()
+{
+    // Nothing is felt while the app is in the background or the game is paused, and what was still to come is dropped.
+    const bool quiet = !m_Active || m_Session.view().state == SessionState::PAUSED;
+    if (quiet == m_HapticsQuiet)
+    {
+        return;
+    }
+    m_HapticsQuiet = quiet;
+    if (m_Services.haptics == nullptr)
+    {
+        return;
+    }
+    if (quiet)
+    {
+        m_Services.haptics->suspend();
+    }
+    else
+    {
+        m_Services.haptics->resume();
+    }
+}
+
+void GameController::play_haptic(HapticId id)
+{
+    if (m_Services.haptics != nullptr)
+    {
+        m_Services.haptics->play(id);
+    }
 }
 
 GameController::State GameController::to_state(SessionState state) noexcept
@@ -1064,6 +1125,16 @@ bool GameController::game_center_enabled() const
 bool GameController::game_center_available() const
 {
     return m_Services.scores->available();
+}
+
+bool GameController::haptics_enabled() const
+{
+    return m_Save.haptics;
+}
+
+bool GameController::haptics_available() const
+{
+    return m_Services.haptics != nullptr && m_Services.haptics->available();
 }
 
 bool GameController::gate_active() const
