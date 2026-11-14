@@ -5,6 +5,7 @@ hbm_generate_prd_tables_header(
     "${CMAKE_CURRENT_BINARY_DIR}/generated/prd_tables.hpp")
 
 add_executable(heart_boom_maths_core_tests
+    test_contract.cpp
     test_endless.cpp
     test_greeting.cpp
     test_parse.cpp
