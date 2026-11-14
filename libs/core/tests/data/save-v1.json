@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "coins": 137,
+  "won_once": true,
+  "sound": true,
+  "music": false,
+  "game_center": false,
+  "top10": [
+    { "name": "ADA", "score": 48210 },
+    { "name": "BEN", "score": 31000 },
+    { "name": "CY", "score": 31000 },
+    { "name": "DI", "score": 120 }
+  ],
+  "run": [3, 0, 1250, 4, 2, 7, 100, 1, 2, 3, -5, 9223372036854775807]
+}

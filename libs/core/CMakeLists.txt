@@ -19,6 +19,8 @@ add_library(heart_boom_maths_core
     src/json.cpp
     src/question_generator.cpp
     src/rng.cpp
+    src/save_codec.cpp
+    src/save_data.cpp
     src/tuning.cpp
     src/version.cpp)
 add_library(heart_boom_maths::core ALIAS heart_boom_maths_core)
