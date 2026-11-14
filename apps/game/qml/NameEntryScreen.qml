@@ -29,7 +29,7 @@ Item {
     readonly property bool keyboardShown: keyboardMode === "on" || (keyboardMode === "auto" && (compact || touchSeen || Qt.platform.os === "ios" || Qt.platform.os === "android"))
     readonly property bool canSave: game.canSaveName(name)
     readonly property bool full: name.length >= game.nameMaxLength
-    readonly property real keyboardHeight: keyboardShown ? Math.min(336, height * 0.4) : 0
+    readonly property real keyboardHeight: keyboardShown ? Math.min(338, height * 0.41) : 0
 
     // Emitted just before the name is saved, so the shell can set up the Top 10 screen before the controller leaves the name
     // entry state.
@@ -89,6 +89,7 @@ Item {
         designHeight: 460
         columnSpacing: 12
         topMax: 44
+        pinTop: true
         reservedBottom: root.keyboardHeight
 
         StarBurst {
@@ -178,7 +179,7 @@ Item {
 
                 objectName: "nameText"
                 anchors.left: parent.left
-                anchors.leftMargin: 18 * page.unit
+                anchors.leftMargin: 18 * page.unit + field.borderWidth
                 anchors.right: counter.left
                 anchors.rightMargin: 8 * page.unit
                 anchors.verticalCenter: parent.verticalCenter
@@ -230,16 +231,24 @@ Item {
             }
         }
 
-        RowLayout {
+        // SAVE and SKIP share what is left in 1.4 to 1, after each has the room its border and padding always take: the
+        // board's two widths are 188 and 140 of 342. They are placed by hand because a layout's stretch factors do not give
+        // this split.
+        Item {
+            id: buttons
+
+            readonly property real gap: 14 * page.unit
+            readonly property real fixedWidth: 22 * page.unit
+            readonly property real shared: width - gap - 2 * fixedWidth
+            readonly property real saveWidth: fixedWidth + shared * 1.4 / 2.4
+
             Layout.fillWidth: true
-            spacing: 14 * page.unit
+            Layout.preferredHeight: 64 * page.unit
 
             ComicButton {
                 objectName: "saveButton"
-                Layout.fillWidth: true
-                Layout.preferredWidth: 0
-                Layout.horizontalStretchFactor: 14
-                Layout.preferredHeight: 64 * page.unit
+                width: buttons.saveWidth
+                height: parent.height
                 enabled: root.canSave
                 variant: "danger"
                 text: qsTr("SAVE")
@@ -254,10 +263,9 @@ Item {
 
             ComicButton {
                 objectName: "skipButton"
-                Layout.fillWidth: true
-                Layout.preferredWidth: 0
-                Layout.horizontalStretchFactor: 10
-                Layout.preferredHeight: 64 * page.unit
+                x: buttons.saveWidth + buttons.gap
+                width: buttons.width - x
+                height: parent.height
                 variant: "secondary"
                 text: qsTr("SKIP")
                 pixelSize: 34 * page.unit

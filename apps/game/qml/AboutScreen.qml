@@ -43,7 +43,7 @@ FocusScope {
         anchors.fill: parent
         focus: true
         title: qsTr("ABOUT")
-        designHeight: 800
+        designHeight: 832
         columnSpacing: 14
         escapeEnabled: root.viewer === ""
         onBackClicked: root.backClicked()
@@ -59,6 +59,23 @@ FocusScope {
             contentHeight: column.implicitHeight + 8 * frame.unit
             boundsBehavior: Flickable.StopAtBounds
             interactive: contentHeight > height
+
+            // A window too short for every row scrolls, and this bar says there is more below. It sits on the Flickable
+            // itself, not on its content, and is white with an ink outline so it shows over the cards' shadows too.
+            Rectangle {
+                objectName: "aboutScrollBar"
+                parent: flick
+                visible: flick.interactive
+                z: 1
+                x: flick.width - width - 1
+                y: flick.contentHeight > flick.height ? (flick.height - height) * flick.contentY / (flick.contentHeight - flick.height) : 0
+                width: 9
+                height: Math.max(32, flick.height * flick.height / Math.max(1, flick.contentHeight))
+                radius: 4.5
+                color: Theme.white
+                border.width: 2
+                border.color: Theme.ink
+            }
 
             ColumnLayout {
                 id: column

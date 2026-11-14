@@ -5,6 +5,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
 
 #include <QByteArray>
 #include <QQuickItem>
@@ -675,6 +676,85 @@ TEST_CASE(
     CHECK(s.screen() == "title"); // back to the title, not to the card it came from
 }
 
+TEST_CASE("The NEW tag follows the name and the score stays at the right edge", "[ui][scores][top10]")
+{
+    auto h = QmlHarness::from_source(R"(
+import QtQuick
+import HeartBoomMaths
+Item {
+    ScoreRow {
+        objectName: "row"
+        x: 24
+        y: 10
+        width: 342
+        rank: 2
+        name: "ROCKET"
+        scoreText: "1,520"
+        highlighted: true
+    }
+    ScoreRow {
+        objectName: "long"
+        x: 24
+        y: 80
+        width: 342
+        rank: 3
+        name: "ABCDEFGHIJKL"
+        scoreText: "1,000,000"
+        highlighted: true
+    }
+}
+)",
+                                     QSize{390, 160});
+    const auto part = [&](const char* row, const char* name)
+    {
+        QQuickItem* r = h.find_item(QLatin1String(row));
+        REQUIRE(r != nullptr);
+        for (QQuickItem* child : r->findChildren<QQuickItem*>())
+        {
+            if (child->objectName() == QLatin1String(name))
+            {
+                return child->mapRectToScene(QRectF(0, 0, child->width(), child->height()));
+            }
+        }
+        FAIL("no part " << name);
+        return QRectF();
+    };
+    // About 14 between the end of the name and the tag, and the score ends 12 inside the row.
+    const QRectF name = part("row", "nameText");
+    const QRectF tag = part("row", "newTag");
+    const QRectF score = part("row", "scoreText");
+    CHECK_THAT(tag.left() - name.right(), Catch::Matchers::WithinAbs(14.0, 1.0));
+    CHECK_THAT(score.right(), Catch::Matchers::WithinAbs(24.0 + 342.0 - 12.0, 1.5));
+    CHECK(score.left() > tag.right() + 20);
+    // A name too long for the row is elided and the tag and the score still fit inside the row.
+    const QRectF long_tag = part("long", "newTag");
+    const QRectF long_score = part("long", "scoreText");
+    CHECK(long_tag.right() <= long_score.left());
+    CHECK(long_score.right() <= 24.0 + 342.0);
+}
+
+TEST_CASE("The top 10's play button stands at the foot of the window with the list above it", "[ui][scores][top10]")
+{
+    const SizeCase size = GENERATE(SizeCase{"phone", PHONE}, SizeCase{"tablet", TABLET}, SizeCase{"desktop", DESKTOP});
+    CAPTURE(size.name);
+    Shell s(size.size, save_text(full_list()));
+    s.tap("top10Button");
+    REQUIRE(s.screen() == "top10");
+    const QRectF play = s.rect_of("top10PlayButton");
+    const QRectF last = s.rect_of("scoreRow10");
+    // The list ends above the button with room to spare, and the button's shadow is 32 above the window's foot.
+    CHECK(last.bottom() + 14 <= play.top());
+    CHECK(play.bottom() <= size.size.height() - 15);
+    CHECK(play.bottom() >= size.size.height() - 50);
+    if (size.size == PHONE)
+    {
+        // CP12: the button is at y 740 to 812, so its shadow ends at 820, 24 above the foot.
+        CHECK_THAT(play.top(), Catch::Matchers::WithinAbs(740.0, 1.0));
+        CHECK_THAT(play.height(), Catch::Matchers::WithinAbs(72.0, 0.6));
+        CHECK_THAT(play.left(), Catch::Matchers::WithinAbs(24.0, 0.6));
+    }
+}
+
 TEST_CASE("The top 10 marks the new entry in a full list and drops the one pushed off", "[ui][scores][top10]")
 {
     const SizeCase size = GENERATE(SizeCase{"phone", PHONE}, SizeCase{"tablet", TABLET}, SizeCase{"desktop", DESKTOP});
@@ -774,9 +854,26 @@ TEST_CASE("The on-screen keyboard types into the field and matches the phone boa
     QQuickItem* keyboard = s.h.find_item("nameKeyboard");
     REQUIRE(keyboard != nullptr);
     CHECK(keyboard->isVisible());
-    // The board reserves about 336 pixels at the foot of the window for it.
-    CHECK(keyboard->height() == 336);
+    // The board reserves 338 pixels at the foot of the window for it (a border of 4 and 334 of grey), from y 506.
+    CHECK(keyboard->height() == 338);
     CHECK(keyboard->mapToScene(QPointF(0, keyboard->height())).y() == PHONE.height());
+    CHECK(keyboard->mapToScene(QPointF(0, 0)).y() == 506);
+
+    // Everything above it is where the board has it: the card at 186, the field at 338 and the buttons at 418, with
+    // SAVE 188 wide from x 24 and SKIP 140 wide up to 366.
+    CHECK(s.rect_of("entryCard").top() == 186);
+    CHECK(s.rect_of("nameField").top() == 338);
+    CHECK(s.rect_of("saveButton").top() == 418);
+    CHECK(s.rect_of("saveButton").left() == 24);
+    CHECK_THAT(s.rect_of("saveButton").width(), Catch::Matchers::WithinAbs(188.0, 1.0));
+    CHECK_THAT(s.rect_of("skipButton").left(), Catch::Matchers::WithinAbs(226.0, 1.0));
+    CHECK_THAT(s.rect_of("skipButton").width(), Catch::Matchers::WithinAbs(140.0, 1.0));
+    // The name starts 47 in: the field's border of 5 and its padding of 18, from x 24.
+    {
+        QQuickItem* name_text = s.h.find_item("nameText");
+        REQUIRE(name_text != nullptr);
+        CHECK_THAT(name_text->mapToScene(QPointF(0, 0)).x(), Catch::Matchers::WithinAbs(47.0, 1.0));
+    }
 
     // The content sits above it with SAVE and SKIP clear of the keys.
     CHECK(s.rect_of("saveButton").bottom() <= keyboard->y());

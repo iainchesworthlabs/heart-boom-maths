@@ -3,11 +3,13 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
 
 #include <QByteArray>
 #include <QQuickItem>
 #include <QTest>
 #include <memory>
+#include <vector>
 
 using namespace hbm_test;
 using namespace heart_boom_maths::game;
@@ -176,6 +178,47 @@ TEST_CASE("The play screen shows the question, four tiles and the stats in every
     }
 }
 
+TEST_CASE("The digits of the question and its slot share one centre line at every size", "[ui][play][question]")
+{
+    struct Arrangement
+    {
+        const char* name;
+        QSize size;
+    };
+    const Arrangement arrangement =
+        GENERATE(Arrangement{"phone", PHONE}, Arrangement{"tablet", TABLET}, Arrangement{"desktop", DESKTOP});
+    CAPTURE(arrangement.name);
+    Shell s(arrangement.size);
+    QQuickItem* card = s.h.find_item("questionCard");
+    QQuickItem* slot = s.h.find_item("questionSlot");
+    REQUIRE(card != nullptr);
+    REQUIRE(slot != nullptr);
+    const double slot_centre = slot->mapToScene(QPointF(0, slot->height() / 2)).y();
+    // The terms are delegates of a Repeater, so they hang from the card's visual tree.
+    std::vector<QQuickItem*> pending{card};
+    int terms = 0;
+    while (!pending.empty())
+    {
+        QQuickItem* item = pending.back();
+        pending.pop_back();
+        for (QQuickItem* child : item->childItems())
+        {
+            pending.push_back(child);
+        }
+        if (item->objectName() != QLatin1String("questionTerm") || !item->isVisible())
+        {
+            continue;
+        }
+        ++terms;
+        const double centre = item->mapToScene(QPointF(0, item->height() / 2)).y();
+        CHECK_THAT(centre, Catch::Matchers::WithinAbs(slot_centre, 1.0));
+    }
+    CHECK(terms >= 3);
+    // The card itself is centred on that line too.
+    const double card_centre = card->mapToScene(QPointF(0, card->height() / 2)).y();
+    CHECK_THAT(slot_centre, Catch::Matchers::WithinAbs(card_centre, 1.5));
+}
+
 TEST_CASE("The hint button is disabled when the wallet cannot pay and enabled when it can", "[ui][play][hint]")
 {
     Shell s(PHONE);
@@ -325,6 +368,71 @@ TEST_CASE("The last ten seconds turn the play screen into the alert", "[ui][play
     CHECK(property_of(s.h.find("bombSeconds"), "text").toString() == "0:08");
 }
 
+TEST_CASE("In the alert nothing of the play column overlaps another part, at every size", "[ui][play][alert]")
+{
+    // From a 667 high phone (the shortest the column's minimum heights allow) to the tablets in portrait and the
+    // desktop.
+    const QSize size =
+        GENERATE(PHONE, QSize{375, 667}, TABLET, QSize{768, 1024}, QSize{744, 1133}, DESKTOP, QSize{1024, 600});
+    CAPTURE(size.width(), size.height());
+    Shell s(size);
+    s.rig.play_for_ms(50000);
+    s.h.settle();
+    REQUIRE(s.rig.controller.alert());
+    REQUIRE(s.visible("alertBanner"));
+
+    const auto top_of = [&](const char* name)
+    { return s.h.find_item(QLatin1String(name))->mapToScene(QPointF(0, 0)).y(); };
+    const auto bottom_of = [&](const char* name)
+    {
+        QQuickItem* item = s.h.find_item(QLatin1String(name));
+        return item->mapToScene(QPointF(0, item->height())).y();
+    };
+    const bool wide = size.width() >= 600 && size.width() >= size.height();
+    CAPTURE(top_of("fuseBar"), bottom_of("fuseBar"), top_of("alertBanner"), bottom_of("alertBanner"),
+            top_of("questionCard"), bottom_of("questionCard"), top_of("tile0"), bottom_of("tile0"), top_of("tile2"),
+            bottom_of("tile2"));
+    // From the top down, each part ends where it or the next begins: the banner and the question card, the hint
+    // button and the tiles.
+    if (!wide)
+    {
+        CHECK(bottom_of("fuseBar") <= top_of("alertBanner") + 0.5);
+        CHECK(bottom_of("heartBomb") <= top_of("fuseBar") + 0.5);
+    }
+    // The banner is tilted a little, so its box is measured by its own height, the card by its box.
+    CHECK(bottom_of("alertBanner") <= top_of("questionCard") + 0.5);
+    if (!wide)
+    {
+        CHECK(bottom_of("questionCard") <= top_of("hintButton") + 0.5);
+        CHECK(bottom_of("hintButton") <= top_of("tile0") + 0.5);
+        CHECK(bottom_of("hintButton") <= top_of("tile1") + 0.5);
+    }
+    else
+    {
+        // The hint button is in the left panel; the card ends above the tiles.
+        CHECK(bottom_of("questionCard") <= top_of("tile0") + 0.5);
+    }
+    // The card keeps room for its question, and the tiles are inside the window.
+    QQuickItem* card = s.h.find_item("questionCard");
+    CHECK(card->height() > property_of(card, "contentHeight").toDouble());
+    CHECK(bottom_of("tile2") <= size.height() + 0.5);
+    CHECK(bottom_of("tile3") <= size.height() + 0.5);
+
+    // A held answer in the alert: the caption that replaces the hint button lies between the card and the tiles.
+    s.feedback->setProperty("wrongHoldMs", 60000);
+    s.rig.answer_wrong();
+    s.h.settle();
+    QTest::qWait(300);
+    if (s.visible("wrongTag") && !wide)
+    {
+        CHECK(top_of("wrongTag") >= bottom_of("questionCard") - 0.5);
+        CHECK(bottom_of("wrongTag") <= top_of("tile0") + 0.5);
+        CHECK(bottom_of("alertBanner") <= top_of("questionCard") + 0.5);
+    }
+    CHECK(s.visible("wrongTag"));
+    CHECK(bottom_of("tile3") <= size.height() + 0.5);
+}
+
 TEST_CASE("The pause button opens the pause overlay and RESUME and QUIT leave it", "[ui][play][pause]")
 {
     Shell s(PHONE);
@@ -444,10 +552,47 @@ TEST_CASE("Winning level 12 offers KEEP GOING, and endless levels say so and sho
 
     s.rig.play_for_ms(9000);
     s.h.settle();
+    // A long hold, so a slow frame cannot clear the look before the test reads it.
+    s.feedback->setProperty("rightHoldMs", 60000);
     click(s.tile(s.rig.controller.session_view().question.correct_tile));
     s.h.settle();
     CHECK(s.visible("timeGain"));
     CHECK(s.text_of("timeGain") == QStringLiteral("+%1 s").arg(s.rig.controller.seconds_per_right_answer()));
+}
+
+TEST_CASE("In an endless level the time gained hangs clear of the question card", "[ui][shell][endless]")
+{
+    Shell s(PHONE);
+    for (int level = 1; level <= 12; ++level)
+    {
+        s.rig.play_level_right();
+        if (level < 12)
+        {
+            s.rig.controller.nextLevel();
+        }
+    }
+    s.wait_out_holds();
+    click(s.h.find_item("keepGoingButton"));
+    s.h.settle();
+    s.rig.play_for_ms(9000);
+    s.h.settle();
+    s.feedback->setProperty("rightHoldMs", 60000);
+    click(s.tile(s.rig.controller.session_view().question.correct_tile));
+    s.h.settle();
+    QTest::qWait(400); // the tag pops in
+
+    QQuickItem* gain = s.h.find_item("timeGain");
+    QQuickItem* fuse = s.h.find_item("fuseBar");
+    QQuickItem* card = s.h.find_item("questionCard");
+    REQUIRE(gain != nullptr);
+    REQUIRE(gain->isVisible());
+    // The tag sits 5 under the bar, and the card is at least 30 under the bar: the tag is whole above it.
+    const double gain_bottom = gain->mapToScene(QPointF(0, gain->height())).y();
+    const double card_top = card->mapToScene(QPointF(0, 0)).y();
+    const double fuse_bottom = fuse->mapToScene(QPointF(0, fuse->height())).y();
+    CHECK_THAT(gain->y() - fuse->height(), Catch::Matchers::WithinAbs(5.0, 0.1));
+    CHECK(gain_bottom <= card_top - 1.0);
+    CHECK(card_top - fuse_bottom >= 30.0);
 }
 
 TEST_CASE("The window can change from a phone to a desktop shape while playing", "[ui][play][resize]")
@@ -514,6 +659,16 @@ TEST_CASE("Screenshots of the play screen for the hand check against the boards"
         QTest::qWait(300);
         CHECK(s.h.grab(prefix + "alert.png"));
 
+        // The alert with a wrong answer held, and then with a right one.
+        s.rig.answer_wrong();
+        QTest::qWait(400);
+        CHECK(s.h.grab(prefix + "alert-wrong.png"));
+        QMetaObject::invokeMethod(s.feedback, "clear");
+        s.rig.controller.answer(s.rig.controller.session_view().question.correct_tile);
+        QTest::qWait(400);
+        CHECK(s.h.grab(prefix + "alert-right.png"));
+        QMetaObject::invokeMethod(s.feedback, "clear");
+
         // CP16: the pause overlay.
         s.rig.controller.pause();
         s.h.settle();
@@ -524,5 +679,40 @@ TEST_CASE("Screenshots of the play screen for the hand check against the boards"
         s.rig.play_for_ms(61000);
         QTest::qWait(500);
         CHECK(s.h.grab(prefix + "boom.png"));
+
+        // CP13: an endless level, with the time gained by a right answer hanging from the fuse.
+        {
+            Shell endless(size.size);
+            for (int level = 1; level <= 12; ++level)
+            {
+                endless.rig.play_level_right();
+                if (level < 12)
+                {
+                    endless.rig.controller.nextLevel();
+                }
+            }
+            endless.wait_out_holds();
+            click(endless.h.find_item("keepGoingButton"));
+            endless.h.settle();
+            // Levels 13, 14 and 20, each with a right answer held: the time gained hangs from the fuse.
+            for (int level = 13; level <= 20; ++level)
+            {
+                if (level == 13 || level == 14 || level == 20)
+                {
+                    endless.rig.play_for_ms(9000);
+                    endless.h.settle();
+                    endless.feedback->setProperty("rightHoldMs", 60000);
+                    click(endless.tile(endless.rig.controller.session_view().question.correct_tile));
+                    QTest::qWait(400);
+                    CHECK(endless.h.grab(prefix + (level == 13 ? QStringLiteral("endless.png")
+                                                               : QStringLiteral("endless-%1.png").arg(level))));
+                    QMetaObject::invokeMethod(endless.feedback, "clear");
+                    endless.h.settle();
+                }
+                endless.rig.play_level_right();
+                endless.rig.controller.nextLevel();
+                endless.h.settle();
+            }
+        }
     }
 }

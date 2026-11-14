@@ -65,7 +65,10 @@ Item {
 
             Text {
                 objectName: "nameText"
+                // As wide as the name, and no wider, so the NEW tag follows it; a name too long for the row shrinks and
+                // is elided.
                 Layout.fillWidth: true
+                Layout.maximumWidth: implicitWidth
                 Layout.alignment: Qt.AlignVCenter
                 text: root.name
                 elide: Text.ElideRight
@@ -78,6 +81,7 @@ Item {
             Badge {
                 objectName: "newTag"
                 Layout.alignment: Qt.AlignVCenter
+                Layout.leftMargin: 2 * root.unit
                 visible: root.highlighted
                 text: qsTr("NEW")
                 fillColor: Theme.background
@@ -86,6 +90,11 @@ Item {
                 pixelSize: 16 * root.unit
                 letterSpacing: 1
                 horizontalPadding: 8 * root.unit
+            }
+
+            // The room between the name (and its tag) and the score, which stays at the right edge.
+            Item {
+                Layout.fillWidth: true
             }
 
             Text {

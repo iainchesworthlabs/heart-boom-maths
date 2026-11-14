@@ -55,7 +55,7 @@ Item {
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         anchors.horizontalCenter: parent.horizontalCenter
-        anchors.topMargin: Math.min(52, root.height * 0.06) * root.unit
+        anchors.topMargin: Math.min(52, root.height * 0.065) * root.unit
         anchors.bottomMargin: Math.min(32, root.height * 0.04) * root.unit
         width: root.contentWidth
         spacing: root.columnSpacing * root.unit

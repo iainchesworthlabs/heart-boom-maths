@@ -26,6 +26,7 @@ QtObject {
     readonly property real paddingSide: pick(20, 60, 56)
     readonly property real paddingBottom: pick(36, 56, 40)
     readonly property real gap: pick(16, 28, 24)
+    readonly property real gapMin: pick(6, 10, 16) // the least the column's gaps shrink to when the alert's banner crowds it
     readonly property real dotGrid: pick(12, 16, 14)
     readonly property real dotRadius: pick(1.6, 2.2, 2)
 
@@ -60,6 +61,8 @@ QtObject {
     readonly property real fuseZoneBorder: pick(3, 4, 4)
     readonly property real stripePeriod: pick(12, 16, 14)
     readonly property real starSize: pick(18, 28, 24)
+    // The room kept under the fuse while the green "+N s" tag hangs from it, so the tag clears what is below.
+    readonly property real gainReserve: pick(30, 28, 34)
 
     // The question card.
     readonly property real cardBorder: pick(5, 6, 6)
@@ -73,6 +76,10 @@ QtObject {
     readonly property real slotRadius: pick(14, 22, 24)
     readonly property real partSpacing: pick(10, 16, 20)
     readonly property real cardPaddingY: pick(26, 40, 0)
+    // A sentence on two lines (three or four terms) has a little less room above and below and a wider gap between parts.
+    readonly property real cardPaddingYMulti: pick(24, 38, 0)
+    readonly property real cardPaddingMin: pick(6, 12, 0) // the least a card keeps above and below when the window is short
+    readonly property real partSpacingMulti: pick(12, 18, 22)
 
     // The hint button and the messages.
     readonly property real hintHeight: pick(44, 60, 52)
@@ -88,6 +95,7 @@ QtObject {
     // The answer tiles.
     readonly property int tileColumns: wide ? 4 : 2
     readonly property real tileHeight: pick(96, 150, 150)
+    readonly property real tileMinHeight: pick(76, 76, 96) // what a tile shrinks to when the alert's banner takes a row
     readonly property real tileBorder: pick(5, 6, 6)
     readonly property real tileRadius: pick(20, 28, 28)
     readonly property real tileShadow: pick(6, 9, 9)

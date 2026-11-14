@@ -5,8 +5,10 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
 
 #include <QByteArray>
+#include <QColor>
 #include <QDate>
 #include <QLocale>
 #include <QQuickItem>
@@ -549,9 +551,51 @@ TEST_CASE("About shows the version, the build, the font licences and four rows",
     QQuickItem* flick = s.item("aboutFlick");
     CHECK(flick->width() > 0);
     CHECK(s.inside(flick));
-    if (arrangement.size == PHONE)
+    if (arrangement.size != TABLET)
     {
         CHECK_FALSE(property_of(flick, "interactive").toBool());
+        CHECK_FALSE(s.visible("aboutScrollBar"));
+        // Every row, the last one too, is whole inside the window.
+        CHECK(s.inside(s.item("sourceButton")));
+    }
+}
+
+TEST_CASE("About never cuts a card flat: it fits, or scrolls with a bar and reaches the last row", "[ui][about]")
+{
+    // Phone, the desktop sizes (the board's 1280 by 800 and a taller one), and windows too short for the rows.
+    const QSize size = GENERATE(PHONE, DESKTOP, QSize{1280, 960}, QSize{1280, 720}, QSize{390, 560}, QSize{390, 420});
+    CAPTURE(size.width(), size.height());
+    Screens s(PHONE);
+    s.tap("settingsButton");
+    s.tap("aboutButton");
+    REQUIRE(s.visible("aboutScreen"));
+    s.window_size = size;
+    s.h.resize(size);
+    s.h.settle();
+
+    QQuickItem* flick = s.item("aboutFlick");
+    QQuickItem* last = s.item("sourceButton");
+    const bool scrolls = property_of(flick, "interactive").toBool();
+    CHECK(s.visible("aboutScrollBar") == scrolls);
+    if (!scrolls)
+    {
+        // Everything fits: the last card, with its shadow, is inside the window.
+        CHECK(s.inside(last));
+        CHECK(last->mapToScene(QPointF(0, last->height())).y() + 6 <= size.height());
+    }
+    else
+    {
+        // The thumb is shorter than the track by as much as the content is longer than the window, and at the top of
+        // it.
+        QQuickItem* bar = s.item("aboutScrollBar");
+        CHECK(bar->height() < flick->height());
+        CHECK(bar->y() == 0);
+        // Scrolled to the end, the last card is whole inside the window and the thumb is at the foot.
+        flick->setProperty("contentY", property_of(flick, "contentHeight").toDouble() - flick->height());
+        s.h.settle();
+        CHECK(s.inside(last));
+        CHECK(bar->y() + bar->height() <= flick->height() + 0.5);
+        CHECK(bar->y() > 0);
     }
 }
 
@@ -764,6 +808,35 @@ TEST_CASE("The gate shows the words, a keypad and OPEN that stays grey until the
     CHECK(s.rig.links.opened.empty());
 }
 
+TEST_CASE("The gate in a phone window matches the board: CANCEL and OPEN at 140 and 188, OPEN grey in its own tones",
+          "[ui][gate]")
+{
+    Screens s(PHONE);
+    s.tap("settingsButton");
+    s.tap("aboutButton");
+    s.tap("privacyButton");
+    REQUIRE(s.visible("gateScreen"));
+
+    const auto top_of = [&](const char* name) { return s.item(name)->mapToScene(QPointF(0, 0)).y(); };
+    const auto left_of = [&](const char* name) { return s.item(name)->mapToScene(QPointF(0, 0)).x(); };
+    // CANCEL runs from x 24 and OPEN ends at 366, with 14 between them; OPEN is 1.4 times CANCEL once the room both
+    // always take (border and padding) is taken off.
+    CHECK_THAT(left_of("cancelButton"), Catch::Matchers::WithinAbs(24.0, 0.6));
+    CHECK_THAT(s.item("cancelButton")->width(), Catch::Matchers::WithinAbs(140.0, 1.0));
+    CHECK_THAT(left_of("openButton"), Catch::Matchers::WithinAbs(178.0, 1.0));
+    CHECK_THAT(s.item("openButton")->width(), Catch::Matchers::WithinAbs(188.0, 1.0));
+    CHECK_THAT(left_of("openButton") + s.item("openButton")->width(), Catch::Matchers::WithinAbs(366.0, 0.6));
+    // The prompt card holds two lines of 24 and two of 35.7, so the display and the keypad sit where the board has
+    // them.
+    CHECK_THAT(top_of("gatePrompt"), Catch::Matchers::WithinAbs(114.0, 1.0));
+    CHECK_THAT(s.item("gatePrompt")->height(), Catch::Matchers::WithinAbs(171.4, 1.0));
+    CHECK_THAT(top_of("gateDisplay"), Catch::Matchers::WithinAbs(299.0, 1.5));
+    CHECK_THAT(top_of("key1"), Catch::Matchers::WithinAbs(381.0, 1.5));
+    // OPEN waits in the grey of a switch that is off with grey words, not in the hint button's pair.
+    CHECK(property_of(s.h.find("openButton"), "fillColor").value<QColor>() == QColor("#D9D9D9"));
+    CHECK(property_of(s.h.find("openButton"), "textColor").value<QColor>() == QColor("#6B7280"));
+}
+
 TEST_CASE("A wrong number is said in words with a mark, a new number is dealt and nothing opens", "[ui][gate]")
 {
     Screens s(PHONE);
@@ -927,6 +1000,12 @@ TEST_CASE("Screenshots of the title, settings, about and gate screens for the ha
             CHECK(s.h.grab(prefix + "settings.png")); // CP14
             s.tap("aboutButton");
             CHECK(s.h.grab(prefix + "about.png")); // CP15
+            // The same page in a window too short for it: it scrolls, with a bar.
+            s.h.resize(QSize{size.size.width(), 480});
+            s.h.settle();
+            CHECK(s.h.grab(prefix + "about-short.png"));
+            s.h.resize(size.size);
+            s.h.settle();
             s.tap("privacyButton");
             s.keypad(Screens::answer(0).left(2));
             CHECK(s.h.grab(prefix + "gate.png")); // CP17

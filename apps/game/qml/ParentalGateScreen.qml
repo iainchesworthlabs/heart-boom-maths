@@ -91,7 +91,8 @@ ScreenFrame {
             id: promptColumn
 
             anchors.fill: parent
-            anchors.margins: 16 * root.unit + 5
+            anchors.topMargin: 16 * root.unit + 5
+            anchors.bottomMargin: 16 * root.unit + 5
             anchors.leftMargin: 18 * root.unit + 5
             anchors.rightMargin: 18 * root.unit + 5
             spacing: 10 * root.unit
@@ -104,6 +105,8 @@ ScreenFrame {
                 color: Theme.ink
                 font.family: Theme.bodyFont
                 font.pixelSize: 20 * root.unit
+                lineHeight: 24 * root.unit
+                lineHeightMode: Text.FixedHeight
             }
 
             Text {
@@ -115,8 +118,9 @@ ScreenFrame {
                 font.family: Theme.displayFont
                 font.pixelSize: 34 * root.unit
                 font.letterSpacing: 2 * root.unit
+                lineHeight: 35.7 * root.unit
+                lineHeightMode: Text.FixedHeight
             }
-
         }
     }
 
@@ -262,16 +266,24 @@ ScreenFrame {
         }
     }
 
-    RowLayout {
+    // CANCEL and OPEN share what is left in 1 to 1.4, after each has the room its border and padding always take: the
+    // board's two widths are 140 and 188 of 342. They are placed by hand because a layout's stretch factors do not give
+    // this split.
+    Item {
+        id: buttons
+
+        readonly property real gap: 14 * root.unit
+        readonly property real fixedWidth: 22 * root.unit
+        readonly property real shared: width - gap - 2 * fixedWidth
+        readonly property real cancelWidth: fixedWidth + shared / 2.4
+
         Layout.fillWidth: true
-        spacing: 14 * root.unit
+        Layout.preferredHeight: 60 * root.unit
 
         ComicButton {
             objectName: "cancelButton"
-            Layout.fillWidth: true
-            Layout.preferredWidth: 0
-            Layout.horizontalStretchFactor: 10
-            Layout.preferredHeight: 60 * root.unit
+            width: buttons.cancelWidth
+            height: parent.height
             variant: "secondary"
             text: qsTr("CANCEL")
             pixelSize: 32 * root.unit
@@ -284,11 +296,12 @@ ScreenFrame {
 
         ComicButton {
             objectName: "openButton"
-            Layout.fillWidth: true
-            Layout.preferredWidth: 0
-            Layout.horizontalStretchFactor: 14
-            Layout.preferredHeight: 60 * root.unit
+            x: buttons.cancelWidth + buttons.gap
+            width: buttons.width - x
+            height: parent.height
             enabled: root.complete
+            fillColor: enabled ? variantFill : Theme.switchOff
+            textColor: enabled ? variantText : Theme.lockedText
             variant: "primary"
             text: root.forGameCenter ? qsTr("TURN ON") : qsTr("OPEN")
             pixelSize: 36 * root.unit
