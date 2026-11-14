@@ -368,6 +368,55 @@ TEST_CASE("The last ten seconds turn the play screen into the alert", "[ui][play
     CHECK(property_of(s.h.find("bombSeconds"), "text").toString() == "0:08");
 }
 
+TEST_CASE("In the alert nothing of the play column overlaps another part, at every size", "[ui][play][alert]")
+{
+    // From a 667 high phone (the shortest the column's minimum heights allow) to the tablets in portrait and the desktop.
+    const QSize size =
+        GENERATE(PHONE, QSize{375, 667}, TABLET, QSize{768, 1024}, QSize{744, 1133}, DESKTOP, QSize{1024, 600});
+    CAPTURE(size.width(), size.height());
+    Shell s(size);
+    s.rig.play_for_ms(50000);
+    s.h.settle();
+    REQUIRE(s.rig.controller.alert());
+    REQUIRE(s.visible("alertBanner"));
+
+    const auto top_of = [&](const char* name) { return s.h.find_item(QLatin1String(name))->mapToScene(QPointF(0, 0)).y(); };
+    const auto bottom_of = [&](const char* name)
+    {
+        QQuickItem* item = s.h.find_item(QLatin1String(name));
+        return item->mapToScene(QPointF(0, item->height())).y();
+    };
+    const bool wide = size.width() >= 600 && size.width() >= size.height();
+    CAPTURE(top_of("fuseBar"), bottom_of("fuseBar"), top_of("alertBanner"), bottom_of("alertBanner"),
+            top_of("questionCard"), bottom_of("questionCard"), top_of("tile0"), bottom_of("tile0"), top_of("tile2"),
+            bottom_of("tile2"));
+    // From the top down, each part ends where it or the next begins: the banner and the question card, the hint
+    // button and the tiles.
+    if (!wide)
+    {
+        CHECK(bottom_of("fuseBar") <= top_of("alertBanner") + 0.5);
+        CHECK(bottom_of("heartBomb") <= top_of("fuseBar") + 0.5);
+    }
+    // The banner is tilted a little, so its box is measured by its own height, the card by its box.
+    CHECK(bottom_of("alertBanner") <= top_of("questionCard") + 0.5);
+    if (!wide)
+    {
+        CHECK(bottom_of("questionCard") <= top_of("hintButton") + 0.5);
+        CHECK(bottom_of("hintButton") <= top_of("tile0") + 0.5);
+        CHECK(bottom_of("hintButton") <= top_of("tile1") + 0.5);
+    }
+    else
+    {
+        // The hint button is in the left panel; the card ends above the tiles.
+        CHECK(bottom_of("questionCard") <= top_of("tile0") + 0.5);
+    }
+    // The card keeps room for its question, and the tiles are inside the window.
+    QQuickItem* card = s.h.find_item("questionCard");
+    CHECK(card->height() > property_of(card, "contentHeight").toDouble());
+    CHECK(bottom_of("tile2") <= size.height() + 0.5);
+    CHECK(bottom_of("tile3") <= size.height() + 0.5);
+}
+
 TEST_CASE("The pause button opens the pause overlay and RESUME and QUIT leave it", "[ui][play][pause]")
 {
     Shell s(PHONE);
@@ -487,6 +536,8 @@ TEST_CASE("Winning level 12 offers KEEP GOING, and endless levels say so and sho
 
     s.rig.play_for_ms(9000);
     s.h.settle();
+    // A long hold, so a slow frame cannot clear the look before the test reads it.
+    s.feedback->setProperty("rightHoldMs", 60000);
     click(s.tile(s.rig.controller.session_view().question.correct_tile));
     s.h.settle();
     CHECK(s.visible("timeGain"));
