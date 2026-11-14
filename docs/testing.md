@@ -8,8 +8,13 @@ flaky tests stay visible. A phase that matches no tests fails, unless the phase 
 
 | Kind | Where | Example |
 |---|---|---|
-| unit | `libs/*/tests` | `test_parse.cpp` |
-| integration | `apps/*/tests` | `cli.greets` runs the executable |
+| unit | `libs/*/tests` | `test_tuning.cpp` |
+| integration | `apps/game` (in `CMakeLists.txt`) | `game.version` runs the program and reads its answer |
+| ui | `apps/game` (in `CMakeLists.txt`) | `game.smoke` starts the program on the offscreen platform and waits for the first frame; `game.qmllint` |
+
+The `game.*` tests exist only when a Qt kit was found. On Windows the Qt `bin` directory must be on `PATH`;
+`tools/dev/test.ps1` adds the `bin` directory of `ICL_QT_ROOT`. The scripts in `tools/ci/` carry their own tests: run
+`python3 tools/ci/check_core_includes.py --self-test` and the same for `check_link_open.py`.
 
 ## Coverage
 

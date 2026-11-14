@@ -54,11 +54,20 @@ Numbers live in `libs/core/data/tuning.json` and `libs/core/tests/data/prd-table
 
 ## Layout
 
-The repository follows the organisation template, as `snake` does: `libs/core` is the rules library (standard library only, tests in `libs/core/tests`, release values in `libs/core/data/tuning.json`), and `apps/game` is the Qt and QML application (QML in `qml/`, view-models and services in `src/`, per-OS code in `src/platform/<os>/`, fonts in `fonts/`). The handover's five top-level folders map onto these. `private/` is ignored by Git and holds the design spec and boards; read it for screen work and never commit it. The template's sample code in `libs/core` and `apps/` is replaced during M0.
-
+The repository follows the organisation template, as `snake` does: `libs/core` is the rules library (standard library only, tests in `libs/core/tests`, release values in `libs/core/data/tuning.json`), and `apps/game` is the Qt and QML application (QML in `qml/`, view-models and services in `src/`, per-OS code in `src/platform/<os>/`, fonts in `fonts/`). The handover's five top-level folders map onto these. `private/` is ignored by Git and holds the design spec and boards; read it for screen work and never commit it.
 ## Commands
 
-Fill this in at M0 once the presets exist. Presets follow the template (`linux-debug`, `linux-asan-ubsan`, `windows-msvc-release` and so on), plus `wasm-release`.
+Presets: `linux-debug`, `linux-release`, `linux-asan-ubsan`, `linux-tsan`, `linux-coverage`, `macos-release`, `windows-msvc-release`, `windows-msvc-asan`, `ios-release` (Mac only) and `wasm-release` (needs `EMSDK`; see `docs/building.md`).
+
+```bash
+cmake --preset linux-debug && cmake --build --preset linux-debug && ctest --preset linux-debug   # configure, build, test
+ctest --preset linux-debug -L unit                          # one label: unit, integration, system, ui, perf
+pwsh -NoProfile -File tools/dev/test.ps1 [-Filter <regex>]  # the same on Windows (loads MSVC; windows-msvc-release)
+python3 tools/ci/precheck.py                                # the Policy checks plus the two project rules, before a push
+python3 tools/ci/check_core_includes.py --self-test         # also check_link_open.py; each script has a self-test
+```
+
+`apps/game` builds only when a Qt 6 kit is found (`ICL_QT_ROOT`); set `-DHEART_BOOM_MATHS_BUILD_GAME=ON` to require it or `OFF` to skip it. Its tests are labelled `ui` (`game.smoke`, `game.qmllint`) and `integration` (`game.version`).
 
 ## Definition of done
 

@@ -48,7 +48,7 @@ public one. So the template ships the TestFlight way only.
 
 ### iOS and TestFlight
 
-`apps/ios` is a one-screen UIKit application that shows the greeting of the core library. It exists so that the whole
+`apps/ios` is a one-screen UIKit stub that shows the game's name and version. It exists so that the whole
 path (compile, sign, check, validate with Apple, upload) works from the first day and can be copied from; a project
 replaces the application and keeps the packaging around it: `apps/ios/CMakeLists.txt`, `apps/ios/packaging/`, the `ios`
 job of `release.yml` and `ios-build.yml`.

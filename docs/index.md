@@ -7,6 +7,7 @@ Cross-platform app and game for iOS, Android, WebAssembly and desktop. It builds
 |---|---|
 | [Building](building.md) | Prerequisites, shared roots, presets |
 | [Architecture](architecture.md) | Layout, platform sources, naming |
+| [Decision records](adr/0001-test-framework-and-json.md) | Test framework and JSON |
 | [Testing](testing.md) | Test kinds, labels, coverage floors |
 | [Continuous integration](ci.md) | What runs when, required checks |
 | [Releasing](releasing.md) | Changelog, tags, signing, publishing |
