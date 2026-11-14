@@ -20,7 +20,7 @@ Numbers live in `libs/core/data/tuning.json` and `libs/core/tests/data/prd-table
 
 ## Rules that must not be broken
 
-- `libs/core` includes the C++ standard library and nothing else. No Qt, file access, clock, threads or global state. CI fails on a Qt include in `libs/core`.
+- `libs/core` includes the C++ standard library and nothing else, with one exception: Tracy, through `heart_boom_maths/profile.hpp`, which is empty unless profiling is built in. No Qt, file access, clock, threads or global state. CI fails on a Qt include, or on a Tracy include outside `profile.hpp`, in `libs/core`.
 - Core state is integers only. No floating point in anything that is saved, hashed or replayed.
 - Use the core's own PRNG and bounded-integer function. Never use `std::uniform_int_distribution` or other standard distributions.
 - The core never reads a clock. The app layer turns real time into whole ticks (20 per second) and calls `tick()`.

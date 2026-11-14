@@ -43,6 +43,10 @@ The boards are the reference for every screen. After a side-by-side review of th
 
 Everything else that differs from a board is treated as a defect and fixed, for example the width ratio of the gate and name-entry buttons, the height of the question digits and the layout of endless questions.
 
+## Tracy in the core (15 Nov 2026)
+
+The project owner allows Tracy in `libs/core`. The rule that the core includes only the C++ standard library has this one exception. Tracy is reached only through `libs/core/include/heart_boom_maths/profile.hpp`, whose macros are empty unless profiling is built in, so normal and release builds have no Tracy code and no overhead. Tracy is a profiler and takes no part in the rules: state, hashes and replays are unaffected, and a test holds that. The `ICL_ENABLE_TRACY` profiling presets are off in release, sanitizer, coverage and fuzz builds.
+
 ## Earlier decisions (7 and 14 Nov)
 
 Alert is the last 10 s of the 60 and gives no extra time. Correct answers keep adding time during the alert. Coins survive the bomb. Wrong answers cost time with clear feedback. When the bomb goes off the game is over, and a new game starts at level 1. 12 levels, then endless mode. Four answer tiles on every level, and a hint removes two wrong ones (removing one is the alternative to playtest). Look is Comic Pop. Name is Heart Boom Maths (first chosen as Star Bomb, then changed because Star Boom was already taken). The bomb is a pink heart (option A on the design canvas) and the explosion is a star burst. The game-over card shows a best score, and a high score earns a typed name on a top 10 that stays on the device. Settings (sound, music) and About exist. Game Center is integrated on Apple devices and assumed allowed at this rating. Target age rating is the lowest in each store. Diamonds, characters and the bonus animal are parked. The ESP32-P4 handheld is v2.
