@@ -65,6 +65,11 @@ public:
         QNativeInterface::QAndroidApplication::runOnAndroidMainThread(
             [constant]
             {
+                // Only an activity has a window; before one exists, or in a service, there is nothing to feel.
+                if (!QNativeInterface::QAndroidApplication::isActivityContext())
+                {
+                    return;
+                }
                 QJniObject activity = QNativeInterface::QAndroidApplication::context();
                 if (!activity.isValid())
                 {

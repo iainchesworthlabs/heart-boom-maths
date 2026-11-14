@@ -126,6 +126,7 @@ Also covered by `Journey: a saved run that cannot be opened, and a save from a n
 Test: `Journey: Settings switches, the gate for Game Center and for a link, and a restart`.
 
 1. The gear. Settings page. Sound and Music off: each is applied to the audio service and written at once.
+   Haptics (shown only where the device can make them) works the same way, and turning it on gives one light tick (`tests/test_ui_haptics.cpp`, [Haptics](haptics.md)).
 2. Game Center (shown only where the platform has a leaderboard). The switch opens the gate. A wrong number deals a new one. CANCEL leaves it off and writes nothing. The right number and OPEN turn it on, tell the score service, and write it.
 3. ABOUT, then a link. The gate opens. Escape closes it and opens nothing. A wrong number opens nothing. The right number opens the address once through `LinkOpener`, and the gate is spent. While the gate is open the page under it takes no taps.
 4. A gate left open when the app leaves the foreground is closed, and nothing opens when the app returns.
