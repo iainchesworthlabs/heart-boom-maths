@@ -43,6 +43,7 @@ ctest --preset linux-debug
 | `ios-release` | The iPhone and iPad application (`apps/ios`), unsigned, on a Mac with Xcode; no tests and no Qt application |
 | `ios-game-release` | The whole game on an iPhone or iPad, linked statically against Qt for iOS, unsigned, on a Mac with Xcode. See iOS below and [iOS and Game Center](ios.md) |
 | `wasm-release` | The game in a browser (`apps/game`), single-threaded. See WebAssembly below |
+| `android-arm64-release`, `android-arm64-debug` | The game for an Android phone or tablet: an unsigned APK and AAB, and a debug-signed APK. See Android below |
 
 On Windows, run `pwsh -NoProfile -File tools/dev/test.ps1` to load the Visual Studio environment, build
 `windows-msvc-release` and run the tests (`-Filter <regex>` runs some of them).
@@ -106,5 +107,13 @@ tools (`QT_HOST_PATH`). It does not use vcpkg, builds no tests and does not buil
 `apps/game/ios/verify_game_app.sh <app> --bundle-id <id> --executable heart-boom-maths --entitlements apps/game/ios/heart-boom-maths.entitlements`.
 `HEART_BOOM_MATHS_IOS_BUILD_NUMBER`, `HEART_BOOM_MATHS_IOS_SIGNING_TEAM` and `HEART_BOOM_MATHS_IOS_SIGNING_PROFILE` work as
 for `ios-release`.
+### Android
+
+`cmake --preset android-arm64-release` (an unsigned APK and AAB) and `android-arm64-debug` (an APK signed with Android's debug
+key) build `apps/game` with Qt's Android kit. The presets are listed only when `HEART_BOOM_MATHS_QT_ANDROID_ROOT` is set.
+They also need `ICL_QT_ROOT` (the desktop kit of the same version), `ANDROID_SDK_ROOT` and `ANDROID_NDK_ROOT` (the NDK the kit
+was built with, `27.2.12479018` for Qt 6.12) and a JDK 17 or later; vcpkg is not used and no tests are built. The packages are
+under `build/<preset>/apps/game/android-build/build/outputs/`. The version code is `ICL_BUILD_NUMBER` (1 when it is not set).
+Check a package with `apps/game/android/verify_package.sh`. [Android](android.md) has the details.
 
 Put personal settings in `CMakeUserPresets.json`, which is ignored by git.

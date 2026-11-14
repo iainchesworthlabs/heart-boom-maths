@@ -1,0 +1,76 @@
+<?xml version="1.0"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- The Android application's manifest: what the program asks of the system, and nothing else. It is the package source
+     directory of the application target (cmake/HbmAndroid.cmake): androiddeployqt fills in the values marked INSERT from
+     the target's properties and copies this file over Qt's template. The application id is not written here: Gradle takes
+     it from the target's QT_ANDROID_PACKAGE_NAME.
+
+     NO PERMISSIONS. The game keeps one small file in its own private folder and plays sound, so it needs no network, no
+     storage, no camera, no microphone and no location (CLAUDE.md: no network calls, analytics, ads, purchases, accounts,
+     notifications or location). Qt's template has a permissions placeholder here, and Qt's core and network modules put
+     INTERNET and storage permissions at it whatever the program does. The placeholder is deliberately NOT in this file,
+     so androiddeployqt inserts none. apps/game/android/verify_package.sh reads the manifest inside the finished package
+     and fails on any permission; a permission added here is added with the code that needs it, and with a decision in
+     docs/DECISIONS.md. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    android:installLocation="auto"
+    android:versionCode="-- %%INSERT_VERSION_CODE%% --"
+    android:versionName="-- %%INSERT_VERSION_NAME%% --">
+
+    <!-- The game is played by touch, but a keyboard or a mouse works too (a Chromebook, a tablet with a keyboard), so a
+         touch screen is not required. -->
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <!-- %%INSERT_FEATURES -->
+
+    <supports-screens
+        android:anyDensity="true"
+        android:largeScreens="true"
+        android:normalScreens="true"
+        android:smallScreens="true" />
+
+    <!-- allowBackup is off: the save holds the names a child types, and those never leave the device. That includes
+         Google's cloud backup, which is what the attribute switches off. -->
+    <application
+        android:name="org.qtproject.qt.android.bindings.QtApplication"
+        android:allowBackup="false"
+        android:hardwareAccelerated="true"
+        android:label="-- %%INSERT_APP_NAME%% --"
+        android:icon="-- %%INSERT_APP_ICON%% --"
+        android:theme="@style/Theme.HeartBoomMaths"
+        android:enableOnBackInvokedCallback="true">
+        <!-- Portrait: the design is a phone held upright (docs/DECISIONS.md, 8). A device whose smallest side is 600 dp or
+             more (a tablet) that runs Android 16 or later ignores the lock for an application targeted at level 36, and
+             follows the device, which is what the regular size class is for. The activity handles the configuration
+             changes itself, so a turn or a resize does not restart it and lose the screen. -->
+        <activity
+            android:name="org.qtproject.qt.android.bindings.QtActivity"
+            android:configChanges="orientation|uiMode|screenLayout|screenSize|smallestScreenSize|layoutDirection|locale|fontScale|keyboard|keyboardHidden|navigation|mcc|mnc|density"
+            android:label="-- %%INSERT_APP_NAME%% --"
+            android:launchMode="singleTop"
+            android:screenOrientation="portrait"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.app.lib_name"
+                android:value="-- %%INSERT_APP_LIB_NAME%% --" />
+
+            <meta-data
+                android:name="android.app.arguments"
+                android:value="-- %%INSERT_APP_ARGUMENTS%% --" />
+        </activity>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.qtprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/qtprovider_paths"/>
+        </provider>
+    </application>
+</manifest>

@@ -280,6 +280,184 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
+  # The Android application, signed with the owner's upload key, as an AAB for Google Play (and a signed APK to look at).
+  # It runs only when the repository variable SIGN_ANDROID_UPLOAD is `true`; with it unset the release is made without
+  # Android, and no signing secret is read. The version code is the number of this run (cmake/HbmAndroid.cmake). Nothing
+  # here uploads to Google Play: the AAB is a workflow artifact for 7 days, named android-*, so that it is never put on the
+  # release (only an artifact named release-* goes there), and the owner puts it on the internal testing track by hand
+  # (docs/releasing.md, "Android and Google Play"). The build that has no key is .github/workflows/android-build.yml.
+  android:
+    name: Package (Android)
+    needs: version
+    if: ${{ !cancelled() && (needs.version.result == 'success' || needs.version.result == 'skipped') && vars.SIGN_ANDROID_UPLOAD == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      ICL_BUILD_NUMBER: ${{ github.run_number }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Read the pinned versions
+        id: pins
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          pins = json.load(open(".github/toolchain-versions.json"))
+          android = pins["android"]
+          print(f"qt={pins['qt']}")
+          print(f"aqtsource={pins.get('aqtsource', '')}")
+          print(f"ndk={android['ndk']}")
+          print(f"platform={android['platform']}")
+          print(f"build_tools={android['build_tools']}")
+          print(f"jdk={android['jdk']}")
+          PY
+
+      - name: Set up CMake
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-cmake@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+
+      - name: Use the runner's JDK
+        shell: bash
+        env:
+          JDK: ${{ steps.pins.outputs.jdk }}
+        run: |
+          set -euo pipefail
+          variable="JAVA_HOME_${JDK}_X64"
+          jdk="${!variable:-}"
+          [ -x "$jdk/bin/java" ] || { echo "::error::the runner image has no JDK $JDK ($variable is '$jdk')"; exit 1; }
+          echo "JAVA_HOME=$jdk" >> "$GITHUB_ENV"
+          echo "$jdk/bin" >> "$GITHUB_PATH"
+          "$jdk/bin/java" -version
+
+      - name: Install the Android SDK parts
+        shell: bash
+        env:
+          NDK: ${{ steps.pins.outputs.ndk }}
+          PLATFORM: ${{ steps.pins.outputs.platform }}
+          BUILD_TOOLS: ${{ steps.pins.outputs.build_tools }}
+        run: |
+          set -euo pipefail
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          [ -d "$sdk" ] || { echo "::error::the runner image has no Android SDK (ANDROID_HOME is '$sdk')"; exit 1; }
+          sdkmanager="$sdk/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$sdkmanager" ] || { echo "::error::$sdkmanager is not there"; exit 1; }
+          "$sdkmanager" --sdk_root="$sdk" --install "ndk;$NDK" "platforms;$PLATFORM" "build-tools;$BUILD_TOOLS"
+          echo "ANDROID_SDK_ROOT=$sdk" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$sdk" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$sdk/ndk/$NDK" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$sdk/ndk/$NDK" >> "$GITHUB_ENV"
+          echo "$sdk/build-tools/$BUILD_TOOLS" >> "$GITHUB_PATH"
+
+      - name: Set up Qt (Android kit and Linux host kit)
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-qt@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+        with:
+          version: ${{ steps.pins.outputs.qt }}
+          aqtsource: ${{ steps.pins.outputs.aqtsource }}
+          host: all_os
+          target: android
+          arch: android_arm64_v8a
+          modules: qtmultimedia
+
+      - name: Name the Qt kits
+        shell: bash
+        run: |
+          set -euo pipefail
+          android_kit="${QT_ROOT_DIR:-}"
+          [ -d "$android_kit" ] || { echo "::error::QT_ROOT_DIR is '$android_kit': the Qt install put its Android kit somewhere else"; exit 1; }
+          host_kit="$(dirname "$android_kit")/gcc_64"
+          [ -e "$host_kit/bin/androiddeployqt" ] || { echo "::error::$host_kit/bin/androiddeployqt is not there"; exit 1; }
+          echo "HEART_BOOM_MATHS_QT_ANDROID_ROOT=$android_kit" >> "$GITHUB_ENV"
+          echo "ICL_QT_ROOT=$host_kit" >> "$GITHUB_ENV"
+
+      # The upload key. The secrets are named in docs/secrets.md of icl-common-infra (organisation secrets, shared with this
+      # repository). Each is checked for being set by name before anything is built, and none is ever printed. The key file
+      # is written readable by this user alone and removed at the end.
+      - name: Write the upload key
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            [ -n "${!name}" ] || { echo "::error::the secret ANDROID_${name} is not set (or this repository is not among the selected repositories of the organisation secret); see docs/releasing.md, Android and Google Play"; exit 1; }
+          done
+          umask 077
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/upload-key.jks"
+          [ -s "$RUNNER_TEMP/upload-key.jks" ] || { echo "::error::the keystore secret decoded to an empty file"; exit 1; }
+          echo "QT_ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/upload-key.jks" >> "$GITHUB_ENV"
+
+      - name: Configure (signed)
+        run: cmake --preset android-arm64-release -DQT_ANDROID_SIGN_AAB=ON -DQT_ANDROID_SIGN_APK=ON
+
+      # Qt's signing step reads the key from these four variables (QtAndroidSignPackage.cmake in the kit).
+      - name: Build the signed AAB and APK
+        env:
+          QT_ANDROID_KEYSTORE_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          QT_ANDROID_KEYSTORE_STORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          QT_ANDROID_KEYSTORE_KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: cmake --build --preset android-arm64-release
+
+      - name: Check the signed packages
+        shell: bash
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          label=dry-run
+          if [ "$REF_TYPE" = tag ]; then label="$REF_NAME"; fi
+          version="$(sed -n 's/^ *VERSION \([0-9][0-9.]*\)$/\1/p' CMakeLists.txt | head -n 1)"
+          # Qt signs the APK into a new file (-release-signed.apk, beside the unsigned one) and the AAB in place.
+          apk="$(find build/android-arm64-release -path '*outputs/apk/release/*' -name '*-release-signed.apk' -type f | head -n 1)"
+          aab="$(find build/android-arm64-release -path '*outputs/bundle/release/*' -name '*.aab' -type f | head -n 1)"
+          [ -n "$apk" ] && [ -n "$aab" ] || { echo "::error::the build made no signed release APK or AAB"; find build/android-arm64-release -name '*.apk' -o -name '*.aab'; exit 1; }
+          mkdir -p dist-android
+          cp "$apk" "dist-android/heart-boom-maths-$label-android-arm64.apk"
+          cp "$aab" "dist-android/heart-boom-maths-$label-android-arm64.aab"
+          ls -l dist-android
+          # Not debuggable, no permission, and signed by a key that is not Android's debug key. The APK is verified as a
+          # device would; the bundle by its jar signature, as Google Play does.
+          apps/game/android/verify_package.sh "dist-android/heart-boom-maths-$label-android-arm64.apk" --version "${version}" --release
+          certs="$(apksigner verify --print-certs "dist-android/heart-boom-maths-$label-android-arm64.apk")"
+          printf '%s\n' "$certs" | head -n 3
+          if printf '%s\n' "$certs" | grep -qi 'CN=Android Debug'; then echo "::error::the APK is signed with Android's debug key"; exit 1; fi
+          jarsigner -verify "dist-android/heart-boom-maths-$label-android-arm64.aab"
+          apps/game/android/verify_package.sh "dist-android/heart-boom-maths-$label-android-arm64.aab"
+
+      - name: Remove the upload key
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/upload-key.jks"
+
+      # Named android-aab-signed, not release-*: only an artifact named release-* goes to the release (the publish job's
+      # pattern). The AAB is for Google Play, which signs what users get with its own key.
+      - name: Upload
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: android-aab-signed
+          retention-days: 7
+          path: dist-android/*
+          if-no-files-found: error
+
+      - name: Say what to do with it
+        shell: bash
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: |
+          {
+            echo "### Android build for Google Play"
+            echo "Signed with the upload key as version code $BUILD_NUMBER. Download the \`android-aab-signed\` artifact and add the AAB to a release on the internal testing track in Play Console (docs/releasing.md)."
+          } >> "$GITHUB_STEP_SUMMARY"
+
   publish:
     name: Publish
     needs: [package, ios]

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- Android 12 and later show the system's own launch screen: the launcher icon on this colour. Without it the screen is
+     the icon on the system's default colour, which flashes before the yellow first frame. -->
+<resources>
+    <style name="Theme.HeartBoomMaths" parent="android:Theme.DeviceDefault.Light.NoActionBar">
+        <item name="android:windowBackground">@color/hbm_launch_background</item>
+        <item name="android:colorBackground">@color/hbm_launch_background</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowSplashScreenBackground">@color/hbm_launch_background</item>
+    </style>
+</resources>

@@ -68,12 +68,12 @@ The owner holds every secret. No one who works in the repository reads, prints o
 | iOS App Store build | `IOS_DIST_CERT_P12_BASE64`, `IOS_DIST_CERT_PASSWORD`, `APPSTORE_API_KEY_ID`, `APPSTORE_API_ISSUER_ID`, and the App Store Connect API key secret (named in `docs/secrets.md`) | Organisation |
 | iOS provisioning for this app | `IOS_PROVISIONING_PROFILE_BASE64`, and the repository variable `SIGN_IOS_UPLOAD` set to `true` | Repository |
 | macOS signing and notarisation | The macOS and notary names in `docs/secrets.md` | Organisation |
-| Android signing | The Android keystore names in `docs/secrets.md` | Organisation |
+| Android signing | `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`, and the repository variable `SIGN_ANDROID_UPLOAD` set to `true` | Organisation, variable on the repository |
 
 - [ ] The repository is in the selected repositories of each organisation secret above.
 - [ ] The Apple developer account, the App ID for `com.iainchesworthlabs.heartboommaths` and the App Store Connect app record exist (steps in [Releasing](releasing.md)).
 - [ ] A Google Play Console account and an app record exist, and the upload key is registered.
-- [ ] Today's `release.yml` packages Linux, macOS and Windows and, when `SIGN_IOS_UPLOAD` is `true`, iOS. It has no Android job or macOS notarisation job (verify). Add or run those before the release, or release without them and say so.
+- [ ] Today's `release.yml` packages Linux, macOS and Windows and, when `SIGN_IOS_UPLOAD` is `true`, iOS, and, when `SIGN_ANDROID_UPLOAD` is `true`, a signed Android AAB (never run yet: try it on a branch first). It has no macOS notarisation job (verify). Add or run that before the release, or release without it and say so.
 - [ ] The `release` environment approval is available to the owner.
 
 ## 4. Store submission by hand

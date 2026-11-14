@@ -5,6 +5,7 @@ find_package(Qt6 6.8 REQUIRED COMPONENTS Quick QuickShapes QuickLayouts)
 qt_standard_project_setup(REQUIRES 6.8)
 
 include(IclQtApp)
+include(HbmAndroid)
 include(HbmBuildInfo)
 include(HbmNotices)
 
@@ -186,6 +187,12 @@ target_link_libraries(heart_boom_maths_game
             icl::coverage)
 # qmlcachegen, rcc and moc write C++ files that the strict warning set rejects with some compilers.
 icl_relax_generated_warnings(heart_boom_maths_game)
+
+if(ANDROID)
+    # A phone or a tablet: no installer. The package is androiddeployqt's, from the target's properties and the files of
+    # apps/game/android (cmake/HbmAndroid.cmake). The notices About shows are generated above, as everywhere.
+    hbm_configure_android_app(heart_boom_maths_game)
+endif()
 
 if(NOT (ANDROID OR IOS OR EMSCRIPTEN))
     # Installs the program, copies the Qt libraries, plugins and QML modules next to it so the installed tree runs on a

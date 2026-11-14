@@ -12,6 +12,7 @@ commit SHA. Dependabot proposes the SHA bump; the pull request also needs
 | Ready pull request | Above, plus Linux release and sanitizer builds and coverage |
 | Merge queue, push to `develop` | Above, plus Linux debug and TSan, macOS, Windows release and ASan |
 | Change to what the iOS build reads (a path filter), or a manual run | iOS compile checks (`ios-build.yml` for the stub, `ios-game-build.yml` for the game; not required) |
+| Change to what the Android build reads (a path filter), or a manual run | Android compile check (`android-build.yml`, not required) |
 | Nightly | CodeQL |
 | Tag `v*` | Release |
 
@@ -67,6 +68,12 @@ the bundle; it needs no secret. The signed build and the TestFlight upload are t
 `ios-game-release` preset, builds unsigned, and checks the bundle with `apps/game/ios/verify_game_app.sh` (orientations,
 capabilities, Game Center entitlement file, frameworks, size in the job summary). It keeps its logs for a week when it
 fails. See [iOS and Game Center](ios.md).
+`android-build.yml` is separate for the same reason: the Qt kits are a download of several gigabytes. It builds the
+`android-arm64-release` and `android-arm64-debug` presets on a Linux runner with the SDK, NDK and JDK that
+`.github/toolchain-versions.json` pins, and `apps/game/android/verify_package.sh` fails it when a package asks for any
+permission, is debuggable in the release, or carries more than `arm64-v8a`. It needs no secret and runs nothing on a
+device. The signed build is the `android` job of `release.yml`, which runs only when the repository variable
+`SIGN_ANDROID_UPLOAD` is `true` (`docs/releasing.md`). What a device has to show is listed in `docs/android.md`.
 
 ## Run the checks locally
 

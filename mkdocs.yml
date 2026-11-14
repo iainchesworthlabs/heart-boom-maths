@@ -11,6 +11,7 @@ theme:
 nav:
   - Home: index.md
   - Building: building.md
+  - Android: android.md
   - Architecture: architecture.md
   - Game:
       - Specification: SPEC.md
