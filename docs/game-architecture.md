@@ -299,6 +299,12 @@ Deviations from the sketches above, all small:
 - The two addresses About can open are written once in `apps/game/src/external_links.hpp` and reach QML as `privacyPolicyUrl` and `repositoryUrl`. Both go to `requestLink`; nothing but `LinkOpener::open` opens one, and it runs only after the gate is passed.
 - The gate takes digits from the on-screen keypad or a keyboard. A number of three digits that is not the one asked for is a wrong answer at once, as is Return on a wrong three digits: the screen says so in words with a mark and the controller deals a new number. Return on fewer digits does nothing.
 - Settings, About and Top 10 are pages stacked over the screen the game state calls for (see `docs/ui-components.md`). Any change of state clears the stack.
+### As built (result and score screens)
+
+- `levelClear` carries more than the core's LEVEL_CLEARED event: the answer points, answer coins and streak coins of the level, added up by the controller from the answer events, plus `levelPoints`, `levelCoins`, `timeBonusPerSecond`, `nextUp` (words from `level_text.hpp`, read from the tuning table) and `complete`. The session snapshot does not hold those sums, so a level that CONTINUE brings back part way reports `complete` false and the card leaves its sums out. The same goes for `coinsEarned` of a resumed game (`coinsEarnedKnown`).
+- `winBonus` is the coins of the last GAME_WON event (0 when the bonus was paid before), `campaignLevels` and `top10Size` come from the tuning, and `canSaveName(typed)` says whether the name has a letter. The core accepts a name of spaces only; the screen does not offer SAVE for one.
+- SKIP also clears `newBest`, because a skipped score is not in the list.
+- HOME on the game-over card is a shell overlay, not a core state (see `ui-components.md`).
 
 ## Tests
 

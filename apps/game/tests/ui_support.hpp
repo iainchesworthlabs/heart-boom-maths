@@ -37,6 +37,9 @@ struct UiRig
     /// are fixed, so a test knows what to type.
     [[nodiscard]] static heart_boom_maths::game::GateChallenge gate_challenge(int nth);
 
+    /// A rig whose device already holds a save, such as a top 10 with entries in it.
+    UiRig(std::uint64_t seed, std::string save_text);
+
     /// Plays real time in 50 ms frames, the length of one tick, as a running level would.
     void play_for_ms(int milliseconds);
     void answer_right();

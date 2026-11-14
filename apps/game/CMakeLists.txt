@@ -15,6 +15,7 @@ add_library(heart_boom_maths_app STATIC
     src/answer_feedback.cpp
     src/event_sounds.cpp
     src/game_controller.cpp
+    src/level_text.cpp
     src/parental_gate.cpp
     src/qml_types.hpp
     src/tick_driver.cpp
@@ -90,6 +91,8 @@ set(HEART_BOOM_MATHS_QML_FILES
     qml/ArrowIcon.qml
     qml/BackIcon.qml
     qml/Badge.qml
+    qml/ChevronIcon.qml
+    qml/CoinCard.qml
     qml/CoinWallet.qml
     qml/ComicButton.qml
     qml/ComicCard.qml
@@ -97,11 +100,15 @@ set(HEART_BOOM_MATHS_QML_FILES
     qml/DashedBox.qml
     qml/FeedbackTag.qml
     qml/FuseBar.qml
+    qml/GameOverScreen.qml
     qml/GearIcon.qml
     qml/HalftoneBackground.qml
     qml/HeartBomb.qml
+    qml/LevelClearScreen.qml
     qml/Main.qml
     qml/MusicIcon.qml
+    qml/NameEntryScreen.qml
+    qml/NameKeyboard.qml
     qml/ParentalGateScreen.qml
     qml/PauseIcon.qml
     qml/PauseOverlay.qml
@@ -115,16 +122,21 @@ set(HEART_BOOM_MATHS_QML_FILES
     qml/PlayTopBar.qml
     qml/QuestionCard.qml
     qml/RowButton.qml
+    qml/ScorePage.qml
+    qml/ScoreRow.qml
     qml/ScreenFrame.qml
     qml/SettingRow.qml
     qml/SettingsScreen.qml
     qml/SoundIcon.qml
     qml/SparkStar.qml
     qml/StarBurst.qml
+    qml/StatRow.qml
     qml/TextViewer.qml
     qml/Theme.qml
     qml/TitleScreen.qml
-    qml/TrophyIcon.qml)
+    qml/Top10Screen.qml
+    qml/TrophyIcon.qml
+    qml/WinScreen.qml)
 foreach(qml_file IN LISTS HEART_BOOM_MATHS_QML_FILES)
     get_filename_component(qml_name "${qml_file}" NAME)
     set_source_files_properties("${qml_file}" PROPERTIES QT_RESOURCE_ALIAS "${qml_name}")
@@ -199,6 +211,7 @@ if(HEART_BOOM_MATHS_BUILD_TESTS)
         tests/test_event_sounds.cpp
         tests/test_file_save_store.cpp
         tests/test_game_controller.cpp
+        tests/test_level_text.cpp
         tests/test_parental_gate.cpp
         tests/test_tick_driver.cpp)
     target_link_libraries(heart_boom_maths_game_tests
@@ -256,6 +269,7 @@ if(HEART_BOOM_MATHS_BUILD_TESTS)
         tests/test_answer_feedback.cpp
         tests/test_ui_components.cpp
         tests/test_ui_play.cpp
+        tests/test_ui_scores.cpp
         tests/test_ui_screens.cpp)
     target_link_libraries(heart_boom_maths_ui_tests
         PRIVATE heart_boom_maths_app heart_boom_maths_appplugin Qt6::Test Catch2::Catch2 icl::warnings icl::coverage)

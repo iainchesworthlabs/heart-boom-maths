@@ -353,6 +353,10 @@ TEST_CASE("The pause button opens the pause overlay and RESUME and QUIT leave it
         click(s.h.find_item("quitButton"));
         s.h.settle();
         CHECK(s.rig.controller.state() == State::GameOver);
+        // Ten points earn a place in the top 10, so the name screen comes before the game-over card.
+        REQUIRE(s.visible("skipButton"));
+        click(s.h.find_item("skipButton"));
+        s.h.settle();
         CHECK(s.visible("playAgainButton"));
     }
 }
@@ -399,6 +403,10 @@ TEST_CASE("A run from level 1 to the bomb and back to level 1, through the scree
     QMetaObject::invokeMethod(s.feedback, "clear");
     s.h.settle();
     CHECK(s.h.find("playScreen") == nullptr);
+    // The score earned a place in the top 10: the name screen first, and SKIP leads to the game-over card.
+    REQUIRE(s.visible("skipButton"));
+    click(s.h.find_item("skipButton"));
+    s.h.settle();
     REQUIRE(s.visible("playAgainButton"));
 
     click(s.h.find_item("playAgainButton"));

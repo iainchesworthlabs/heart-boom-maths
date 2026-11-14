@@ -110,8 +110,17 @@ class GameController final : public QObject
     Q_PROPERTY(int run READ run NOTIFY runChanged FINAL)
     Q_PROPERTY(int multiplier READ multiplier NOTIFY multiplierChanged FINAL)
 
-    // The level-clear card: the numbers of the last LEVEL_CLEARED event.
+    // The level-clear card: the numbers of the last LEVEL_CLEARED event, with the answer points and coins of that level
+    // added up from the answer events (keys: level, correctAnswers, secondsLeft, timeBonusPoints, timeBonusPerSecond,
+    // perfectBonusPoints, perfect, points, coins, totalPoints, wallet, and answerPoints, answerCoins, streakCoins,
+    // levelPoints, levelCoins, complete, nextUp). `complete` is false when the level was resumed from a saved run part
+    // way: the answers before the pause are then not known, so levelPoints and levelCoins are 0 and a screen leaves
+    // them out.
     Q_PROPERTY(QVariantMap levelClear READ level_clear NOTIFY levelClearChanged FINAL)
+
+    // The win screen: the bonus the win paid (0 when it was paid in an earlier game) and the number of campaign levels.
+    Q_PROPERTY(int winBonus READ win_bonus NOTIFY winBonusChanged FINAL)
+    Q_PROPERTY(int campaignLevels READ campaign_levels CONSTANT FINAL)
 
     // The end of a game and the name entry.
     Q_PROPERTY(EndReason endReason READ end_reason NOTIFY nameEntryChanged FINAL)
@@ -121,6 +130,13 @@ class GameController final : public QObject
     Q_PROPERTY(bool nameEntryPending READ name_entry_pending NOTIFY nameEntryChanged FINAL)
     Q_PROPERTY(int nameEntryRank READ name_entry_rank NOTIFY nameEntryChanged FINAL)
     Q_PROPERTY(int nameMaxLength READ name_max_length CONSTANT FINAL)
+    Q_PROPERTY(int top10Size READ top10_size CONSTANT FINAL)
+
+    // Coins earned in the game that just ended (answers, streak bonuses, perfect levels and the win bonus; hints are
+    // not taken off). coinsEarnedKnown is false when the game was resumed from a saved run: the coins before the pause
+    // are then not known and a screen leaves the line out.
+    Q_PROPERTY(qint64 coinsEarned READ coins_earned NOTIFY nameEntryChanged FINAL)
+    Q_PROPERTY(bool coinsEarnedKnown READ coins_earned_known NOTIFY nameEntryChanged FINAL)
 
     // The top 10 and the best score. highlightRank is the place of the entry saved last, 0 when none.
     Q_PROPERTY(QVariantList top10 READ top10 NOTIFY topScoresChanged FINAL)
@@ -219,6 +235,10 @@ public:
     Q_INVOKABLE void skipName();
     [[nodiscard]] Q_INVOKABLE QString normaliseName(const QString& typed) const;
 
+    /// Whether SAVE may be offered for what is typed: the name has at least one letter once cut and normalised. The
+    /// core also accepts a name of spaces only, but a score saved under a blank name would show as an empty row.
+    [[nodiscard]] Q_INVOKABLE bool canSaveName(const QString& typed) const;
+
     Q_INVOKABLE void setSoundEnabled(bool enabled);
     Q_INVOKABLE void setMusicEnabled(bool enabled);
 
@@ -285,6 +305,11 @@ public:
     [[nodiscard]] int run() const;
     [[nodiscard]] int multiplier() const;
     [[nodiscard]] QVariantMap level_clear() const;
+    [[nodiscard]] int win_bonus() const;
+    [[nodiscard]] int campaign_levels() const;
+    [[nodiscard]] int top10_size() const;
+    [[nodiscard]] qint64 coins_earned() const;
+    [[nodiscard]] bool coins_earned_known() const;
     [[nodiscard]] EndReason end_reason() const;
     [[nodiscard]] qint64 final_score() const;
     [[nodiscard]] int final_level() const;
@@ -331,6 +356,7 @@ signals:
     void runChanged();
     void multiplierChanged();
     void levelClearChanged();
+    void winBonusChanged();
     void nameEntryChanged();
     void topScoresChanged();
     void savedRunChanged();
@@ -390,6 +416,15 @@ private:
     MusicId m_Music = MusicId::NONE;
 
     QVariantMap m_LevelClear;
+    // Added up from the answer events of the level on screen, for the level-clear card. Unknown (false) after CONTINUE
+    // brought a level back part way through.
+    int m_LevelAnswerPoints = 0;
+    int m_LevelAnswerCoins = 0;
+    int m_LevelStreakCoins = 0;
+    bool m_LevelCountsKnown = true;
+    int m_WinBonus = 0;
+    std::int64_t m_CoinsEarned = 0;
+    bool m_CoinsEarnedKnown = true;
     EndReason m_EndReason = EndReason::Bomb;
     std::int64_t m_FinalScore = 0;
     int m_FinalLevel = 0;

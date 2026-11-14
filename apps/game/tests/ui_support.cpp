@@ -64,6 +64,8 @@ UiRig::UiRig(std::uint64_t seed, bool scores_available, std::string saved_text)
 {
 }
 
+UiRig::UiRig(std::uint64_t seed, std::string save_text) : UiRig(seed, false, std::move(save_text)) {}
+
 void UiRig::play_for_ms(int milliseconds)
 {
     for (int elapsed = 0; elapsed < milliseconds; elapsed += 50)
