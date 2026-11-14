@@ -341,7 +341,8 @@ void GameSession::clear_level()
     const bool perfect = v.correct_answers == t.questions_per_level;
     const int perfect_points = perfect ? t.perfect_level_bonus_points : 0;
     const int perfect_coins = perfect ? t.perfect_level_coins : 0;
-    v.points += time_bonus + perfect_points;
+    // Added in 64 bits: the two bonuses are ints, and their sum is added to a 64-bit score.
+    v.points += std::int64_t{time_bonus} + perfect_points;
     v.wallet += perfect_coins;
 
     Event cleared = make_event(EventKind::LEVEL_CLEARED);

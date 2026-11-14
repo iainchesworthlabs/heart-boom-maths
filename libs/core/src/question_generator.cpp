@@ -532,6 +532,7 @@ void deal_tiles(Question& q, const LevelInfo& info, Rng& rng)
     while (count < 3)
     {
         offer(q.answer - distance);
+        // cppcheck-suppress identicalInnerCondition ; offer() changes count through a reference
         if (count < 3)
         {
             offer(q.answer + distance);

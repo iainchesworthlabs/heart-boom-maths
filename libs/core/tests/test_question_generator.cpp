@@ -628,7 +628,7 @@ TEST_CASE("Restore rejects garbage and changes nothing", "[unit][generator]")
     const std::vector<std::int64_t> redraw_good = redraw.snapshot();
     REQUIRE(redraw_good.size() == 3 + 3);
 
-    const auto rejects = [&](std::vector<std::int64_t> bad)
+    const auto rejects = [&](const std::vector<std::int64_t>& bad)
     {
         const std::vector<std::int64_t> before = gen.snapshot();
         const bool accepted = gen.restore(bad);

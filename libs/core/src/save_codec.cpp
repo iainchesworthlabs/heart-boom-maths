@@ -224,7 +224,7 @@ std::expected<std::string, SaveError> serialise(const SaveData& data, const Tuni
 
 ParseResult parse_save(std::string_view text, const Tuning& tuning, const SaveSchema& schema)
 {
-    json::Limits limits;
+    const json::Limits limits;
     auto parsed = json::parse(text, limits);
     if (!parsed)
     {
