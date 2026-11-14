@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- No action bar (the game draws its own screens) and the page colour behind the first frame. The game has one look, light
+     or dark system theme alike, so the theme is a light one. The page is yellow, so the status bar and the navigation bar
+     draw dark icons over it. The system draws the bars edge to edge on Android 15 and later whatever is set here; keeping
+     controls out from under them is the screens' job (Qt's SafeArea.margins). -->
+<resources>
+    <style name="Theme.HeartBoomMaths" parent="android:Theme.DeviceDefault.Light.NoActionBar">
+        <item name="android:windowBackground">@color/hbm_launch_background</item>
+        <item name="android:colorBackground">@color/hbm_launch_background</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+</resources>

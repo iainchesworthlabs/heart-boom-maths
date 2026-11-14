@@ -158,6 +158,7 @@ Settings opens from a gear button on Title and in the pause menu. Values are sav
 |---|---|---|
 | Sound effects | On | Chimes, buzzes, ticking, boom, fanfare |
 | Music | On | Separate from sound effects |
+| Haptics | On | Only where the device can make them (a phone, a browser on a touch screen). A little touch feedback for answers and presses, never the only cue. See `haptics.md` |
 | Game Center | Off | Apple devices only. Needs the parental gate to turn on |
 
 About shows version and build number, short commit hash, branch or tag and build date ("dev" for local builds), the game's own licence (GPL-3.0-or-later), third-party notices generated at build time, the font licences for Bangers and Lilita One, and a privacy statement with a link to the privacy policy. Every link that leaves the app opens behind the parental gate, where an adult types back a number written in words.

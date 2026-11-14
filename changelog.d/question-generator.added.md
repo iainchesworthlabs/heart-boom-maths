@@ -1,0 +1,1 @@
+**The question generator deals real questions.** Levels 1 to 12 follow the campaign table and endless levels mix shapes by the multi-term share. Every question is built from its result backwards, has four distinct near-miss tiles, and does not repeat within a level. A saved run restores the repeat-avoidance state exactly.

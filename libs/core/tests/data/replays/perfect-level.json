@@ -1,0 +1,21 @@
+{
+  "format": 1,
+  "seed": 101,
+  "tuning": "defaults",
+  "note": "Level 1 played perfectly: ten right answers, a time bonus and the perfect-level bonus.",
+  "recipe": "--seed 101 --clear-level 1 --auto perfect",
+  "commands": [
+    { "tick": 0, "do": "start_game" },
+    { "tick": 30, "do": "answer", "tile": 3 },
+    { "tick": 60, "do": "answer", "tile": 2 },
+    { "tick": 90, "do": "answer", "tile": 3 },
+    { "tick": 120, "do": "answer", "tile": 3 },
+    { "tick": 150, "do": "answer", "tile": 2 },
+    { "tick": 180, "do": "answer", "tile": 1 },
+    { "tick": 210, "do": "answer", "tile": 1 },
+    { "tick": 240, "do": "answer", "tile": 3 },
+    { "tick": 270, "do": "answer", "tile": 2 },
+    { "tick": 300, "do": "answer", "tile": 3 }
+  ],
+  "expect": { "events_hash": "e99bd15969168519", "final_hash": "7b563d1a3f01e275", "score": 930 }
+}

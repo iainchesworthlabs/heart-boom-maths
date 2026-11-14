@@ -1,0 +1,1 @@
+**The project skeleton replaces the template's sample code.** `apps/game` is a Qt 6 Quick stub that builds when a Qt kit is found, the greeting, parser and command-line sample are gone, a `wasm-release` preset is added, and CI checks that `libs/core` includes only the standard library and that the game opens a URL in one place at most.

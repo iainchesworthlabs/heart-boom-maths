@@ -38,12 +38,12 @@ Fonts (Bangers and Lilita One, SIL OFL 1.1) are bundled in `apps/game/fonts/` wi
 
 Dependencies point down: the app layer uses the platform and core layers, the platform layer uses core types, and the core layer uses nothing.
 
-1. `libs/core` includes the C++ standard library and nothing else. No Qt, file access, clock, threads or global state.
+1. `libs/core` includes the C++ standard library and nothing else, with one exception: Tracy, through `heart_boom_maths/profile.hpp`, which is empty unless profiling is built in (see [Profiling](profiling.md)). No Qt, file access, clock, threads or global state; the only state the profiling header holds is the flag that says whether the profiler was started, which no rule reads.
 2. The platform layer declares the service interfaces and implements them once per OS. It may use Qt and core types.
 3. The app layer may use both. It is the only place that holds a real-time clock, a `QObject` or a QML type.
 4. The tests in `libs/core/tests` link `libs/core` alone, so the whole rule set runs without Qt or a display.
 
-CMake enforces rule 1: the core target links no Qt target, and CI fails if a core file includes a Qt header. This keeps rules testable in milliseconds, makes replays repeat exactly, and lets the v2 ESP32-P4 handheld reuse `libs/core` unchanged.
+CMake enforces rule 1: the core target links no Qt target, and CI fails if a core file includes a Qt header, or a Tracy header from anywhere but `profile.hpp`. This keeps rules testable in milliseconds, makes replays repeat exactly, and lets the v2 ESP32-P4 handheld reuse `libs/core` unchanged.
 
 ## Game core
 
@@ -61,15 +61,24 @@ public:
     void use_hint();
     void pause();
     void resume();
+    void quit();        // QUIT on the pause screen
+    void next_level();  // leaves the level-clear card
+    void keep_going();  // win screen: into level 13
+    void finish();      // win screen: end the run
+    void set_wallet(std::int64_t coins);   // from the save, before a game starts
+    void set_won_once(bool won_once);      // from the save, before a game starts
 
     const SessionView& view() const;
     std::vector<Event> take_events();
+    std::vector<std::int64_t> snapshot() const;
+    bool restore(std::span<const std::int64_t> values);
+    std::uint64_t state_hash() const;
 };
 ```
 
 Events: `level_started`, `question_shown`, `answer_correct`, `answer_wrong`, `hint_used`, `alert_entered`, `level_cleared`, `game_won`, `game_over`. Each event carries the numbers the screens and sounds need (points, coins, streak, seconds added), so the app never recomputes a rule. The app reads `view()` every frame for what to draw.
 
-Pause and resume work from the Playing state only. Clearing level 12 pays the 1,000-coin bonus once and moves on to level 13, the first endless level. The win screen is an app-layer choice between KEEP GOING and FINISH (see `SPEC.md`, Ending a game).
+The session is in one of six states (idle, playing, paused, level clear, won, game over), and a command the state does not accept is ignored. Pause and resume work from the Playing state only. Clearing level 12 pays the 1,000-coin bonus once and waits in the won state, where `keep_going()` starts level 13, the first endless level. The win screen is an app-layer choice between KEEP GOING and FINISH (see `SPEC.md`, Ending a game).
 
 ### Time
 
@@ -138,10 +147,11 @@ One small JSON document per device. `libs/core` owns the schema. Platforms store
 | `won_once` | Whether the 1,000-coin win bonus was paid | Level 12 cleared |
 | `sound`, `music` | The two Settings switches | When changed |
 | `game_center` | The Game Center switch (Apple only, default off) | When changed |
+| `haptics` | The Haptics switch (default on, optional on reading: an older save reads as on) | When changed |
 | `top10` | Up to 10 entries of name and score | After name entry |
-| `run` | Saved run snapshot | On pause. Removed when resumed or ended |
+| `run` | Saved run snapshot | On pause. Removed as soon as CONTINUE loads it, and when a game ends |
 
-The plan's field table does not list `game_center`. The PRD and decision 6 require the switch to persist, so add it and note it in the schema.
+The plan's field table does not list `game_center`. The PRD and decision 6 require the switch to persist, so add it and note it in the schema. `haptics` is added the same way: an optional boolean that reads as its default when absent, a wrong type damages the save, the writer always writes it, and the version stays 1.
 
 Best score is the top entry of `top10`, so it is not stored twice.
 
@@ -168,7 +178,7 @@ Rules:
 
 ### Browser storage
 
-On WebAssembly, files written with `QFile` go to an in-memory file system by default, and standard data folders may not exist. `QSettings` has a local-storage backend with a 5 MB limit. The save is a few kilobytes, so `WebSaveStore` keeps the whole text under one `QSettings` key. The M2 web spike confirms this on the pinned Qt version, including what happens when the browser blocks storage. Fallback: a small JavaScript storage bridge.
+On WebAssembly, files written with `QFile` go to an in-memory file system by default, and standard data folders may not exist. `QSettings` has a local-storage backend with a 5 MB limit. The save is a few kilobytes, so `WebSaveStore` keeps the whole text under one `QSettings` key. The M2 web spike confirmed this on the pinned Qt version, including what happens when the browser blocks storage (the game keeps its save in memory for the session); see [The browser build](web.md). Fallback if a browser misbehaves: a small JavaScript storage bridge.
 
 ## App layer
 
@@ -183,7 +193,7 @@ QML screens driven by one view-model each. The QML is the same on every platform
 | Name entry | CP11 | Rank, score, name field, SAVE and SKIP |
 | Top 10 | CP12 | Rank, name and score per entry |
 | Game over | CP7 | Score, level reached, coins, best score |
-| Settings | CP14 | Sound and music switches, and a Game Center switch on Apple devices |
+| Settings | CP14 | Sound and music switches, a Haptics switch where the device can, and a Game Center switch on Apple devices |
 | About | CP15 | Build information, font licences, notices |
 | Pause | CP16 | RESUME and QUIT |
 | Parental gate | CP17 | A number in words for a grown-up to type back, before a link opens or Game Center turns on |
@@ -202,7 +212,8 @@ The platform layer holds everything that touches the operating system. Each serv
 |---|---|---|
 | `SaveStore` | `FileSaveStore`, `WebSaveStore`, `MemorySaveStore` | See Persistence |
 | `ScoreService` | `GameCenterScoreService` on iOS and iPadOS, `NullScoreService` elsewhere | Submits a finished score. The local top 10 does not depend on it |
-| `AudioService` | Qt Multimedia implementation, `NullAudioService` for tests | Effects and music, with the two Settings switches |
+| `AudioService` | `BackedAudioService` over Qt Multimedia, or over AVFoundation on iOS (`ClipAudioBackend`); `NullAudioService` for tests | Effects and music, with the two Settings switches |
+| `HapticsService` | `BackedHapticsService` over a `HapticBackend` per platform (UIKit generators on iOS, `performHapticFeedback` on Android, `navigator.vibrate` in a browser); `NullHapticsService` on the desktop and for tests | Touch feedback for answers and presses, with its own Settings switch. See [Haptics](haptics.md) |
 | `LinkOpener` | System browser | Reached only through the parental gate |
 | `BuildInfo` | Generated at configure time | Version, build number, commit and Qt version |
 | Notices | Generated at build time | Third-party licence texts for the About screen |
@@ -239,23 +250,29 @@ public:
 
 The local top 10 is part of the save data and the core ranks it, so it works with the service absent. `GameController` calls `ScoreService::submit` once when a run ends, with the final score. The call returns nothing. A failure is logged and never shown to the child.
 
-`GameCenterScoreService` is Objective-C++, compiled only for the iOS target. It sends the score and nothing else, and never reads the player's alias, friends or avatar. It stays idle until the Settings switch is on. The switch is off by default and sits behind the parental gate. The sign-in handler is installed only after the switch is turned on, so a default install never shows a Game Center sign-in sheet. If the player is not signed in, or Screen Time restricts Game Center, `submit` does nothing. Android uses `NullScoreService` in v1.
+`GameCenterScoreService` holds the rules in plain C++ over a small `GameCenterBackend`, and only the GameKit calls are Objective-C++, compiled only for the iOS target (`src/platform/ios/`); each platform directory returns its own service from `make_score_service()`. See [iOS and Game Center](ios.md). It sends the score and nothing else, and never reads the player's alias, friends or avatar. It stays idle until the Settings switch is on. The switch is off by default and sits behind the parental gate. The sign-in handler is installed only after the switch is turned on, so a default install never shows a Game Center sign-in sheet. If the player is not signed in, or Screen Time restricts Game Center, `submit` does nothing. Android uses `NullScoreService` in v1.
 
 ### Lifecycle and screen time
 
-The app observes `QGuiApplication::applicationStateChanged`. When the state leaves Active, `GameController` calls `pause()`, stops the tick driver, suspends audio and writes the save. When the app is active again, a paused run opens the pause screen with RESUME and QUIT, and the tick driver stays stopped until RESUME.
+The app observes `QGuiApplication::applicationStateChanged`. When the state leaves Active, `GameController` calls `pause()`, stops the tick driver, suspends audio and haptics and writes the save. When the app is active again, a paused run opens the pause screen with RESUME and QUIT, and the tick driver stays stopped until RESUME.
 
 The game has no code for screen-time settings. A Screen Time limit, Downtime, a Family Link lock or a Digital Wellbeing timer takes the app out of the foreground, and that is the only signal needed. Device tests confirm each produces a state change in Qt.
 
-Desktop windows pause when they lose focus. In the browser the same path runs from page visibility. The spike confirms Qt reports a hidden tab, and a small JavaScript hook calls `pause()` if it does not.
+Desktop windows pause when they lose focus. In the browser the same path runs from page visibility. Qt does not report a hidden tab, so the browser build listens for the page's `visibilitychange` and calls `on_application_state` itself (see [The browser build](web.md)).
 
 ### Audio
 
 One table in the app layer maps core events to sounds, using the feedback table in `SPEC.md`. The core knows nothing about audio. Browsers block audio until the first tap, so on the web the first tap on Title starts the sound. Whether Qt Multimedia is enough on WebAssembly, and the audio format, are settled by the M2 spike.
 
+The built service, its placeholder sounds and how to replace them are in [Audio](audio.md).
+
+### Haptics
+
+One table in the app layer maps core events to haptics (`event_haptics`), one haptic per command, and a light tick comes from button presses through `GameController::tap()`. The core knows nothing about touch feedback. The rules (switch off, paused, background, a minimum gap between beats, the three beats of the win) are plain C++ in `BackedHapticsService`, and each platform's `HapticBackend` only translates a beat. The Settings switch is shown only where the device can make haptics. No permission is needed on any platform. What fires when, the platform notes and the device checks are in [Haptics](haptics.md).
+
 ### Parental gate
 
-One screen in the app layer. `GameController::request_link(url)` shows it and calls `LinkOpener::open` only when it is passed. The gate also guards the Game Center switch. The only links v1 needs are the privacy policy and the source repository, both on About. The code base has exactly one call that opens a URL, and a CI check fails if another appears. The form is a number written in words that the adult types back. It is checked against the current Apple and Google rules for children's apps before release.
+One screen in the app layer. `GameController::requestLink(url)` (QML-facing names are camelCase; only an https address is accepted) opens the gate, `submitGate(typed)` checks the number, and it calls `LinkOpener::open` only when it is passed. The gate also guards the Game Center switch. The only links v1 needs are the privacy policy and the source repository, both on About. The code base has exactly one call that opens a URL, and a CI check fails if another appears. The form is a number written in words that the adult types back. It is checked against the current Apple and Google rules for children's apps before release.
 
 ### Build information and notices
 
@@ -264,6 +281,43 @@ One screen in the app layer. `GameController::request_link(url)` shows it and ca
 A CMake step gathers the licence file of each vcpkg dependency, the Qt notice and the OFL text for the two fonts into one notices file, which ships as a resource. CI fails if a dependency has no licence file.
 
 v1 ships no analytics, crash reporting or advertising code, and the app makes no network requests of its own. The release checklist includes a traffic capture on a device.
+
+### As built (appcore)
+
+Deviations from the sketches above, all small:
+
+- `ScoreService` gains `set_enabled(bool)`, called when the Game Center switch changes, so the controller always calls `submit` once and the service stays idle while the switch is off. `available()` is false on a platform without a leaderboard, and the switch is then ignored.
+- `AudioService` gains `stop_effect(SoundId)` so the ticking can end when the timer leaves the alert zone, or the level stops running. `SoundId` and `MusicId` are in `services/audio_service.hpp`; `MusicId` is `NONE`, `MENU` and `PLAY` (a placeholder until music is chosen).
+- `AudioService` also gains `unlock()` (empty by default), called on the first tap so a browser lets sound start. The Qt Multimedia service is `BackedAudioService` over a thin `AudioBackend`; see [Audio](audio.md).
+- `SaveStore` only loads and stores, so moving a damaged file aside is a second interface, `SaveQuarantine`, that `FileSaveStore` also implements. The controller moves a damaged file to `save.json.bad` before its first write. A newer file stays untouched because `SaveManager` refuses every save after it.
+- The controller is built from `GameServices` (pointers) and `GameOptions` (tuning, session seed, gate seed source, build information). The clock is the `Clock` interface (`SteadyClock`, and `ManualClock` for tests), and `TickDriver` is plain C++ with integer arithmetic only.
+- The gate asks for a three-digit number in English words (`parental_gate.hpp`). A wrong answer deals a new number. Only the two link purposes and the Game Center switch use it.
+
+### As built (play screen)
+
+- The screens are one static QML module, `HeartBoomMaths`, inside the `heart_boom_maths_app` library, so the program and the `ui` tests load the same QML. The controller reaches QML as a typed `required property GameController game` on the main window (an initial property, not a context property), which lets `qmllint` and the QML compiler check every binding. See `docs/ui-components.md`.
+- The controller gains `ticksPerSecond`, `alertTicks` (the alert zone, a different share of the fuse in endless levels) and `answered`: the question as it stood when the child tapped. The core deals the next question at once, so the play screen draws `answered` for the second that `AnswerFeedback` holds a right or wrong look. The core is never paused or delayed by it, and taps are ignored while a look is held.
+- Navigation is in `AppShell.qml`. The play screen stays up after the last answer of a level or after the bomb until the hold ends.
+
+### As built (title, settings, about and the gate)
+
+- The controller gains `savedRun` (the level and whole seconds left of the saved run, read by restoring the snapshot into a scratch `GameSession`, so the layout of a snapshot is known only to the core), `firstLevelQuestions` and `firstLevelSeconds` (the tagline's numbers, from the tuning), `gateUrl`, `gateDigits` and the command `gateMatches(typed)`, so the gate screen enables OPEN without the number ever reaching QML.
+- The two addresses About can open are written once in `apps/game/src/external_links.hpp` and reach QML as `privacyPolicyUrl` and `repositoryUrl`. Both go to `requestLink`; nothing but `LinkOpener::open` opens one, and it runs only after the gate is passed.
+- The gate takes digits from the on-screen keypad or a keyboard. A number of three digits that is not the one asked for is a wrong answer at once, as is Return on a wrong three digits: the screen says so in words with a mark and the controller deals a new number. Return on fewer digits does nothing.
+- Settings, About and Top 10 are pages stacked over the screen the game state calls for (see `docs/ui-components.md`). Any change of state clears the stack.
+### As built (result and score screens)
+
+- `levelClear` carries more than the core's LEVEL_CLEARED event: the answer points, answer coins and streak coins of the level, added up by the controller from the answer events, plus `levelPoints`, `levelCoins`, `timeBonusPerSecond`, `nextUp` (words from `level_text.hpp`, read from the tuning table) and `complete`. The session snapshot does not hold those sums, so a level that CONTINUE brings back part way reports `complete` false and the card leaves its sums out. The same goes for `coinsEarned` of a resumed game (`coinsEarnedKnown`).
+- `winBonus` is the coins of the last GAME_WON event (0 when the bonus was paid before), `campaignLevels` and `top10Size` come from the tuning, and `canSaveName(typed)` says whether the name has a letter. The core accepts a name of spaces only; the screen does not offer SAVE for one.
+- SKIP also clears `newBest`, because a skipped score is not in the list.
+- HOME on the game-over card is a shell overlay, not a core state (see `ui-components.md`).
+
+### As built (journeys and lifecycle)
+
+- The screens, every way between them, what is saved at each step and what happens when the app is interrupted are in [User journeys](user-journeys.md), with the open decisions for the owner at its top.
+- `continueGame()` restores a saved run on a scratch session first and resumes it only when it is a running or paused level. Anything else the core would restore (a level-clear card, a win, a finished game) counts as a run that cannot be restored: it is spent and `continueFailed` is emitted.
+- `on_application_state(false)` also closes the parental gate. `AnswerFeedback` ends its hold on any game over that is not the bomb.
+- The back key is handled in `AppShell.qml` (a `Back` shortcut) for the screens that have no back button, and by `ScreenFrame` for the pages and the gate. About is a focus scope so the key reaches its frame or its text viewer.
 
 ## Tests
 
@@ -301,6 +355,8 @@ A replay is a seed, a tuning name and a list of commands with the tick each arri
   "expect": { "events_hash": "<hash>", "final_hash": "<hash>", "score": 0 }
 }
 ```
+
+A command's `tick` is the number of `tick()` calls made before it, and the runner makes them between commands. Optional fields: `wallet` and `won_once` (the starting save values), `end_tick` (keep ticking to here after the last command, so a run can end in the bomb), and `note` and `recipe` (for readers and for the harness, which rewrites a file from its recipe). Hashes are 16 lowercase hex digits. The code is `replay.hpp` in `libs/core`.
 
 The set covers a perfect level, a level with wrong answers and hints, a time-out in the alert zone, the 12-level win, and endless mode to level 20. A deliberate rule or tuning change regenerates the affected replays in the same commit, and the diff is reviewed. A replay that changes without a deliberate rule change is a bug.
 

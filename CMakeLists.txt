@@ -36,23 +36,64 @@ include(IclSanitizers)
 include(IclWarnings)
 include(IclHardening)
 include(IclTracy)
+include(HbmProfiling)
 include(IclCoverage)
 include(IclPlatform)
 
 option(HEART_BOOM_MATHS_BUILD_TESTS "Build the tests" ON)
-option(HEART_BOOM_MATHS_BUILD_CLI "Build the command-line application" ON)
+# The performance tests (label perf) time the rules and the game against the budgets in tools/perf-budgets.json. They are
+# off in every ordinary preset, so the normal test run stays fast and cannot fail on a busy machine; the *-perf presets
+# turn them on (docs/testing.md, "Performance tests").
+option(HEART_BOOM_MATHS_BUILD_PERF_TESTS "Build and register the performance tests (label perf)" OFF)
+option(HEART_BOOM_MATHS_BUILD_HARNESS "Build the text harness without the tests (the tests build it anyway)" OFF)
 option(HEART_BOOM_MATHS_BUILD_IOS_APP "Build the iPhone and iPad application (iOS only)" ON)
+
+# The Qt application. AUTO builds it when a Qt 6 kit can be found and says so when it cannot, so a machine with no Qt
+# still builds and tests the core. ON makes a missing kit an error; OFF skips the application.
+set(HEART_BOOM_MATHS_BUILD_GAME "AUTO" CACHE STRING "Build the Qt application: AUTO (when Qt 6 is found), ON or OFF")
+set_property(CACHE HEART_BOOM_MATHS_BUILD_GAME PROPERTY STRINGS AUTO ON OFF)
 
 if(HEART_BOOM_MATHS_BUILD_TESTS)
     include(CTest)
     find_package(Catch2 3 CONFIG REQUIRED)
     include(Catch)
+
+    # The configure refuses Tracy for a WebAssembly, Android or iOS build (cmake/HbmProfiling.cmake) and accepts it for a
+    # desktop one. The script is run in each configuration, so that those builds are shown to have no Tracy without
+    # building them here.
+    foreach(hbm_platform IN ITEMS EMSCRIPTEN=1 ANDROID=1 CMAKE_SYSTEM_NAME=iOS)
+        string(REGEX REPLACE "=.*" "" hbm_platform_name "${hbm_platform}")
+        add_test(NAME tracy.refused_for_${hbm_platform_name}
+            COMMAND "${CMAKE_COMMAND}" -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR} -DICL_ENABLE_TRACY=ON -D${hbm_platform}
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/tools/ci/tracy_platform_check.cmake")
+        set_tests_properties(tracy.refused_for_${hbm_platform_name} PROPERTIES
+            LABELS unit TIMEOUT 60 PASS_REGULAR_EXPRESSION "ICL_ENABLE_TRACY is on for a WebAssembly")
+    endforeach()
+    add_test(NAME tracy.accepted_for_the_desktop
+        COMMAND "${CMAKE_COMMAND}" -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR} -DICL_ENABLE_TRACY=ON
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/tools/ci/tracy_platform_check.cmake")
+    add_test(NAME tracy.accepted_when_off_for_a_phone
+        COMMAND "${CMAKE_COMMAND}" -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR} -DICL_ENABLE_TRACY=OFF -DANDROID=1
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/tools/ci/tracy_platform_check.cmake")
+    set_tests_properties(tracy.accepted_for_the_desktop tracy.accepted_when_off_for_a_phone PROPERTIES
+        LABELS unit TIMEOUT 60 PASS_REGULAR_EXPRESSION "accepted")
 endif()
 
 add_subdirectory(libs/core)
 
-if(HEART_BOOM_MATHS_BUILD_CLI)
-    add_subdirectory(apps/cli)
+if(HEART_BOOM_MATHS_BUILD_GAME STREQUAL "AUTO")
+    find_package(Qt6 6.8 QUIET COMPONENTS Quick)
+    if(Qt6_FOUND)
+        set(heart_boom_maths_build_game ON)
+    else()
+        set(heart_boom_maths_build_game OFF)
+        message(STATUS "No Qt 6 kit found: apps/game is not built (set ICL_QT_ROOT, or HEART_BOOM_MATHS_BUILD_GAME=ON to require it)")
+    endif()
+else()
+    set(heart_boom_maths_build_game "${HEART_BOOM_MATHS_BUILD_GAME}")
+endif()
+if(heart_boom_maths_build_game)
+    add_subdirectory(apps/game)
 endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS" AND HEART_BOOM_MATHS_BUILD_IOS_APP)

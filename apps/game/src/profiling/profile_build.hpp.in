@@ -1,0 +1,15 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+#pragma once
+
+namespace heart_boom_maths::game::profiling
+{
+
+/// Whether this build starts the profiler when it is told nothing: set by HEART_BOOM_MATHS_PROFILE_AUTOSTART, which only
+/// the profile presets turn on. A flag or the environment overrides it either way (profile_switch.hpp).
+inline constexpr bool AUTOSTART = @HBM_PROFILE_AUTOSTART_VALUE@;
+
+/// Whether the build has Tracy (the tracy variant of profiling.hpp). A test pins profiling::ENABLED against it, so that CMake
+/// cannot select the wrong directory unnoticed.
+inline constexpr bool TRACY_BUILT = @HBM_PROFILE_TRACY_VALUE@;
+
+} // namespace heart_boom_maths::game::profiling

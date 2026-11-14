@@ -1,0 +1,1 @@
+**The core can read and write the save file.** A small integer-only JSON reader and writer with hard limits, the save schema with validation and migrations, the top 10 ranking rules, and a store interface with an in-memory store and a manager that never overwrites a newer or damaged-and-unmoved file.

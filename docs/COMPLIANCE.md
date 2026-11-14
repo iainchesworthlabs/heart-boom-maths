@@ -16,6 +16,8 @@ Heart Boom Maths targets the lowest age rating in each store: 4+ on the App Stor
 | No notifications | Never request notification permission |
 | No links out except behind a parental gate | One call opens a URL (`LinkOpener::open`), reached only through the gate. CI fails if another appears |
 | Typed names stay on the device | Names are in the save file only |
+| No permissions beyond what a store lists for a game with no data | Haptics use `performHapticFeedback` on Android, which needs none (never `Vibrator.vibrate()` and its VIBRATE permission), the UIKit feedback generators on iOS and `navigator.vibrate` in a browser. They collect and send nothing. See [Haptics](haptics.md) |
+| No listening socket in a shipped build unless asked | The desktop release builds carry the Tracy client dormant: it starts only for `--profile` or `HBM_PROFILE=1`, and then listens on the loopback interface only. The web, Android and iOS builds have no Tracy, and CI checks that. See [Profiling](profiling.md) |
 
 Entering the App Store Kids Category is a separate decision. It adds the parental gate and no-third-party-analytics rules, which this list already follows.
 
@@ -67,6 +69,7 @@ Each item is a task for M5 or M7, and the result goes in the PRD.
 - [ ] Write the privacy policy: no data collected, no accounts, no ads. Link it from both stores and from About, behind the parental gate.
 - [ ] Read the Children's Online Privacy Code once registered and confirm the game's scope.
 - [ ] Traffic capture on a device: the app makes no network requests of its own (Game Center switch off), and only the Game Center call with it on.
+- [ ] On a desktop release package: with no flag and no `HBM_PROFILE`, nothing listens on port 8086 (`netstat`), and `TracyClient.dll` or the Tracy library is listed in the notices.
 - [ ] Parental gate form checked against the current Apple and Google rules for children's apps.
 
 ## References

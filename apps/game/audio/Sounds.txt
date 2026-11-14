@@ -1,0 +1,9 @@
+The sound effects and the two music beds are placeholders. They were synthesised by
+tools/assets/make_placeholder_sounds.py from sine tones and noise made inside the script. They are entirely the
+project's own work, are released under GPL-3.0-or-later like the rest of the game, and contain no recorded or sampled
+material. They are to be replaced by a sound designer's work.
+
+coin_chime.wav, soft_buzz.wav, rising_tone.wav, ticking.wav, cartoon_pop.wav, fanfare.wav, whoosh.wav
+    Sound effects for the feedback table.
+music_menu.wav, music_play.wav
+    Music beds.

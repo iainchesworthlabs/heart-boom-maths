@@ -7,6 +7,7 @@ Cross-platform app and game for iOS, Android, WebAssembly and desktop. It builds
 |---|---|
 | [Building](building.md) | Prerequisites, shared roots, presets |
 | [Architecture](architecture.md) | Layout, platform sources, naming |
+| [Decision records](adr/0001-test-framework-and-json.md) | Test framework and JSON |
 | [Testing](testing.md) | Test kinds, labels, coverage floors |
 | [Continuous integration](ci.md) | What runs when, required checks |
 | [Releasing](releasing.md) | Changelog, tags, signing, publishing |
@@ -15,3 +16,7 @@ Cross-platform app and game for iOS, Android, WebAssembly and desktop. It builds
 | [Decisions](DECISIONS.md) | Accepted decisions, open gaps G1 to G8, risks |
 | [Milestones](MILESTONES.md) | M0 to M7 and the M0 and M1 briefs |
 | [Compliance](COMPLIANCE.md) | Children's privacy, screen time, store rules |
+| [Privacy policy](privacy-policy.md) | What the game saves and sends (draft) |
+| [Release checklist](release-checklist.md) | By-hand checks, signing prerequisites and owner decisions before a release |
+| [App Store listing](store/app-store.md) | Draft listing, age rating and privacy answers |
+| [Google Play listing](store/google-play.md) | Draft listing, content rating and Data safety answers |

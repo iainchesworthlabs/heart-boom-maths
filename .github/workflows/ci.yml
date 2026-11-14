@@ -110,6 +110,37 @@ jobs:
             python3 .icl-infra/scripts/plan_gate.py --config .github/ci/plan.json --force-all >> "$GITHUB_OUTPUT"
           fi
 
+  # The rules in CLAUDE.md that no compiler enforces: the core includes only the C++ standard library, and the game opens
+  # a URL in one place. Python only, so it runs on every pull request, drafts included, in a few seconds.
+  project-rules:
+    name: Project rules
+    needs: plan
+    runs-on: ${{ fromJSON(needs.plan.outputs.linux_runner || '["ubuntu-24.04"]') }}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Core includes only the standard library
+        run: |
+          python3 tools/ci/check_core_includes.py --self-test
+          python3 tools/ci/check_core_includes.py
+      - name: One call opens a URL
+        run: |
+          python3 tools/ci/check_link_open.py --self-test
+          python3 tools/ci/check_link_open.py
+      - name: The web page reaches nothing outside itself
+        run: |
+          python3 tools/ci/check_web_site.py --self-test
+          python3 tools/ci/check_web_site.py
+      - name: Tracy is in no web, Android, iOS, sanitizer or coverage preset
+        run: |
+          python3 tools/ci/check_presets_tracy.py --self-test
+          python3 tools/ci/check_presets_tracy.py
+
   build-fast:
     name: Build (fast)
     needs: plan
@@ -120,8 +151,9 @@ jobs:
     with:
       legs: >-
         [
-          {"name": "linux-gcc-release", "runner": ${{ needs.plan.outputs.linux_runner }}, "compiler": "gcc", "preset": "linux-release", "qt": true},
-          {"name": "linux-clang-asan-ubsan", "runner": ${{ needs.plan.outputs.linux_runner }}, "compiler": "clang", "preset": "linux-asan-ubsan", "qt": true}
+          {"name": "linux-gcc-release", "runner": ${{ needs.plan.outputs.linux_runner }}, "compiler": "gcc", "preset": "linux-release", "qt": true, "qt_modules": "qtmultimedia"},
+          {"name": "linux-clang-asan-ubsan", "runner": ${{ needs.plan.outputs.linux_runner }}, "compiler": "clang", "preset": "linux-asan-ubsan", "qt": true, "qt_modules": "qtmultimedia"},
+          {"name": "linux-gcc-profile", "runner": ${{ needs.plan.outputs.linux_runner }}, "compiler": "gcc", "preset": "linux-profile", "qt": true, "qt_modules": "qtmultimedia", "vcpkg_features": "profiling"}
         ]
 
   build-full:
@@ -134,12 +166,12 @@ jobs:
     with:
       legs: >-
         [
-          {"name": "linux-gcc-debug", "runner": ${{ needs.plan.outputs.linux_runner }}, "compiler": "gcc", "preset": "linux-debug", "qt": true, "vcpkg_features": "profiling"},
-          {"name": "linux-clang-tsan", "runner": ${{ needs.plan.outputs.linux_runner }}, "compiler": "clang", "preset": "linux-tsan", "qt": true},
-          {"name": "macos-release", "runner": ["macos-26"], "preset": "macos-release", "qt": true},
-          {"name": "macos-xcode27-release", "runner": ["xcode-27"], "preset": "macos-release", "qt": true, "experimental": true},
-          {"name": "windows-msvc-release", "runner": ${{ needs.plan.outputs.windows_runner }}, "preset": "windows-msvc-release", "qt": true, "config": "Release", "msvc": true},
-          {"name": "windows-msvc-asan", "runner": ${{ needs.plan.outputs.windows_runner }}, "preset": "windows-msvc-asan", "qt": true, "config": "Debug", "msvc": true}
+          {"name": "linux-gcc-debug", "runner": ${{ needs.plan.outputs.linux_runner }}, "compiler": "gcc", "preset": "linux-debug", "qt": true, "qt_modules": "qtmultimedia", "vcpkg_features": "profiling"},
+          {"name": "linux-clang-tsan", "runner": ${{ needs.plan.outputs.linux_runner }}, "compiler": "clang", "preset": "linux-tsan", "qt": true, "qt_modules": "qtmultimedia"},
+          {"name": "macos-release", "runner": ["macos-26"], "preset": "macos-release", "qt": true, "qt_modules": "qtmultimedia"},
+          {"name": "macos-xcode27-release", "runner": ["xcode-27"], "preset": "macos-release", "qt": true, "qt_modules": "qtmultimedia", "experimental": true},
+          {"name": "windows-msvc-release", "runner": ${{ needs.plan.outputs.windows_runner }}, "preset": "windows-msvc-release", "qt": true, "qt_modules": "qtmultimedia", "config": "Release", "msvc": true},
+          {"name": "windows-msvc-asan", "runner": ${{ needs.plan.outputs.windows_runner }}, "preset": "windows-msvc-asan", "qt": true, "qt_modules": "qtmultimedia", "config": "Debug", "msvc": true}
         ]
 
   coverage:
@@ -161,6 +193,8 @@ jobs:
         uses: iainchesworthlabs/icl-common-infra/actions/setup-gcc@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
       - name: Set up Qt
         uses: iainchesworthlabs/icl-common-infra/actions/setup-qt@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+        with:
+          modules: qtmultimedia
       - name: Set up CMake
         uses: iainchesworthlabs/icl-common-infra/actions/setup-cmake@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
       - name: Set up vcpkg
@@ -217,7 +251,7 @@ jobs:
   ci-status:
     name: CI Status
     if: always()
-    needs: [policy, plan, build-fast, build-full, coverage, zizmor, dependency-scan]
+    needs: [policy, plan, project-rules, build-fast, build-full, coverage, zizmor, dependency-scan]
     # Always hosted: this is the job that must report when a self-hosted fleet is down.
     runs-on: ubuntu-24.04
     timeout-minutes: 5

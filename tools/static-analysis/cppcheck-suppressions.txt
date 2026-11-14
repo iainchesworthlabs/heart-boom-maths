@@ -1,0 +1,15 @@
+# Suppressions for cppcheck (tools/ci/static_analysis.py, docs/testing.md "Nightly checks"). A line here names a check and
+# the reason it is wrong for this project. Prefer an inline `// cppcheck-suppress <id>: <reason>` at the line, which is
+# read through --inline-suppr, to an entry here; an entry here is for a whole class of findings.
+#
+# Findings that are accepted for now are counted in tools/static-analysis-baseline.json instead, not listed here.
+
+# A header of Qt, vcpkg or the compiler that cppcheck was not given.
+missingIncludeSystem
+
+# EM_JS takes the body of a JavaScript function as a macro argument, which cppcheck reads as C++.
+syntaxError:apps/game/src/platform/wasm/browser.cpp
+
+# These getters are Q_PROPERTY READ functions that return a Qt value type by value on purpose: QStringList and QList are
+# implicitly shared, so the copy is a reference count, and QML takes the property by value anyway.
+returnByReference:apps/game/src/answer_feedback.hpp

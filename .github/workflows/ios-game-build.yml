@@ -1,0 +1,152 @@
+name: iOS game build
+
+# An unsigned compile of the whole game for an iPhone or iPad (the `ios-game-release` preset): the Qt Quick application of
+# apps/game, linked statically against Qt for iOS, with the Game Center service (apps/game/src/platform/ios). It then looks
+# inside the .app that Xcode made (apps/game/ios/verify_game_app.sh). It needs no Apple account and no secret; a signed build
+# is the owner's, once the App Store question of DECISIONS.md is settled (docs/ios.md).
+#
+# ios-build.yml, which compiles the one-screen stub of apps/ios, is a different workflow and stays as it is. This one is
+# not a required check and not on the merge queue, for the same reasons (docs/ci.md): a path filter keeps it from running on
+# unrelated changes, and a macOS runner is billed at a multiple. Dispatch it by hand to run it anywhere:
+#   gh workflow run ios-game-build.yml --ref <branch>
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "libs/**"
+      - "apps/**"
+      - "cmake/**"
+      - "tools/assets/make_placeholder_icon.py"
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - ".github/toolchain-versions.json"
+      - ".github/workflows/ios-game-build.yml"
+  push:
+    branches: [main, develop]
+    paths:
+      - "libs/**"
+      - "apps/**"
+      - "cmake/**"
+      - "tools/assets/make_placeholder_icon.py"
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - ".github/toolchain-versions.json"
+      - ".github/workflows/ios-game-build.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ios-game-build-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/develop' && github.ref != 'refs/heads/main' }}
+
+# No job gets more than it names below.
+permissions: {}
+
+env:
+  # The bundle identifier of CMakeLists.txt (HEART_BOOM_MATHS_APPLICATION_ID), which the check of the bundle compares.
+  BUNDLE_ID: com.iainchesworthlabs.heartboommaths
+
+jobs:
+  ios-game-build:
+    name: iOS game (device, unsigned compile, Qt static)
+    runs-on: macos-26
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up CMake
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-cmake@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+
+      # Qt for iOS is cross-compiled: the iOS kit holds the libraries that are linked, and the macOS desktop kit of the same
+      # version holds the tools that run on the build machine (moc, rcc, qmlcachegen, qmlimportscanner), which the iOS
+      # toolchain file finds through QT_HOST_PATH. The version is the `qt` key of .github/toolchain-versions.json.
+      - name: Set up Qt (the desktop kit, for the host tools)
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-qt@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+      - name: Remember the desktop kit
+        id: host-kit
+        shell: bash
+        run: echo "root=$QT_ROOT_DIR" >> "$GITHUB_OUTPUT"
+
+      # Qt Multimedia is left out on purpose. Its iOS backend is FFmpeg, and the kit has no FFmpeg libraries to link, so the
+      # static link fails with undefined av_* symbols. Without the module the game builds with its silent fallback; iOS
+      # sound is a native AVFoundation backend, still to be written (docs/audio.md).
+      - name: Set up Qt (the iOS kit)
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-qt@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+        with:
+          target: ios
+      - name: Remember the iOS kit
+        id: ios-kit
+        shell: bash
+        run: echo "root=$QT_ROOT_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Show the toolchain
+        shell: bash
+        env:
+          HOST_KIT: ${{ steps.host-kit.outputs.root }}
+          IOS_KIT: ${{ steps.ios-kit.outputs.root }}
+        run: |
+          cmake --version | head -n 1
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+          echo "desktop kit: $HOST_KIT"
+          echo "iOS kit:     $IOS_KIT"
+          for kit in "$HOST_KIT" "$IOS_KIT"; do
+            [ -f "$kit/lib/cmake/Qt6/Qt6Config.cmake" ] || { echo "::error::no Qt6Config.cmake under $kit"; exit 1; }
+          done
+          [ -f "$IOS_KIT/lib/cmake/Qt6/qt.toolchain.cmake" ] || { echo "::error::no qt.toolchain.cmake in the iOS kit"; exit 1; }
+          ls "$IOS_KIT/lib/cmake" | grep -E 'Qt6(Multimedia|Quick|Qml)$' || true
+
+      - name: Configure
+        shell: bash
+        env:
+          HEART_BOOM_MATHS_QT_IOS_ROOT: ${{ steps.ios-kit.outputs.root }}
+          ICL_QT_ROOT: ${{ steps.host-kit.outputs.root }}
+        run: |
+          set -o pipefail
+          cmake --preset ios-game-release 2>&1 | tee configure.log
+
+      - name: Build
+        shell: bash
+        run: |
+          set -o pipefail
+          cmake --build --preset ios-game-release 2>&1 | tee build.log | tail -n 60
+
+      # The build log is long. When the build failed, the errors come first and the whole log is kept for a week.
+      - name: Show the errors of the build
+        if: failure()
+        shell: bash
+        run: |
+          for log in configure.log build.log; do
+            [ -f "$log" ] || continue
+            echo "::group::$log: errors"
+            grep -n -E 'error:|CMake Error|fatal error|Undefined symbols|ld: ' "$log" | head -n 80 || true
+            echo "::endgroup::"
+          done
+      - name: Keep the logs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ios-game-build-logs
+          path: |
+            configure.log
+            build.log
+          retention-days: 7
+
+      # What Xcode made, from the bundle alone: everything apps/ios/packaging/verify_app.sh checks of any bundle of this
+      # project, then the orientations, the capabilities, the Game Center entitlement of the file (an unsigned build embeds
+      # none), the frameworks, and the size of the bundle, which goes to the job summary. (An unsigned build: no --signed.)
+      - name: Check the application bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="$(find build/ios-game-release -name heart-boom-maths.app -type d | head -n 1)"
+          [ -n "$app" ] || { echo "::error::no heart-boom-maths.app under build/ios-game-release"; exit 1; }
+          echo "bundle: $app"
+          ls -la "$app"
+          apps/game/ios/verify_game_app.sh "$app" --bundle-id "$BUNDLE_ID" --executable heart-boom-maths \
+            --entitlements apps/game/ios/heart-boom-maths.entitlements

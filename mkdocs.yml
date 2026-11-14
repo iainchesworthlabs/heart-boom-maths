@@ -11,13 +11,28 @@ theme:
 nav:
   - Home: index.md
   - Building: building.md
+  - Android: android.md
   - Architecture: architecture.md
   - Game:
       - Specification: SPEC.md
       - Game architecture: game-architecture.md
+      - User journeys: user-journeys.md
       - Decisions: DECISIONS.md
       - Milestones: MILESTONES.md
       - Compliance: COMPLIANCE.md
+      - Audio: audio.md
+      - Haptics: haptics.md
+      - iOS and Game Center: ios.md
+      - Browser build: web.md
+  - Release:
+      - Privacy policy: privacy-policy.md
+      - Release checklist: release-checklist.md
+      - App Store listing: store/app-store.md
+      - Google Play listing: store/google-play.md
+  - Decision records:
+      - "0001 Test framework and JSON": adr/0001-test-framework-and-json.md
+  - UI components: ui-components.md
   - Testing: testing.md
+  - Profiling: profiling.md
   - Continuous integration: ci.md
   - Releasing: releasing.md

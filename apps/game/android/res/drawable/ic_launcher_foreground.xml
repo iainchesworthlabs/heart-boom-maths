@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- PLACEHOLDER: the foreground layer of the launcher icon, a pink heart with an ink outline on the 108 dp adaptive icon
+     canvas. The system shows the middle 72 dp at most, and a mask can cut that to a 66 dp circle, so the heart spans
+     24 to 84 and stays inside it. Not final art: see mipmap-anydpi-v26/ic_launcher.xml. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="@color/hbm_icon_heart"
+        android:strokeColor="@color/hbm_icon_outline"
+        android:strokeWidth="4"
+        android:strokeLineJoin="round"
+        android:pathData="M54,84 C30,66 24,54 24,43 C24,33 31,27 39,27 C46,27 51,31 54,37 C57,31 62,27 69,27 C77,27 84,33 84,43 C84,54 78,66 54,84 Z" />
+</vector>

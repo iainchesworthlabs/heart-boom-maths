@@ -1,0 +1,1 @@
+**The 7 has a crossbar, so it no longer looks like a 1.** The game uses two modified copies of its fonts (HBM Display and HBM Body, renamed as the font licence requires) in which the seven is crossed. It applies to every number: the answer tiles, the question, the timer, the scores and the parental gate keypad.

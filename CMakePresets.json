@@ -26,9 +26,9 @@
     },
     {
       "name": "linux-release",
-      "displayName": "Linux, Release",
+      "displayName": "Linux, Release, Tracy dormant",
       "inherits": "linux-base",
-      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "ICL_ENABLE_TRACY": "ON", "VCPKG_MANIFEST_FEATURES": "profiling" }
     },
     {
       "name": "linux-asan-ubsan",
@@ -43,6 +43,49 @@
       "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo", "ICL_SANITIZERS": "thread" }
     },
     {
+      "name": "linux-asan-o1",
+      "displayName": "Linux, AddressSanitizer alone, -O1, assertions on",
+      "description": "The nightly's AddressSanitizer leg (docs/testing.md, Nightly checks): address only, so its runtime options and its slowdown are its own, at -O1 with frame pointers kept and without -DNDEBUG, so every assert runs. cmake/icl/IclSanitizers.cmake adds -O1 -fno-omit-frame-pointer to every sanitizer build; the flags are repeated here so the optimisation level is written where it is read.",
+      "inherits": "linux-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_CXX_FLAGS": "-fno-omit-frame-pointer",
+        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O1 -g",
+        "ICL_SANITIZERS": "address"
+      }
+    },
+    {
+      "name": "linux-ubsan",
+      "displayName": "Linux, UBSan alone, -O1, assertions on",
+      "description": "The nightly's UndefinedBehaviorSanitizer leg: undefined alone, -fno-sanitize-recover=all (from IclSanitizers.cmake, so the first report fails the run), -O1 and no -DNDEBUG.",
+      "inherits": "linux-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_CXX_FLAGS": "-fno-omit-frame-pointer",
+        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O1 -g",
+        "ICL_SANITIZERS": "undefined"
+      }
+    },
+    {
+      "name": "linux-static-analysis",
+      "displayName": "Linux, Debug, for clang-tidy and cppcheck",
+      "description": "Debug (assertions on, so their code is analysed), no Tracy, the game on. Its compile_commands.json is what run-clang-tidy and cppcheck read (tools/ci/static_analysis.py). Nothing here is run.",
+      "inherits": "linux-base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    {
+      "name": "linux-gcc-analyzer",
+      "displayName": "Linux, GCC -fanalyzer, the rules only",
+      "description": "The library libs/core built with GCC's static analyzer (-fanalyzer): no Qt (the analyzer is slow and noisy on Qt headers) and no tests. Build only. CXX must be g++, GCC 14 or newer; GCC 14 reports false positives for C++ standard library code that later releases do not, so the baseline is the CI's compiler's.",
+      "inherits": "linux-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_FLAGS": "-fanalyzer",
+        "HEART_BOOM_MATHS_BUILD_GAME": "OFF",
+        "HEART_BOOM_MATHS_BUILD_TESTS": "OFF"
+      }
+    },
+    {
       "name": "linux-coverage",
       "displayName": "Linux, coverage",
       "inherits": "linux-base",
@@ -50,28 +93,92 @@
     },
     {
       "name": "macos-release",
-      "displayName": "macOS, Release",
+      "displayName": "macOS, Release, Tracy dormant",
       "inherits": "base",
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" },
-      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "VCPKG_TARGET_TRIPLET": "arm64-osx" }
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "VCPKG_TARGET_TRIPLET": "arm64-osx", "ICL_ENABLE_TRACY": "ON", "VCPKG_MANIFEST_FEATURES": "profiling" }
     },
     {
       "name": "windows-msvc-release",
-      "displayName": "Windows, MSVC, Release",
+      "displayName": "Windows, MSVC, Release, Tracy dormant",
       "inherits": "base",
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "VCPKG_TARGET_TRIPLET": "x64-windows",
         "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "Embedded",
-        "CMAKE_POLICY_DEFAULT_CMP0141": "NEW"
+        "CMAKE_POLICY_DEFAULT_CMP0141": "NEW",
+        "ICL_ENABLE_TRACY": "ON",
+        "VCPKG_MANIFEST_FEATURES": "profiling"
       }
+    },
+    {
+      "name": "linux-release-perf",
+      "displayName": "Linux, Release, performance tests",
+      "description": "linux-release with the performance tests (label perf) built. A separate build directory, so the ordinary test run never sees them. Run: ctest --preset linux-release-perf; summary: python3 tools/ci/perf_report.py (docs/testing.md).",
+      "inherits": "linux-release",
+      "cacheVariables": { "HEART_BOOM_MATHS_BUILD_PERF_TESTS": "ON" }
+    },
+    {
+      "name": "windows-msvc-release-perf",
+      "displayName": "Windows, MSVC, Release, performance tests",
+      "description": "windows-msvc-release with the performance tests (label perf) built. A separate build directory, so the ordinary test run never sees them. Run: pwsh tools/dev/test.ps1 -Perf (docs/testing.md).",
+      "inherits": "windows-msvc-release",
+      "cacheVariables": { "HEART_BOOM_MATHS_BUILD_PERF_TESTS": "ON" }
     },
     {
       "name": "windows-msvc-asan",
       "displayName": "Windows, MSVC, AddressSanitizer, /O1",
       "inherits": "windows-msvc-release",
-      "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo", "ICL_SANITIZERS": "address" }
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo", "ICL_SANITIZERS": "address", "ICL_ENABLE_TRACY": "OFF", "VCPKG_MANIFEST_FEATURES": "" }
+    },
+    {
+      "name": "windows-msvc-profile",
+      "displayName": "Windows, MSVC, optimised with symbols, Tracy on",
+      "description": "The game as it ships, plus Tracy: what to build to take a profile (docs/profiling.md). Starts profiling at launch, listens on the loopback interface only, and builds tracy-capture and tracy-csvexport for the host. Never a release.",
+      "inherits": "windows-msvc-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "ICL_ENABLE_TRACY": "ON",
+        "HEART_BOOM_MATHS_PROFILE_AUTOSTART": "ON",
+        "VCPKG_MANIFEST_FEATURES": "profiling;profiling-tools"
+      }
+    },
+    {
+      "name": "linux-profile",
+      "displayName": "Linux, optimised with symbols, Tracy on",
+      "description": "As windows-msvc-profile, without the command-line tools (add profiling-tools to VCPKG_MANIFEST_FEATURES for them). CI builds and tests this to keep the instrumentation compiling.",
+      "inherits": "linux-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "ICL_ENABLE_TRACY": "ON",
+        "HEART_BOOM_MATHS_PROFILE_AUTOSTART": "ON",
+        "VCPKG_MANIFEST_FEATURES": "profiling"
+      }
+    },
+    {
+      "name": "windows-msvc-analyze",
+      "displayName": "Windows, MSVC, /analyze with the C++ Core Check rules",
+      "description": "Build only. PREfast (/analyze) with the EspX engine, which brings the C++ Core Guidelines checker and its default rules; /analyze:WX- keeps the warnings from failing the build (the baseline decides, tools/ci/static_analysis.py). CMAKE_CXX_FLAGS replaces CMake's own default flags, so those are repeated first. /wd4702 (unreachable code) is off because the analysis pass reports it for test code that the ordinary build does not, and the project builds with /WX. C26446, C26472, C26481, C26482 and C26821 are off: each asks for the Guidelines Support Library (gsl::at, gsl::narrow_cast, gsl::span), which the project does not use, and they were 670 of the first 987 findings. The warnings are read from the build log by tools/ci/static_analysis.py. Headers in angle brackets (Qt, vcpkg, the standard library) are external and not analysed.",
+      "inherits": "windows-msvc-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "ICL_ENABLE_TRACY": "OFF",
+        "VCPKG_MANIFEST_FEATURES": "",
+        "CMAKE_CXX_FLAGS": "/DWIN32 /D_WINDOWS /EHsc /GR /wd4702 /wd26446 /wd26472 /wd26481 /wd26482 /wd26821 /analyze /analyze:WX- /analyze:plugin EspXEngine.dll /analyze:external- /external:anglebrackets /external:W0"
+      }
+    },
+    {
+      "name": "macos-asan-ubsan",
+      "displayName": "macOS, Apple Clang, AddressSanitizer and UBSan, -O1",
+      "inherits": "base",
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O1 -g",
+        "ICL_SANITIZERS": "address,undefined",
+        "VCPKG_TARGET_TRIPLET": "arm64-osx"
+      }
     },
     {
       "name": "ios-release",
@@ -93,27 +200,147 @@
         "CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED": "NO",
         "CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY": "",
         "HEART_BOOM_MATHS_BUILD_TESTS": "OFF",
-        "HEART_BOOM_MATHS_BUILD_CLI": "OFF",
+        "HEART_BOOM_MATHS_BUILD_GAME": "OFF",
         "CMAKE_BUILD_TYPE": "Release"
       }
+    },
+    {
+      "name": "ios-game-release",
+      "displayName": "iOS game (device, Release, unsigned, Qt static)",
+      "description": "The whole game on an iPhone or iPad (arm64), built by Xcode on a Mac against Qt's static iOS kit. Unsigned unless given the signing variables (the release workflow passes HEART_BOOM_MATHS_IOS_SIGNING_TEAM, _PROFILE, _BUILD_NUMBER and _GAME_CENTER on the command line, docs/ios.md): it needs no Apple account. Needs HEART_BOOM_MATHS_QT_IOS_ROOT (the ios kit of the pinned Qt version) and ICL_QT_ROOT (the macOS desktop kit of the same version, which Qt uses as its host tools). No tests are built: vcpkg is not used and nothing runs on a device here. apps/ios, the one-screen stub, is not built.",
+      "inherits": "base",
+      "generator": "Xcode",
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" },
+      "toolchainFile": "$env{HEART_BOOM_MATHS_QT_IOS_ROOT}/lib/cmake/Qt6/qt.toolchain.cmake",
+      "cacheVariables": {
+        "QT_HOST_PATH": "$env{ICL_QT_ROOT}",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "OFF",
+        "CMAKE_OSX_SYSROOT": "iphoneos",
+        "CMAKE_OSX_ARCHITECTURES": "arm64",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "18.0",
+        "CMAKE_XCODE_GENERATE_SCHEME": "ON",
+        "CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED": "NO",
+        "CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED": "NO",
+        "CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY": "",
+        "HEART_BOOM_MATHS_BUILD_TESTS": "OFF",
+        "HEART_BOOM_MATHS_BUILD_GAME": "ON",
+        "HEART_BOOM_MATHS_BUILD_IOS_APP": "OFF",
+        "HEART_BOOM_MATHS_USE_QT_MULTIMEDIA": "OFF",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "wasm-core",
+      "displayName": "WebAssembly, the rules and the text harness, to run under Node",
+      "description": "libs/core and the text harness built with Emscripten alone (no Qt, no vcpkg), so the golden replays can be checked under Node: `node build/wasm-core/libs/core/heart_boom_maths_harness.js --check libs/core/tests/data/replays`. Needs EMSDK (an activated emsdk).",
+      "inherits": "base",
+      "condition": { "type": "notEquals", "lhs": "$env{EMSDK}", "rhs": "" },
+      "toolchainFile": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "HEART_BOOM_MATHS_BUILD_TESTS": "OFF",
+        "HEART_BOOM_MATHS_BUILD_GAME": "OFF",
+        "HEART_BOOM_MATHS_BUILD_HARNESS": "ON",
+        "HEART_BOOM_MATHS_BUILD_IOS_APP": "OFF"
+      }
+    },
+    {
+      "name": "wasm-release",
+      "displayName": "WebAssembly, Release, single-threaded",
+      "description": "The game in a browser, built with Qt's single-threaded WebAssembly kit. Needs EMSDK (an activated emsdk of the Emscripten release the kit was built with: 5.0.5 for Qt 6.12.0, which the kit insists on), HEART_BOOM_MATHS_QT_WASM_ROOT (the wasm_singlethread kit) and ICL_QT_ROOT (the desktop kit of the same Qt version, which Qt uses as its host tools). The finished site is build/wasm-release/site. No tests are built: vcpkg is not used and a browser cannot run them.",
+      "inherits": "base",
+      "condition": { "type": "notEquals", "lhs": "$env{EMSDK}", "rhs": "" },
+      "toolchainFile": "$env{HEART_BOOM_MATHS_QT_WASM_ROOT}/lib/cmake/Qt6/qt.toolchain.cmake",
+      "cacheVariables": {
+        "QT_CHAINLOAD_TOOLCHAIN_FILE": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+        "QT_HOST_PATH": "$env{ICL_QT_ROOT}",
+        "CMAKE_BUILD_TYPE": "Release",
+        "HEART_BOOM_MATHS_BUILD_TESTS": "OFF",
+        "HEART_BOOM_MATHS_BUILD_GAME": "ON",
+        "HEART_BOOM_MATHS_BUILD_IOS_APP": "OFF"
+      }
+    },
+    {
+      "name": "android-base",
+      "hidden": true,
+      "inherits": "base",
+      "description": "An Android phone or tablet, built from any host with Qt's Android kit (HEART_BOOM_MATHS_QT_ANDROID_ROOT, for example Qt/6.12.0/android_arm64_v8a: the kit names the architecture), a desktop kit of the same Qt version for the host tools and androiddeployqt (ICL_QT_ROOT), the Android SDK (ANDROID_SDK_ROOT), the NDK that kit was built with (ANDROID_NDK_ROOT) and a JDK 17 or later. `cmake --build --preset <name>` makes the packages. No tests are built: vcpkg is not used and nothing runs on a device here. The C++ module dependency scan is off: nothing here uses modules.",
+      "condition": { "type": "notEquals", "lhs": "$env{HEART_BOOM_MATHS_QT_ANDROID_ROOT}", "rhs": "" },
+      "toolchainFile": "$env{HEART_BOOM_MATHS_QT_ANDROID_ROOT}/lib/cmake/Qt6/qt.toolchain.cmake",
+      "cacheVariables": {
+        "QT_HOST_PATH": "$env{ICL_QT_ROOT}",
+        "CMAKE_CXX_SCAN_FOR_MODULES": "OFF",
+        "HEART_BOOM_MATHS_BUILD_TESTS": "OFF",
+        "HEART_BOOM_MATHS_BUILD_GAME": "ON",
+        "HEART_BOOM_MATHS_BUILD_IOS_APP": "OFF"
+      }
+    },
+    {
+      "name": "android-arm64-release",
+      "displayName": "Android (arm64-v8a, Release, unsigned)",
+      "description": "What a release is made from: an unsigned APK and AAB. A package signed with the upload key needs QT_ANDROID_SIGN_AAB (or QT_ANDROID_SIGN_APK) and the QT_ANDROID_KEYSTORE_* environment variables, which only the tag build has (docs/releasing.md).",
+      "inherits": "android-base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    },
+    {
+      "name": "android-arm64-debug",
+      "displayName": "Android (arm64-v8a, Debug, debug-signed)",
+      "description": "A debuggable APK signed with Android's own debug key, which installs on any device that allows apps from outside the store.",
+      "inherits": "android-base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "QT_ANDROID_DEPLOYMENT_TYPE": "Debug" }
     }
   ],
   "buildPresets": [
     { "name": "linux-debug", "configurePreset": "linux-debug" },
     { "name": "linux-release", "configurePreset": "linux-release" },
+    { "name": "linux-release-perf", "configurePreset": "linux-release-perf" },
     { "name": "linux-asan-ubsan", "configurePreset": "linux-asan-ubsan" },
     { "name": "linux-tsan", "configurePreset": "linux-tsan" },
+    { "name": "linux-asan-o1", "configurePreset": "linux-asan-o1" },
+    { "name": "linux-ubsan", "configurePreset": "linux-ubsan" },
+    { "name": "linux-static-analysis", "configurePreset": "linux-static-analysis" },
+    { "name": "linux-gcc-analyzer", "configurePreset": "linux-gcc-analyzer" },
     { "name": "linux-coverage", "configurePreset": "linux-coverage" },
     { "name": "macos-release", "configurePreset": "macos-release" },
     { "name": "windows-msvc-release", "configurePreset": "windows-msvc-release", "configuration": "Release" },
+    { "name": "windows-msvc-release-perf", "configurePreset": "windows-msvc-release-perf", "configuration": "Release" },
     { "name": "windows-msvc-asan", "configurePreset": "windows-msvc-asan" },
-    { "name": "ios-release", "configurePreset": "ios-release", "configuration": "Release" }
+    { "name": "windows-msvc-analyze", "configurePreset": "windows-msvc-analyze", "configuration": "Debug" },
+    { "name": "macos-asan-ubsan", "configurePreset": "macos-asan-ubsan" },
+    { "name": "windows-msvc-profile", "configurePreset": "windows-msvc-profile", "configuration": "RelWithDebInfo" },
+    { "name": "linux-profile", "configurePreset": "linux-profile" },
+    { "name": "ios-release", "configurePreset": "ios-release", "configuration": "Release" },
+    { "name": "ios-game-release", "configurePreset": "ios-game-release", "configuration": "Release" },
+    { "name": "wasm-core", "configurePreset": "wasm-core" },
+    { "name": "wasm-release", "configurePreset": "wasm-release" },
+    { "name": "android-arm64-release", "configurePreset": "android-arm64-release", "targets": ["apk", "aab"] },
+    { "name": "android-arm64-debug", "configurePreset": "android-arm64-debug", "targets": ["apk"] }
   ],
   "testPresets": [
     { "name": "linux-debug", "configurePreset": "linux-debug", "output": { "outputOnFailure": true } },
     { "name": "linux-release", "configurePreset": "linux-release", "output": { "outputOnFailure": true } },
+    {
+      "name": "linux-release-perf",
+      "configurePreset": "linux-release-perf",
+      "output": { "outputOnFailure": true, "verbosity": "verbose" },
+      "filter": { "include": { "label": "perf" } },
+      "execution": { "jobs": 1, "noTestsAction": "error" }
+    },
+    {
+      "name": "windows-msvc-release-perf",
+      "configurePreset": "windows-msvc-release-perf",
+      "configuration": "Release",
+      "output": { "outputOnFailure": true, "verbosity": "verbose" },
+      "filter": { "include": { "label": "perf" } },
+      "execution": { "jobs": 1, "noTestsAction": "error" }
+    },
     { "name": "linux-asan-ubsan", "configurePreset": "linux-asan-ubsan", "output": { "outputOnFailure": true } },
-    { "name": "linux-tsan", "configurePreset": "linux-tsan", "output": { "outputOnFailure": true } },
-    { "name": "linux-coverage", "configurePreset": "linux-coverage", "output": { "outputOnFailure": true } }
+    { "name": "linux-tsan", "configurePreset": "linux-tsan", "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "perf|fuzz" } } },
+    { "name": "linux-coverage", "configurePreset": "linux-coverage", "output": { "outputOnFailure": true } },
+    { "name": "linux-asan-o1", "configurePreset": "linux-asan-o1", "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "perf|fuzz" } } },
+    { "name": "linux-ubsan", "configurePreset": "linux-ubsan", "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "perf|fuzz" } } },
+    { "name": "windows-msvc-asan", "configurePreset": "windows-msvc-asan", "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "perf|fuzz" } } },
+    { "name": "macos-asan-ubsan", "configurePreset": "macos-asan-ubsan", "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "perf|fuzz" } } },
+    { "name": "linux-profile", "configurePreset": "linux-profile", "output": { "outputOnFailure": true } }
   ]
 }

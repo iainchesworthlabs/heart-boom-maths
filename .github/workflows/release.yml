@@ -77,6 +77,8 @@ jobs:
         uses: iainchesworthlabs/icl-common-infra/actions/setup-gcc@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
       - name: Set up Qt
         uses: iainchesworthlabs/icl-common-infra/actions/setup-qt@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+        with:
+          modules: qtmultimedia
       - name: Load the MSVC environment
         if: runner.os == 'Windows'
         uses: iainchesworthlabs/icl-common-infra/actions/setup-msvc-env@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
@@ -138,25 +140,32 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
-  # The iPhone and iPad application, signed with the Apple Distribution certificate (organisation secrets) and this
-  # repository's own App Store provisioning profile, through the shared signing actions (docs/ios-signing.md in
-  # icl-common-infra), and sent to TestFlight. It runs only when the repository variable SIGN_IOS_UPLOAD is `true`; with
-  # it unset the release is made without iOS. The build number is the number of this run. A tag, or a manual run with
-  # `upload_testflight`, uploads the build; any other run has Apple validate it and stops there. The IPA is a workflow
-  # artifact for 7 days and is never put on the release: Testers install from the TestFlight app (docs/releasing.md).
+  # The iPhone and iPad game (apps/game, linked statically against Qt for iOS), signed with the Apple Distribution
+  # certificate (organisation secrets) and this repository's own App Store provisioning profile, through the shared signing
+  # actions (docs/ios-signing.md in icl-common-infra), and sent to TestFlight. It runs only when the repository variable
+  # SIGN_IOS_UPLOAD is `true`; with it unset the release is made without iOS. The build number is the number of this run.
+  # A tag, or a manual run with `upload_testflight`, uploads the build; any other run has Apple validate it and stops there.
+  # The IPA is a workflow artifact for 7 days and is never put on the release: Testers install from the TestFlight app
+  # (docs/releasing.md, docs/ios.md). The build that needs no secret is ios-game-build.yml; the one-screen stub of apps/ios
+  # and ios-build.yml stay as a template to copy.
+  #
+  # Game Center follows the provisioning profile: the entitlement is requested only when the profile carries it, because
+  # Xcode refuses to sign a bundle that asks for an entitlement its profile lacks. When the owner turns the capability on
+  # for the App ID and makes the profile again, the next run builds with it, with no change here.
   ios:
     name: Package (iOS)
     needs: version
     if: ${{ !cancelled() && (needs.version.result == 'success' || needs.version.result == 'skipped') && vars.SIGN_IOS_UPLOAD == 'true' }}
     runs-on: macos-26
-    timeout-minutes: 90
+    timeout-minutes: 120
     permissions:
       contents: read
     env:
       # HEART_BOOM_MATHS_APPLICATION_ID in CMakeLists.txt; the check of the IPA fails if the two differ.
       BUNDLE_ID: com.iainchesworthlabs.heartboommaths
       EXECUTABLE: heart-boom-maths
-      VCPKG_DISABLE_METRICS: "1"
+      # The target of apps/game, whose scheme CMake makes (CMAKE_XCODE_GENERATE_SCHEME is ON in the preset).
+      SCHEME: heart_boom_maths_game
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -174,26 +183,112 @@ jobs:
           bundle-id: ${{ env.BUNDLE_ID }}
           method: app-store
 
-      - name: Set up vcpkg
-        uses: iainchesworthlabs/icl-common-infra/actions/setup-vcpkg@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+      # Reads the profile the action put where Xcode looks for it. Only names, dates and counts are printed. The Game
+      # Center entitlement is asked for only if the profile has it; a profile that expires within 14 days stops the run
+      # here, with a sentence, and not as a build that fails an hour in or a TestFlight build that stops working.
+      - name: Read the provisioning profile
+        id: profile
+        shell: bash
+        env:
+          PROFILE_UUID: ${{ steps.signing.outputs.profile-uuid }}
+          TEAM_ID: ${{ steps.signing.outputs.team-id }}
+        run: |
+          set -euo pipefail
+          profile="$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+          [ -f "$profile" ] || { echo "::error title=iOS signing::the profile is not at $profile"; exit 1; }
+          plist="$RUNNER_TEMP/profile-read.plist"
+          trap 'rm -f "$plist"' EXIT
+          security cms -D -i "$profile" > "$plist"
+          pb() { /usr/libexec/PlistBuddy -c "Print :$1" "$plist" 2>/dev/null || true; }
+          name="$(pb Name)"
+          appid="$(pb Entitlements:application-identifier)"
+          expires="$(plutil -extract ExpirationDate raw -o - "$plist")"
+          devices="$(/usr/libexec/PlistBuddy -c 'Print :ProvisionedDevices' "$plist" 2>/dev/null | grep -c '^    ' || true)"
+          limit="$(date -u -v+14d +%Y-%m-%dT%H:%M:%SZ)"
+
+          echo "profile name:        $name"
+          echo "application id:      $appid"
+          echo "team:                $TEAM_ID"
+          echo "expires:             $expires"
+          echo "devices:             $devices"
+          echo "entitlements in it:"
+          /usr/libexec/PlistBuddy -c 'Print :Entitlements' "$plist" | grep -E '^    [^ ]' | sed -E 's/ = .*//; s/^ +/  /' || true
+
+          [ "$appid" = "$TEAM_ID.$BUNDLE_ID" ] \
+            || { echo "::error title=iOS signing::the profile is for '$appid', not $TEAM_ID.$BUNDLE_ID: make a profile for this App ID"; exit 1; }
+          [[ "$expires" > "$limit" ]] \
+            || { echo "::error title=iOS signing::the profile '$name' expires on $expires, within 14 days: make it again in the Apple developer portal and set IOS_PROVISIONING_PROFILE_BASE64 again"; exit 1; }
+
+          if [ "$(pb 'Entitlements:com.apple.developer.game-center')" = "true" ]; then
+            cmake_value=ON; verify_value=on
+          else
+            cmake_value=OFF; verify_value=off
+          fi
+          echo "Game Center entitlement: $cmake_value (the profile does$([ "$cmake_value" = ON ] || echo ' not') carry com.apple.developer.game-center)"
+          {
+            echo "game-center-cmake=$cmake_value"
+            echo "game-center-verify=$verify_value"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Set up CMake
         uses: iainchesworthlabs/icl-common-infra/actions/setup-cmake@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
 
-      # Signed for the application alone (apps/ios/CMakeLists.txt says why). CMake makes no Xcode scheme unless asked,
-      # and `xcodebuild archive` takes only a scheme.
+      # Qt for iOS is cross-compiled, as in ios-game-build.yml: the iOS kit holds the libraries that are linked, and the
+      # macOS desktop kit of the same version holds the tools that run on the build machine (moc, rcc, qmlcachegen,
+      # qmlimportscanner), which the iOS toolchain file finds through QT_HOST_PATH. Qt Multimedia is not installed: sound on
+      # iOS is AVFoundation (docs/audio.md). No vcpkg: the game has no dependency on iOS.
+      - name: Set up Qt (the desktop kit, for the host tools)
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-qt@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+      - name: Remember the desktop kit
+        id: host-kit
+        shell: bash
+        run: echo "root=$QT_ROOT_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Qt (the iOS kit)
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-qt@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+        with:
+          target: ios
+      - name: Remember the iOS kit
+        id: ios-kit
+        shell: bash
+        run: echo "root=$QT_ROOT_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Show the toolchain
+        shell: bash
+        env:
+          HOST_KIT: ${{ steps.host-kit.outputs.root }}
+          IOS_KIT: ${{ steps.ios-kit.outputs.root }}
+        run: |
+          cmake --version | head -n 1
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+          echo "desktop kit: $HOST_KIT"
+          echo "iOS kit:     $IOS_KIT"
+          for kit in "$HOST_KIT" "$IOS_KIT"; do
+            [ -f "$kit/lib/cmake/Qt6/Qt6Config.cmake" ] || { echo "::error::no Qt6Config.cmake under $kit"; exit 1; }
+          done
+          [ -f "$IOS_KIT/lib/cmake/Qt6/qt.toolchain.cmake" ] || { echo "::error::no qt.toolchain.cmake in the iOS kit"; exit 1; }
+          echo "Apple Distribution identities in the keychains: $(security find-identity -v -p codesigning | grep -c 'Apple Distribution' || true)"
+
+      # The signing variables sign the application target alone (apps/game/ios/ios.cmake says why), over the preset's
+      # unsigned defaults. The preset makes the Xcode scheme, which `xcodebuild archive` takes.
       - name: Configure (signed)
         shell: bash
         env:
+          HEART_BOOM_MATHS_QT_IOS_ROOT: ${{ steps.ios-kit.outputs.root }}
+          ICL_QT_ROOT: ${{ steps.host-kit.outputs.root }}
           TEAM_ID: ${{ steps.signing.outputs.team-id }}
           PROFILE_NAME: ${{ steps.signing.outputs.profile-name }}
           BUILD_NUMBER: ${{ github.run_number }}
-        run: >
-          cmake --preset ios-release
-          -DCMAKE_XCODE_GENERATE_SCHEME=ON
-          -DHEART_BOOM_MATHS_IOS_BUILD_NUMBER="$BUILD_NUMBER"
-          -DHEART_BOOM_MATHS_IOS_SIGNING_TEAM="$TEAM_ID"
-          -DHEART_BOOM_MATHS_IOS_SIGNING_PROFILE="$PROFILE_NAME"
+          GAME_CENTER: ${{ steps.profile.outputs.game-center-cmake }}
+        run: |
+          set -o pipefail
+          echo "build number $BUILD_NUMBER, Game Center $GAME_CENTER, profile '$PROFILE_NAME'"
+          cmake --preset ios-game-release \
+            -DHEART_BOOM_MATHS_IOS_BUILD_NUMBER="$BUILD_NUMBER" \
+            -DHEART_BOOM_MATHS_IOS_SIGNING_TEAM="$TEAM_ID" \
+            -DHEART_BOOM_MATHS_IOS_SIGNING_PROFILE="$PROFILE_NAME" \
+            -DHEART_BOOM_MATHS_IOS_GAME_CENTER="$GAME_CENTER" 2>&1 | tee configure.log
 
       - name: Name the package
         id: name
@@ -205,37 +300,47 @@ jobs:
           set -euo pipefail
           label=dry-run
           if [ "$REF_TYPE" = tag ]; then label="$REF_NAME"; fi
-          project="$(find build/ios-release -maxdepth 1 -name '*.xcodeproj' | head -n 1)"
-          [ -n "$project" ] || { echo "::error::CMake made no .xcodeproj under build/ios-release"; exit 1; }
+          project="$(find build/ios-game-release -maxdepth 1 -name '*.xcodeproj' | head -n 1)"
+          [ -n "$project" ] || { echo "::error::CMake made no .xcodeproj under build/ios-game-release"; exit 1; }
+          listing="$(xcodebuild -list -project "$project")"
+          echo "$listing"
+          grep -E "^[[:space:]]+$SCHEME\$" <<<"$listing" >/dev/null \
+            || { echo "::error::the project has no scheme $SCHEME (CMAKE_XCODE_GENERATE_SCHEME): see the list above"; exit 1; }
           echo "project=$project" >> "$GITHUB_OUTPUT"
           echo "ipa=dist-ios/heart-boom-maths-$label-ios-appstore.ipa" >> "$GITHUB_OUTPUT"
           echo "version=${label#v}" >> "$GITHUB_OUTPUT"
 
+      # The long step: it compiles the game (static Qt and all) in the archive. Its output is Xcode's own, in this log.
       - name: Archive and export the IPA
         id: export
         uses: iainchesworthlabs/icl-common-infra/actions/export-ios-ipa@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
         with:
           project: ${{ steps.name.outputs.project }}
-          scheme: heart_boom_maths_ios
+          scheme: ${{ env.SCHEME }}
           bundle-id: ${{ env.BUNDLE_ID }}
           team-id: ${{ steps.signing.outputs.team-id }}
           profile-name: ${{ steps.signing.outputs.profile-name }}
           method: app-store
           output: ${{ steps.name.outputs.ipa }}
 
-      # The signed IPA, opened as a device would: identifier, version, the icon, no permission text, arm64, a valid
-      # signature, and an App Store profile for this identifier.
+      # The signed IPA, opened as a device would: everything verify_app.sh checks (identifier, version, the icon, no
+      # permission text, arm64, a valid signature, an App Store profile for this identifier) and what only the game
+      # promises (orientations, the Game Center entitlement in the state the profile allowed, the frameworks, the sound
+      # files, the size). It prints the state it found.
       - name: Check the IPA
         shell: bash
         env:
           IPA: ${{ steps.export.outputs.ipa }}
           VERSION: ${{ steps.name.outputs.version }}
           REF_TYPE: ${{ github.ref_type }}
+          GAME_CENTER: ${{ steps.profile.outputs.game-center-verify }}
         run: |
           set -euo pipefail
-          args=(--bundle-id "$BUNDLE_ID" --executable "$EXECUTABLE" --signed --store)
+          ls -l "$IPA"
+          args=(--bundle-id "$BUNDLE_ID" --executable "$EXECUTABLE" --signed --store \
+            --game-center "$GAME_CENTER" --entitlements apps/game/ios/heart-boom-maths.entitlements)
           if [ "$REF_TYPE" = tag ]; then args+=(--version "${VERSION%%-*}"); fi
-          apps/ios/packaging/verify_app.sh "$IPA" "${args[@]}"
+          apps/game/ios/verify_game_app.sh "$IPA" "${args[@]}"
 
       # Apple's own check of the icon, the property list, the signature and the privacy declarations; and, for a tag or a
       # manual run that asks, the upload to TestFlight.
@@ -254,6 +359,16 @@ jobs:
         with:
           remove: "true"
 
+      # The configure log, when something failed: the Xcode log is in the step above, and nothing here holds a secret.
+      - name: Keep the configure log
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ios-release-logs
+          path: configure.log
+          retention-days: 7
+          if-no-files-found: ignore
+
       # Named ios-appstore, not release-*: only an artifact named release-* goes to the release (the publish job's pattern).
       - name: Upload
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -268,14 +383,197 @@ jobs:
         env:
           UPLOADED: ${{ github.ref_type == 'tag' || inputs.upload_testflight == true }}
           BUILD_NUMBER: ${{ github.run_number }}
+          GAME_CENTER: ${{ steps.profile.outputs.game-center-cmake }}
         run: |
           {
             echo "### iOS build for TestFlight"
+            echo "Game Center entitlement: $GAME_CENTER (it follows the provisioning profile; docs/ios.md)."
             if [ "$UPLOADED" = true ]; then
               echo "Uploaded as build $BUILD_NUMBER. Apple processes it for a few minutes; then it is in the TestFlight app for the internal testers."
             else
               echo "Validated by Apple, not uploaded. Run the workflow with \`upload_testflight\` (or push a tag) to upload build $BUILD_NUMBER."
             fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # The Android application, signed with the owner's upload key, as an AAB for Google Play (and a signed APK to look at).
+  # It runs only when the repository variable SIGN_ANDROID_UPLOAD is `true`; with it unset the release is made without
+  # Android, and no signing secret is read. The version code is the number of this run (cmake/HbmAndroid.cmake). Nothing
+  # here uploads to Google Play: the AAB is a workflow artifact for 7 days, named android-*, so that it is never put on the
+  # release (only an artifact named release-* goes there), and the owner puts it on the internal testing track by hand
+  # (docs/releasing.md, "Android and Google Play"). The build that has no key is .github/workflows/android-build.yml.
+  android:
+    name: Package (Android)
+    needs: version
+    if: ${{ !cancelled() && (needs.version.result == 'success' || needs.version.result == 'skipped') && vars.SIGN_ANDROID_UPLOAD == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      ICL_BUILD_NUMBER: ${{ github.run_number }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Read the pinned versions
+        id: pins
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          pins = json.load(open(".github/toolchain-versions.json"))
+          android = pins["android"]
+          print(f"qt={pins['qt']}")
+          print(f"aqtsource={pins.get('aqtsource', '')}")
+          print(f"ndk={android['ndk']}")
+          print(f"platform={android['platform']}")
+          print(f"build_tools={android['build_tools']}")
+          print(f"jdk={android['jdk']}")
+          PY
+
+      - name: Set up CMake
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-cmake@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+
+      - name: Use the runner's JDK
+        shell: bash
+        env:
+          JDK: ${{ steps.pins.outputs.jdk }}
+        run: |
+          set -euo pipefail
+          variable="JAVA_HOME_${JDK}_X64"
+          jdk="${!variable:-}"
+          [ -x "$jdk/bin/java" ] || { echo "::error::the runner image has no JDK $JDK ($variable is '$jdk')"; exit 1; }
+          echo "JAVA_HOME=$jdk" >> "$GITHUB_ENV"
+          echo "$jdk/bin" >> "$GITHUB_PATH"
+          "$jdk/bin/java" -version
+
+      - name: Install the Android SDK parts
+        shell: bash
+        env:
+          NDK: ${{ steps.pins.outputs.ndk }}
+          PLATFORM: ${{ steps.pins.outputs.platform }}
+          BUILD_TOOLS: ${{ steps.pins.outputs.build_tools }}
+        run: |
+          set -euo pipefail
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          [ -d "$sdk" ] || { echo "::error::the runner image has no Android SDK (ANDROID_HOME is '$sdk')"; exit 1; }
+          sdkmanager="$sdk/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$sdkmanager" ] || { echo "::error::$sdkmanager is not there"; exit 1; }
+          "$sdkmanager" --sdk_root="$sdk" --install "ndk;$NDK" "platforms;$PLATFORM" "build-tools;$BUILD_TOOLS"
+          echo "ANDROID_SDK_ROOT=$sdk" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$sdk" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$sdk/ndk/$NDK" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$sdk/ndk/$NDK" >> "$GITHUB_ENV"
+          echo "$sdk/build-tools/$BUILD_TOOLS" >> "$GITHUB_PATH"
+
+      - name: Set up Qt (Android kit and Linux host kit)
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-qt@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+        with:
+          version: ${{ steps.pins.outputs.qt }}
+          aqtsource: ${{ steps.pins.outputs.aqtsource }}
+          host: all_os
+          target: android
+          arch: android_arm64_v8a
+          modules: qtmultimedia
+
+      - name: Name the Qt kits
+        shell: bash
+        run: |
+          set -euo pipefail
+          android_kit="${QT_ROOT_DIR:-}"
+          [ -d "$android_kit" ] || { echo "::error::QT_ROOT_DIR is '$android_kit': the Qt install put its Android kit somewhere else"; exit 1; }
+          host_kit="$(dirname "$android_kit")/gcc_64"
+          [ -e "$host_kit/bin/androiddeployqt" ] || { echo "::error::$host_kit/bin/androiddeployqt is not there"; exit 1; }
+          echo "HEART_BOOM_MATHS_QT_ANDROID_ROOT=$android_kit" >> "$GITHUB_ENV"
+          echo "ICL_QT_ROOT=$host_kit" >> "$GITHUB_ENV"
+
+      # The upload key. The secrets are named in docs/secrets.md of icl-common-infra (organisation secrets, shared with this
+      # repository). Each is checked for being set by name before anything is built, and none is ever printed. The key file
+      # is written readable by this user alone and removed at the end.
+      - name: Write the upload key
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            [ -n "${!name}" ] || { echo "::error::the secret ANDROID_${name} is not set (or this repository is not among the selected repositories of the organisation secret); see docs/releasing.md, Android and Google Play"; exit 1; }
+          done
+          umask 077
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/upload-key.jks"
+          [ -s "$RUNNER_TEMP/upload-key.jks" ] || { echo "::error::the keystore secret decoded to an empty file"; exit 1; }
+          echo "QT_ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/upload-key.jks" >> "$GITHUB_ENV"
+
+      - name: Configure (signed)
+        run: cmake --preset android-arm64-release -DQT_ANDROID_SIGN_AAB=ON -DQT_ANDROID_SIGN_APK=ON
+
+      # Qt's signing step reads the key from these four variables (QtAndroidSignPackage.cmake in the kit).
+      - name: Build the signed AAB and APK
+        env:
+          QT_ANDROID_KEYSTORE_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          QT_ANDROID_KEYSTORE_STORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          QT_ANDROID_KEYSTORE_KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          # The APK and the AAB both write into one android-build folder, so they are built one after the other.
+          cmake --build --preset android-arm64-release --target apk
+          cmake --build --preset android-arm64-release --target aab
+
+      - name: Check the signed packages
+        shell: bash
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          label=dry-run
+          if [ "$REF_TYPE" = tag ]; then label="$REF_NAME"; fi
+          version="$(sed -n 's/^ *VERSION \([0-9][0-9.]*\)$/\1/p' CMakeLists.txt | head -n 1)"
+          # Qt signs the APK into a new file (-release-signed.apk, beside the unsigned one) and the AAB in place.
+          apk="$(find build/android-arm64-release -path '*outputs/apk/release/*' -name '*-release-signed.apk' -type f | head -n 1)"
+          aab="$(find build/android-arm64-release -path '*outputs/bundle/release/*' -name '*.aab' -type f | head -n 1)"
+          [ -n "$apk" ] && [ -n "$aab" ] || { echo "::error::the build made no signed release APK or AAB"; find build/android-arm64-release -name '*.apk' -o -name '*.aab'; exit 1; }
+          mkdir -p dist-android
+          cp "$apk" "dist-android/heart-boom-maths-$label-android-arm64.apk"
+          cp "$aab" "dist-android/heart-boom-maths-$label-android-arm64.aab"
+          ls -l dist-android
+          # Not debuggable, no permission, and signed by a key that is not Android's debug key. The APK is verified as a
+          # device would; the bundle by its jar signature, as Google Play does.
+          apps/game/android/verify_package.sh "dist-android/heart-boom-maths-$label-android-arm64.apk" --version "${version}" --release
+          certs="$(apksigner verify --print-certs "dist-android/heart-boom-maths-$label-android-arm64.apk")"
+          printf '%s\n' "$certs" | head -n 3
+          if printf '%s\n' "$certs" | grep -qi 'CN=Android Debug'; then echo "::error::the APK is signed with Android's debug key"; exit 1; fi
+          jarsigner -verify "dist-android/heart-boom-maths-$label-android-arm64.aab"
+          apps/game/android/verify_package.sh "dist-android/heart-boom-maths-$label-android-arm64.aab"
+
+      - name: Remove the upload key
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/upload-key.jks"
+
+      # Named android-aab-signed, not release-*: only an artifact named release-* goes to the release (the publish job's
+      # pattern). The AAB is for Google Play, which signs what users get with its own key.
+      - name: Upload
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: android-aab-signed
+          retention-days: 7
+          path: dist-android/*
+          if-no-files-found: error
+
+      - name: Say what to do with it
+        shell: bash
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: |
+          {
+            echo "### Android build for Google Play"
+            echo "Signed with the upload key as version code $BUILD_NUMBER. Download the \`android-aab-signed\` artifact and add the AAB to a release on the internal testing track in Play Console (docs/releasing.md)."
           } >> "$GITHUB_STEP_SUMMARY"
 
   publish:

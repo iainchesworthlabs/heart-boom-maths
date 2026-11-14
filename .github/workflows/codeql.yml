@@ -7,6 +7,12 @@ on:
 
 permissions: {}
 
+# What the cpp analysis sees: the linux-release preset builds libs/core, apps/game and every test, with Qt of the version
+# in .github/toolchain-versions.json, so all of that is analysed. It does not see what that build leaves out: the Qt
+# Multimedia sound backend (the reusable workflow installs Qt with no add-on modules, so the silent backend is built
+# instead), and the Windows, macOS, iOS, Android and browser files under apps/game/src/platform. MSVC /analyze in
+# nightly.yml covers the Windows files. Alerts go to code scanning; the job itself fails only when the build or the
+# analysis does.
 jobs:
   codeql:
     name: CodeQL
