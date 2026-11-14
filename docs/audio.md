@@ -66,3 +66,13 @@ Qt Multimedia is an add-on module of the Qt kit. The configure looks for the `Qt
 the backend is built and `Qt6::Multimedia` is linked, and otherwise a status line says so and the game builds silent. The
 CI job that installs Qt with aqtinstall needs `modules: qtmultimedia` (for the WebAssembly kit as well) for the checked-in
 sounds to be heard in those builds.
+
+## Platforms without Qt Multimedia
+
+The Qt Multimedia backend plays sound on Windows, Linux and macOS, and on Android where the kit bundles it. Two targets
+are silent for now:
+
+- **iOS.** The Qt Multimedia module is not installed in the iOS CI job. Its backend on iOS is FFmpeg, and the kit has no
+  FFmpeg libraries, so the static link fails. The game builds with the silent fallback. The planned replacement is a
+  small AVFoundation backend behind the same `AudioBackend` interface.
+- **WebAssembly.** The aqt kit has no Qt Multimedia module. A WebAudio backend or a source-built module is the choice.

@@ -72,11 +72,13 @@ jobs:
         shell: bash
         run: echo "root=$QT_ROOT_DIR" >> "$GITHUB_OUTPUT"
 
-      - name: Set up Qt (the iOS kit, with Qt Multimedia)
+      # Qt Multimedia is left out on purpose. Its iOS backend is FFmpeg, and the kit has no FFmpeg libraries to link, so the
+      # static link fails with undefined av_* symbols. Without the module the game builds with its silent fallback; iOS
+      # sound is a native AVFoundation backend, still to be written (docs/audio.md).
+      - name: Set up Qt (the iOS kit)
         uses: iainchesworthlabs/icl-common-infra/actions/setup-qt@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
         with:
           target: ios
-          modules: qtmultimedia
       - name: Remember the iOS kit
         id: ios-kit
         shell: bash

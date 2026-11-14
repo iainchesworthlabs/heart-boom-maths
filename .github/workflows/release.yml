@@ -404,7 +404,10 @@ jobs:
           QT_ANDROID_KEYSTORE_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           QT_ANDROID_KEYSTORE_STORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           QT_ANDROID_KEYSTORE_KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: cmake --build --preset android-arm64-release
+        run: |
+          # The APK and the AAB both write into one android-build folder, so they are built one after the other.
+          cmake --build --preset android-arm64-release --target apk
+          cmake --build --preset android-arm64-release --target aab
 
       - name: Check the signed packages
         shell: bash

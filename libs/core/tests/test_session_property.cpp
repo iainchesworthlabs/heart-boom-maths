@@ -390,7 +390,7 @@ TEST_CASE("restore rejects garbage and leaves the session untouched", "[unit][se
         const auto with = [&](std::size_t index, std::int64_t value)
         {
             std::vector<std::int64_t> bad = good;
-            bad[index] = value;
+            bad.at(index) = value;
             return bad;
         };
         REQUIRE(rejects(with(1, 99)));    // state

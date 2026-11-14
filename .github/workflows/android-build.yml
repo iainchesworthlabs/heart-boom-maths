@@ -168,7 +168,10 @@ jobs:
         run: cmake --preset android-arm64-release
 
       - name: Build the release APK and AAB
-        run: cmake --build --preset android-arm64-release
+        run: |
+          # The APK and the AAB both write into one android-build folder, so they are built one after the other.
+          cmake --build --preset android-arm64-release --target apk
+          cmake --build --preset android-arm64-release --target aab
 
       # What androiddeployqt made, from the packages alone. A release must not be debuggable, and no package may ask for a
       # permission. The sizes are printed so that a jump shows in the log.
