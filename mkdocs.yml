@@ -21,6 +21,7 @@ nav:
       - Compliance: COMPLIANCE.md
       - Audio: audio.md
       - iOS and Game Center: ios.md
+      - Browser build: web.md
   - Release:
       - Privacy policy: privacy-policy.md
       - Release checklist: release-checklist.md

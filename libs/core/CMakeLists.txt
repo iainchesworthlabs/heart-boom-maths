@@ -37,4 +37,13 @@ target_link_libraries(heart_boom_maths_core
 
 if(HEART_BOOM_MATHS_BUILD_TESTS)
     add_subdirectory(tests)
+elseif(HEART_BOOM_MATHS_BUILD_HARNESS)
+    # The text harness alone, with no Catch2: the WebAssembly check builds it with Emscripten and replays the golden
+    # files under Node (docs/web.md). With the tests on, tests/CMakeLists.txt builds the same program.
+    add_executable(heart_boom_maths_harness tests/harness.cpp)
+    target_link_libraries(heart_boom_maths_harness PRIVATE heart_boom_maths::core icl::warnings icl::coverage)
+    if(EMSCRIPTEN)
+        # Node's own file system, so `--check <directory>` reads the replay files where they are.
+        target_link_options(heart_boom_maths_harness PRIVATE "SHELL:-s NODERAWFS=1" "SHELL:-s ENVIRONMENT=node")
+    endif()
 endif()

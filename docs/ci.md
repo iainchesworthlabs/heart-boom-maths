@@ -13,6 +13,7 @@ commit SHA. Dependabot proposes the SHA bump; the pull request also needs
 | Merge queue, push to `develop` | Above, plus Linux debug and TSan, macOS, Windows release and ASan |
 | Change to what the iOS build reads (a path filter), or a manual run | iOS compile checks (`ios-build.yml` for the stub, `ios-game-build.yml` for the game; not required) |
 | Change to what the Android build reads (a path filter), or a manual run | Android compile check (`android-build.yml`, not required) |
+| Change to what the browser build reads (a path filter), or a manual run | WebAssembly build (`wasm-build.yml`, not required) |
 | Nightly | CodeQL |
 | Tag `v*` | Release |
 
@@ -74,6 +75,12 @@ fails. See [iOS and Game Center](ios.md).
 permission, is debuggable in the release, or carries more than `arm64-v8a`. It needs no secret and runs nothing on a
 device. The signed build is the `android` job of `release.yml`, which runs only when the repository variable
 `SIGN_ANDROID_UPLOAD` is `true` (`docs/releasing.md`). What a device has to show is listed in `docs/android.md`.
+`wasm-build.yml` is separate for the same reason. Its three jobs build the rules for Node and compare eight games with
+the native build, build the game for the browser and check the site and its size against a budget
+(`WASM_GZIP_BUDGET_BYTES`, a placeholder to confirm), and open the site in Chrome. It installs two Emscripten releases
+(the repository pin for the rules, the one Qt's kit demands for the game) and two Qt kits (desktop for the host tools,
+WebAssembly). `docs/web.md` has the detail. The Project rules job of `ci.yml` also checks that the page template
+reaches nothing outside itself.
 
 ## Run the checks locally
 

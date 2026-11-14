@@ -36,6 +36,7 @@ def find_infra() -> Path | None:
 PROJECT_CHECKS = [
     ("core includes", "check_core_includes.py"),
     ("single link-open call", "check_link_open.py"),
+    ("web page is closed", "check_web_site.py"),
 ]
 
 

@@ -177,7 +177,7 @@ Rules:
 
 ### Browser storage
 
-On WebAssembly, files written with `QFile` go to an in-memory file system by default, and standard data folders may not exist. `QSettings` has a local-storage backend with a 5 MB limit. The save is a few kilobytes, so `WebSaveStore` keeps the whole text under one `QSettings` key. The M2 web spike confirms this on the pinned Qt version, including what happens when the browser blocks storage. Fallback: a small JavaScript storage bridge.
+On WebAssembly, files written with `QFile` go to an in-memory file system by default, and standard data folders may not exist. `QSettings` has a local-storage backend with a 5 MB limit. The save is a few kilobytes, so `WebSaveStore` keeps the whole text under one `QSettings` key. The M2 web spike confirmed this on the pinned Qt version, including what happens when the browser blocks storage (the game keeps its save in memory for the session); see [The browser build](web.md). Fallback if a browser misbehaves: a small JavaScript storage bridge.
 
 ## App layer
 
@@ -256,7 +256,7 @@ The app observes `QGuiApplication::applicationStateChanged`. When the state leav
 
 The game has no code for screen-time settings. A Screen Time limit, Downtime, a Family Link lock or a Digital Wellbeing timer takes the app out of the foreground, and that is the only signal needed. Device tests confirm each produces a state change in Qt.
 
-Desktop windows pause when they lose focus. In the browser the same path runs from page visibility. The spike confirms Qt reports a hidden tab, and a small JavaScript hook calls `pause()` if it does not.
+Desktop windows pause when they lose focus. In the browser the same path runs from page visibility. Qt does not report a hidden tab, so the browser build listens for the page's `visibilitychange` and calls `on_application_state` itself (see [The browser build](web.md)).
 
 ### Audio
 

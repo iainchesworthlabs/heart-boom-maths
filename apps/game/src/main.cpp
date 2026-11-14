@@ -2,8 +2,10 @@
 #include "game_controller.hpp"
 #include "heart_boom_maths/save_store.hpp"
 #include "heart_boom_maths/version.hpp"
+#include "platform/browser.hpp"
 #include "platform/platform.hpp"
 #include "platform/score_platform.hpp"
+#include "services/app_save_store.hpp"
 #include "services/audio_factory.hpp"
 #include "services/clock.hpp"
 #include "services/file_save_store.hpp"
@@ -80,12 +82,18 @@ int main(int argc, char* argv[])
     // The Game Center service on an Apple device, which stays idle until its Settings switch is on, and none elsewhere.
     const std::unique_ptr<game::ScoreService> scores = game::platform::make_score_service();
     game::SystemLinkOpener links;
-    game::FileSaveStore file_store(game::FileSaveStore::default_directory());
+    // The platform chooses where the save lives: a file, or the page's storage in a browser (src/platform/<os>/).
+    const game::platform::SaveStorage save_storage = game::platform::save_storage();
+    std::unique_ptr<game::AppSaveStore> app_store;
     MemorySaveStore memory_store;
-    SaveStore& store = smoke_test ? static_cast<SaveStore&>(memory_store) : static_cast<SaveStore&>(file_store);
+    if (!smoke_test)
+    {
+        app_store = game::make_save_store(save_storage, game::FileSaveStore::default_directory());
+    }
+    SaveStore& store = smoke_test ? static_cast<SaveStore&>(memory_store) : static_cast<SaveStore&>(*app_store);
     game::GameServices services;
     services.store = &store;
-    services.quarantine = smoke_test ? nullptr : &file_store;
+    services.quarantine = app_store.get();
     services.audio = audio.service.get();
     services.scores = scores.get();
     services.links = &links;
@@ -95,6 +103,9 @@ int main(int argc, char* argv[])
     QObject::connect(&app, &QGuiApplication::applicationStateChanged, &controller,
                      [&controller](Qt::ApplicationState state)
                      { controller.on_application_state(state == Qt::ApplicationActive); });
+    // Qt's browser platform does not report a hidden tab as a change of application state, so the page's visibility
+    // takes the same path. It does nothing off the web.
+    game::platform::watch_page_visibility([&controller](bool visible) { controller.on_application_state(visible); });
 
     QQmlApplicationEngine engine;
     // The window takes the controller as a required property, so qmllint and the QML compiler know its type.
@@ -116,5 +127,8 @@ int main(int argc, char* argv[])
         QTimer::singleShot(SMOKE_TEST_LIMIT_MS, &app, [] { QCoreApplication::exit(1); });
     }
 
-    return QGuiApplication::exec();
+    const int exit_code = QGuiApplication::exec();
+    // The controller is about to go; a late visibility event must not reach it.
+    game::platform::watch_page_visibility({});
+    return exit_code;
 }

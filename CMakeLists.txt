@@ -40,6 +40,7 @@ include(IclCoverage)
 include(IclPlatform)
 
 option(HEART_BOOM_MATHS_BUILD_TESTS "Build the tests" ON)
+option(HEART_BOOM_MATHS_BUILD_HARNESS "Build the text harness without the tests (the tests build it anyway)" OFF)
 option(HEART_BOOM_MATHS_BUILD_IOS_APP "Build the iPhone and iPad application (iOS only)" ON)
 
 # The Qt application. AUTO builds it when a Qt 6 kit can be found and says so when it cannot, so a machine with no Qt

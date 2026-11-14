@@ -8,6 +8,7 @@ include(IclQtApp)
 include(HbmAndroid)
 include(HbmBuildInfo)
 include(HbmNotices)
+include(HbmWebSite)
 
 # Everything the screens bind to, and the screens themselves as one static QML module (HeartBoomMaths), so the application
 # and the ui tests load the same QML. The controller and AnswerFeedback are the module's C++ types; qml_types.hpp makes the
@@ -67,6 +68,15 @@ else()
     message(STATUS "Qt Multimedia was not found: the game will be silent (install the qtmultimedia module of the Qt kit)")
     target_sources(heart_boom_maths_app PRIVATE src/services/no_audio_backend.cpp)
 endif()
+# Where the save lives. The file store is for every platform with a file system; the browser has none that lasts, so its
+# save is one value of the page's storage (QSettings), behind an interface a desktop test can fake. The platform decides
+# which one src/platform/<os>/browser.cpp answers.
+target_sources(heart_boom_maths_app PRIVATE
+    src/services/app_save_store.cpp
+    src/services/key_value_backend.cpp
+    src/services/qsettings_backend.cpp
+    src/services/web_save_store.cpp)
+
 # The files are made by tools/assets/make_placeholder_sounds.py and are replaced by a sound designer's work.
 set(HEART_BOOM_MATHS_AUDIO_FILES
     audio/coin_chime.wav
@@ -180,6 +190,15 @@ if(IOS)
     include("${CMAKE_CURRENT_SOURCE_DIR}/ios/ios.cmake")
 endif()
 
+# The browser build is a site, not a program: the page, its script and style, Qt's loader and the module in <build>/site.
+if(EMSCRIPTEN)
+    hbm_add_web_site(heart_boom_maths_game
+        WEB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/web"
+        TITLE "${HEART_BOOM_MATHS_DISPLAY_NAME}"
+        LICENCE_FILE "${PROJECT_SOURCE_DIR}/LICENSE"
+        NOTICES_FILE "${CMAKE_CURRENT_BINARY_DIR}/generated/notices.txt")
+endif()
+
 target_include_directories(heart_boom_maths_game PRIVATE src)
 # The static QML module needs its backing library and its plugin, which registers the types and the QML files.
 target_link_libraries(heart_boom_maths_game
@@ -242,6 +261,10 @@ if(HEART_BOOM_MATHS_BUILD_TESTS)
         TEST_SPEC "[integration]"
         DISCOVERY_MODE PRE_TEST
         PROPERTIES LABELS integration TIMEOUT 60 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+    # The browser's save over a fake key-value store (blocked storage, a full quota, a damaged save kept under a second
+    # key), the same store over QSettings on the desktop, the factory that picks the store, and the hidden-tab path.
+    target_sources(heart_boom_maths_game_tests PRIVATE tests/test_web_save_store.cpp)
 
     # The sound rules over a recording backend, the factory, the first-gesture filter and the placeholder sound files.
     target_sources(heart_boom_maths_game_tests PRIVATE tests/test_audio.cpp)

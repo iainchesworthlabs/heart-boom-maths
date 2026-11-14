@@ -122,9 +122,24 @@
       }
     },
     {
+      "name": "wasm-core",
+      "displayName": "WebAssembly, the rules and the text harness, to run under Node",
+      "description": "libs/core and the text harness built with Emscripten alone (no Qt, no vcpkg), so the golden replays can be checked under Node: `node build/wasm-core/libs/core/heart_boom_maths_harness.js --check libs/core/tests/data/replays`. Needs EMSDK (an activated emsdk).",
+      "inherits": "base",
+      "condition": { "type": "notEquals", "lhs": "$env{EMSDK}", "rhs": "" },
+      "toolchainFile": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "HEART_BOOM_MATHS_BUILD_TESTS": "OFF",
+        "HEART_BOOM_MATHS_BUILD_GAME": "OFF",
+        "HEART_BOOM_MATHS_BUILD_HARNESS": "ON",
+        "HEART_BOOM_MATHS_BUILD_IOS_APP": "OFF"
+      }
+    },
+    {
       "name": "wasm-release",
       "displayName": "WebAssembly, Release, single-threaded",
-      "description": "The game in a browser, built with Qt's single-threaded WebAssembly kit and the pinned Emscripten. Needs EMSDK (an activated emsdk), HEART_BOOM_MATHS_QT_WASM_ROOT (the wasm_singlethread kit) and ICL_QT_ROOT (the desktop kit of the same Qt version, which Qt uses as its host tools). No tests are built: vcpkg is not used and a browser cannot run them.",
+      "description": "The game in a browser, built with Qt's single-threaded WebAssembly kit. Needs EMSDK (an activated emsdk of the Emscripten release the kit was built with: 5.0.5 for Qt 6.12.0, which the kit insists on), HEART_BOOM_MATHS_QT_WASM_ROOT (the wasm_singlethread kit) and ICL_QT_ROOT (the desktop kit of the same Qt version, which Qt uses as its host tools). The finished site is build/wasm-release/site. No tests are built: vcpkg is not used and a browser cannot run them.",
       "inherits": "base",
       "condition": { "type": "notEquals", "lhs": "$env{EMSDK}", "rhs": "" },
       "toolchainFile": "$env{HEART_BOOM_MATHS_QT_WASM_ROOT}/lib/cmake/Qt6/qt.toolchain.cmake",
@@ -178,6 +193,7 @@
     { "name": "windows-msvc-asan", "configurePreset": "windows-msvc-asan" },
     { "name": "ios-release", "configurePreset": "ios-release", "configuration": "Release" },
     { "name": "ios-game-release", "configurePreset": "ios-game-release", "configuration": "Release" },
+    { "name": "wasm-core", "configurePreset": "wasm-core" },
     { "name": "wasm-release", "configurePreset": "wasm-release" },
     { "name": "android-arm64-release", "configurePreset": "android-arm64-release", "targets": ["apk", "aab"] },
     { "name": "android-arm64-debug", "configurePreset": "android-arm64-debug", "targets": ["apk"] }

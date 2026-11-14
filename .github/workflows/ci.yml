@@ -132,6 +132,10 @@ jobs:
         run: |
           python3 tools/ci/check_link_open.py --self-test
           python3 tools/ci/check_link_open.py
+      - name: The web page reaches nothing outside itself
+        run: |
+          python3 tools/ci/check_web_site.py --self-test
+          python3 tools/ci/check_web_site.py
 
   build-fast:
     name: Build (fast)
