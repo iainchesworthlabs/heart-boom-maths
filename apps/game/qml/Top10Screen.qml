@@ -21,9 +21,12 @@ ScorePage {
     signal backRequested
     signal playRequested
 
-    designHeight: 720
+    designHeight: 804
     columnSpacing: 14
     topMax: 52
+    // The play button stands at the foot of the window, 32 above its edge, as on the board, with the list above it.
+    pinTop: true
+    pinBottom: 32
 
     RowLayout {
         Layout.fillWidth: true
@@ -120,6 +123,10 @@ ScorePage {
                 font.pixelSize: 20 * root.unit
             }
         }
+    }
+
+    Item {
+        Layout.fillHeight: true
     }
 
     ComicButton {

@@ -22,6 +22,9 @@ Item {
     property real reservedBottom: 0
     // True: the column starts `topMax` from the top whenever it fits, instead of being centred in the room that is left.
     property bool pinTop: false
+    // At least 0: the column reaches down to this far above the window's foot (times `unit`), so a spacer in it that fills
+    // the height pushes what follows to the bottom. -1 leaves the column as tall as its content.
+    property real pinBottom: -1
     property real columnSpacing: 20
 
     readonly property real sideMargin: 24
@@ -51,6 +54,7 @@ Item {
             return Math.max(root.verticalMargin / 2, root.compact ? Math.min(root.topMax * root.unit, free / 2) : free / 2);
         }
         width: root.columnWidth
+        height: root.pinBottom >= 0 ? Math.max(implicitHeight, root.availableHeight - root.pinBottom * root.unit - y) : implicitHeight
         spacing: root.columnSpacing * root.unit
     }
 }

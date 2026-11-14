@@ -676,6 +676,28 @@ TEST_CASE(
     CHECK(s.screen() == "title"); // back to the title, not to the card it came from
 }
 
+TEST_CASE("The top 10's play button stands at the foot of the window with the list above it", "[ui][scores][top10]")
+{
+    const SizeCase size = GENERATE(SizeCase{"phone", PHONE}, SizeCase{"tablet", TABLET}, SizeCase{"desktop", DESKTOP});
+    CAPTURE(size.name);
+    Shell s(size.size, save_text(full_list()));
+    s.tap("top10Button");
+    REQUIRE(s.screen() == "top10");
+    const QRectF play = s.rect_of("top10PlayButton");
+    const QRectF last = s.rect_of("scoreRow10");
+    // The list ends above the button with room to spare, and the button's shadow is 32 above the window's foot.
+    CHECK(last.bottom() + 14 <= play.top());
+    CHECK(play.bottom() <= size.size.height() - 15);
+    CHECK(play.bottom() >= size.size.height() - 50);
+    if (size.size == PHONE)
+    {
+        // CP12: the button is at y 740 to 812, so its shadow ends at 820, 24 above the foot.
+        CHECK_THAT(play.top(), Catch::Matchers::WithinAbs(740.0, 1.0));
+        CHECK_THAT(play.height(), Catch::Matchers::WithinAbs(72.0, 0.6));
+        CHECK_THAT(play.left(), Catch::Matchers::WithinAbs(24.0, 0.6));
+    }
+}
+
 TEST_CASE("The top 10 marks the new entry in a full list and drops the one pushed off", "[ui][scores][top10]")
 {
     const SizeCase size = GENERATE(SizeCase{"phone", PHONE}, SizeCase{"tablet", TABLET}, SizeCase{"desktop", DESKTOP});
