@@ -311,6 +311,8 @@ A replay is a seed, a tuning name and a list of commands with the tick each arri
 }
 ```
 
+A command's `tick` is the number of `tick()` calls made before it, and the runner makes them between commands. Optional fields: `wallet` and `won_once` (the starting save values), `end_tick` (keep ticking to here after the last command, so a run can end in the bomb), and `note` and `recipe` (for readers and for the harness, which rewrites a file from its recipe). Hashes are 16 lowercase hex digits. The code is `replay.hpp` in `libs/core`.
+
 The set covers a perfect level, a level with wrong answers and hints, a time-out in the alert zone, the 12-level win, and endless mode to level 20. A deliberate rule or tuning change regenerates the affected replays in the same commit, and the diff is reviewed. A replay that changes without a deliberate rule change is a bug.
 
 ### Property tests

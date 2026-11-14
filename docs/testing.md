@@ -16,6 +16,36 @@ The `game.*` tests exist only when a Qt kit was found. On Windows the Qt `bin` d
 `tools/dev/test.ps1` adds the `bin` directory of `ICL_QT_ROOT`. The scripts in `tools/ci/` carry their own tests: run
 `python3 tools/ci/check_core_includes.py --self-test` and the same for `check_link_open.py`.
 
+## Golden replays and the text harness
+
+A replay is a JSON file of a seed and the commands of a whole run, each with the tick it arrives on, plus the events hash,
+the final state hash and the score it must produce (format in `docs/game-architecture.md`; `end_tick` lets a run end by
+letting the clock run out, and `recipe` records how the file was made). The files live in
+`libs/core/tests/data/replays/`. CMake turns each into a byte array in a generated header, so the `[replay]` test reads no
+file at run time.
+
+`heart_boom_maths_harness` (built with the tests, from `libs/core/tests/harness.cpp`) plays a game in the terminal from a
+seed and either a script or a policy, printing each question, the tiles, every event in words, the clock and the score.
+The last line is always `FINAL score=<n> level=<n> events_hash=<hex> final_hash=<hex>`.
+
+```bash
+harness --auto perfect --seed 7                         # a whole 12-level game, perfect play
+harness --auto perfect --endless-to 20                  # win, KEEP GOING, on to level 20
+harness --auto random 42 --wallet 6 --clear-level 2     # right, wrong, hints and pauses from a second generator
+harness --script some-replay.json                       # replay a file; says whether its hashes still match
+harness --auto always-wrong --record wrong.json         # also write the run as a replay file
+```
+
+A rule or tuning change regenerates the affected replays in the same commit:
+
+```bash
+harness --regenerate libs/core/tests/data/replays       # rewrites each file from its recipe
+harness --check libs/core/tests/data/replays            # what the ctest test harness.replays-current runs
+```
+
+Review the diff of the replay files like any other change. A replay that changes when no rule or tuning was meant to change
+is a bug in the change, not a file to regenerate. The `[replay]` test failure says so and names this command.
+
 ## Coverage
 
 `linux-coverage` builds with instrumentation. CI runs gcovr and `coverage_gate.py` against
