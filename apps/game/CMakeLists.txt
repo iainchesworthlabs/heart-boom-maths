@@ -152,6 +152,7 @@ set(HEART_BOOM_MATHS_QML_FILES
     qml/PlayTopBar.qml
     qml/QuestionCard.qml
     qml/RowButton.qml
+    qml/SafeAreaFrame.qml
     qml/ScorePage.qml
     qml/ScoreRow.qml
     qml/ScreenFrame.qml

@@ -407,3 +407,72 @@ Item {
     CHECK(property_of(shortCard, "contentHeight").toDouble() > 0);
     CHECK(property_of(longCard, "contentHeight").toDouble() > property_of(shortCard, "contentHeight").toDouble());
 }
+
+TEST_CASE("The safe-area frame keeps the content off the unsafe edges and lets the page run under them",
+          "[ui][safearea]")
+{
+    // A phone with a cut-out and a home indicator reports margins such as these; the additional margins stand in for
+    // them.
+    auto h = QmlHarness::from_source(R"(
+import QtQuick
+import HeartBoomMaths
+Item {
+    objectName: "host"
+    SafeAreaFrame {
+        objectName: "frame"
+        anchors.fill: parent
+        SafeArea.additionalMargins.left: 8
+        SafeArea.additionalMargins.top: 59
+        SafeArea.additionalMargins.right: 12
+        SafeArea.additionalMargins.bottom: 34
+        content: Rectangle {
+            objectName: "probe"
+            anchors.fill: parent
+            color: "transparent"
+        }
+    }
+}
+)",
+                                     QSize(390, 844));
+    h.settle();
+    QQuickItem* probe = h.find_item("probe");
+    QQuickItem* page = h.find_item("windowBackground");
+    REQUIRE(probe != nullptr);
+    REQUIRE(page != nullptr);
+    const QPointF top_left = probe->mapToItem(h.root(), QPointF(0, 0));
+    CHECK_THAT(top_left.x(), WithinAbs(8.0, 0.5));
+    CHECK_THAT(top_left.y(), WithinAbs(59.0, 0.5));
+    CHECK_THAT(probe->width(), WithinAbs(390.0 - 8.0 - 12.0, 0.5));
+    CHECK_THAT(probe->height(), WithinAbs(844.0 - 59.0 - 34.0, 0.5));
+    // The yellow page itself still covers the whole window, edges included.
+    CHECK_THAT(page->width(), WithinAbs(390.0, 0.5));
+    CHECK_THAT(page->height(), WithinAbs(844.0, 0.5));
+    // Its dots are in step with the page inside: the grid starts at the same offset as the content.
+    CHECK_THAT(property_of(page, "originX").toDouble(), WithinAbs(8.0, 0.5));
+    CHECK_THAT(property_of(page, "originY").toDouble(), WithinAbs(59.0, 0.5));
+}
+
+TEST_CASE("Without a safe area the frame fills the window", "[ui][safearea]")
+{
+    auto h = QmlHarness::from_source(R"(
+import QtQuick
+import HeartBoomMaths
+Item {
+    objectName: "host"
+    SafeAreaFrame {
+        anchors.fill: parent
+        content: Rectangle {
+            objectName: "probe"
+            anchors.fill: parent
+            color: "transparent"
+        }
+    }
+}
+)",
+                                     QSize(820, 1180));
+    h.settle();
+    QQuickItem* probe = h.find_item("probe");
+    REQUIRE(probe != nullptr);
+    CHECK_THAT(probe->width(), WithinAbs(820.0, 0.5));
+    CHECK_THAT(probe->height(), WithinAbs(1180.0, 0.5));
+}

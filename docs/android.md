@@ -81,9 +81,9 @@ A permission is added only with the code that needs it and a decision in `DECISI
 - **The icon is a placeholder**: a pink heart on yellow, drawn in vector XML (`res/drawable/ic_launcher_foreground.xml`).
   The real icon is not designed yet; replace the two files and add a monochrome layer for themed icons then.
 - **System bars.** Android 15 and later draw the app edge to edge whatever the app asks for, and the theme gives the bars
-  dark icons over the yellow page. The screens do not yet lay out inside Qt's `SafeArea.margins`, so on a phone with a
-  camera cut-out or a status bar the top bar may sit under the system. Seeing it needs a device; the fix is in the QML (the
-  same one iOS needs), not in the Android code.
+  dark icons over the yellow page. `SafeAreaFrame.qml` lays the whole application out inside Qt's `SafeArea.margins`
+  (Qt 6.9 and later), with the yellow page running under the bars, so a camera cut-out or a status bar does not cover the
+  top bar. A desktop window has no margins and the frame changes nothing. Seeing it work needs a device.
 
 ## Lifecycle and the save
 

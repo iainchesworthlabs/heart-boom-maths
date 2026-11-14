@@ -28,10 +28,16 @@ endif()
 
 set(hbm_ios_assets "${CMAKE_CURRENT_SOURCE_DIR}/ios/Assets.xcassets")
 set(hbm_ios_entitlements "${CMAKE_CURRENT_SOURCE_DIR}/ios/heart-boom-maths.entitlements")
+set(hbm_ios_privacy_manifest "${CMAKE_CURRENT_SOURCE_DIR}/ios/PrivacyInfo.xcprivacy")
 
 # A source path ending in .xcassets is what tells the Xcode generator to compile the catalogue, not copy it.
 target_sources(heart_boom_maths_game PRIVATE "${hbm_ios_assets}")
 set_source_files_properties("${hbm_ios_assets}" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+
+# Apple's privacy manifest (no tracking, no collected data, the required-reason APIs the game and Qt call). It goes into the
+# root of the bundle, where Apple's upload check looks for it.
+target_sources(heart_boom_maths_game PRIVATE "${hbm_ios_privacy_manifest}")
+set_source_files_properties("${hbm_ios_privacy_manifest}" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 
 set_target_properties(heart_boom_maths_game PROPERTIES
     MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/ios/Info.plist.in"

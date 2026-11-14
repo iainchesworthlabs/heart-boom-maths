@@ -18,9 +18,14 @@ Window {
     title: qsTr("Heart Boom Maths")
     color: Theme.background
 
-    AppShell {
-        objectName: "appShell"
+    // Everything sits inside the device's safe area (SafeArea.margins, Qt 6.9 and later); the page runs under the edges.
+    SafeAreaFrame {
+        objectName: "safeAreaFrame"
         anchors.fill: parent
-        game: root.game
+        content: AppShell {
+            objectName: "appShell"
+            anchors.fill: parent
+            game: root.game
+        }
     }
 }

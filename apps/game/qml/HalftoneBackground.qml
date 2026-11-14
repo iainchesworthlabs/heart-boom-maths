@@ -9,6 +9,9 @@ Rectangle {
     // The distance between dots and their radius, in pixels. Larger windows use a coarser grid.
     property real gridSize: 12
     property real dotRadius: 1.6
+    // Where the grid starts, so a page behind another one can keep its dots in step with the page in front.
+    property real originX: 0
+    property real originY: 0
 
     color: Theme.background
 
@@ -25,8 +28,10 @@ Rectangle {
             ctx.fillStyle = Theme.halftone;
             ctx.beginPath();
             const step = root.gridSize;
-            for (let y = step / 2; y < height + step; y += step) {
-                for (let x = step / 2; x < width + step; x += step) {
+            const startX = ((root.originX % step) + step) % step - step / 2;
+            const startY = ((root.originY % step) + step) % step - step / 2;
+            for (let y = startY; y < height + step; y += step) {
+                for (let x = startX; x < width + step; x += step) {
                     ctx.moveTo(x + root.dotRadius, y);
                     ctx.arc(x, y, root.dotRadius, 0, 2 * Math.PI);
                 }
@@ -39,4 +44,6 @@ Rectangle {
 
     onGridSizeChanged: dots.requestPaint()
     onDotRadiusChanged: dots.requestPaint()
+    onOriginXChanged: dots.requestPaint()
+    onOriginYChanged: dots.requestPaint()
 }

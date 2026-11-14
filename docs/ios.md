@@ -117,6 +117,19 @@ are then removed.
   it says nothing about whether it may be distributed through the store. The release workflow can upload a build to
   **TestFlight** (internal testers, not the store) before the question is settled; releasing to the App Store waits for it.
 
+## Safe area and the privacy manifest
+
+- **Safe area.** Qt 6.9 and later draw a window edge to edge on iOS, so the cut-out of an iPhone, its rounded corners and the
+  home indicator are the application's to keep clear. `apps/game/qml/SafeAreaFrame.qml` (used by `Main.qml`) reads
+  `SafeArea.margins` and lays the application shell out inside them; the yellow halftone page runs under the unsafe edges,
+  with its dots in step with the page inside. Desktop windows report zero margins. The tests stand in for a phone's
+  margins with `SafeArea.additionalMargins`.
+- **Privacy manifest.** `apps/game/ios/PrivacyInfo.xcprivacy` goes into the root of the bundle. It says the game does not
+  track, has no tracking domains and collects no data type, and declares the required-reason APIs that the game and the
+  statically linked Qt call: UserDefaults (CA92.1), FileTimestamp (C617.1), SystemBootTime (35F9.1) and DiskSpace (E174.1).
+  `verify_game_app.sh` refuses a bundle without it, and one that says it tracks or collects. If Apple's upload check names
+  another required-reason API after a Qt update or a new feature, add its category and reason to the file.
+
 ## Sound
 
 The iPhone and iPad build has sound, from AVFoundation and not from Qt Multimedia, whose FFmpeg backend cannot link into

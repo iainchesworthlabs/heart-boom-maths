@@ -155,11 +155,22 @@ qt_network_symbols="$(nm -gU "$exe" 2>/dev/null | grep -c 'QNetwork' || true)"
 session_symbols="$(nm -u "$exe" 2>/dev/null | grep -c -E 'NSURLSession|NSURLConnection' || true)"
 echo "    note: network frameworks linked: ${network_frameworks:-none}; QNetwork symbols: $qt_network_symbols; NSURLSession or NSURLConnection references: $session_symbols"
 
-if [ -e "$app/PrivacyInfo.xcprivacy" ]; then
-  echo "    note: the bundle has a PrivacyInfo.xcprivacy"
-else
-  echo "    note: the bundle has no PrivacyInfo.xcprivacy (Apple may ask for the required-reason API declarations at upload)"
-fi
+# The privacy manifest is required: Apple's upload check refuses an app that calls a required-reason API without declaring it.
+manifest="$app/PrivacyInfo.xcprivacy"
+[ -e "$manifest" ] || fail "the bundle has no PrivacyInfo.xcprivacy (Apple's upload check needs the privacy manifest)"
+plutil -lint "$manifest" >/dev/null || fail "PrivacyInfo.xcprivacy is not a valid property list"
+tracking="$(plutil -extract NSPrivacyTracking raw -o - "$manifest" 2>/dev/null || true)"
+[ "$tracking" = "false" ] || fail "PrivacyInfo.xcprivacy says NSPrivacyTracking is '$tracking': the game tracks nothing"
+collected="$(plutil -extract NSPrivacyCollectedDataTypes json -o - "$manifest" 2>/dev/null | tr -d '[:space:]' || true)"
+[ "$collected" = "[]" ] || fail "PrivacyInfo.xcprivacy lists collected data types ($collected): the game collects nothing"
+api_types="$(plutil -extract NSPrivacyAccessedAPITypes json -o - "$manifest" 2>/dev/null | tr -d '[:space:]' || true)"
+for category in UserDefaults FileTimestamp SystemBootTime DiskSpace; do
+  case "$api_types" in
+    *"NSPrivacyAccessedAPICategory$category"*) ;;
+    *) fail "PrivacyInfo.xcprivacy does not declare NSPrivacyAccessedAPICategory$category" ;;
+  esac
+done
+echo "    privacy manifest: no tracking, no collected data, required-reason APIs declared"
 
 bundle_kb="$(du -sk "$app" | awk '{print $1}')"
 exe_kb="$(( $(stat -f %z "$exe") / 1024 ))"
