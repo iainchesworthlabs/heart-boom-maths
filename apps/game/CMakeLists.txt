@@ -184,13 +184,14 @@ if(HEART_BOOM_MATHS_BUILD_TESTS)
     add_test(NAME game.smoke COMMAND heart_boom_maths_game --smoke-test)
     set_tests_properties(game.smoke PROPERTIES LABELS ui TIMEOUT 60 ENVIRONMENT "${game_test_environment}")
 
-    # The version is answered before Qt starts, so the test needs no window system at all.
+    # The version is answered before Qt starts, so the test needs no window system at all. The pattern is not anchored,
+    # because Qt Multimedia may print a plugin-loading note to the same stream before main runs.
     add_test(NAME game.version COMMAND heart_boom_maths_game --version)
     set_tests_properties(game.version PROPERTIES
         LABELS integration
         TIMEOUT 30
         ENVIRONMENT "QT_QPA_PLATFORM=there-is-no-such-plugin"
-        PASS_REGULAR_EXPRESSION "^heart-boom-maths ${PROJECT_VERSION} \\(")
+        PASS_REGULAR_EXPRESSION "heart-boom-maths ${PROJECT_VERSION} \\(")
 
     # qmllint over the QML files; any warning fails (qml/.qmllint.ini).
     add_test(NAME game.qmllint
