@@ -19,8 +19,10 @@ The `game.*` tests exist only when a Qt kit was found. On Windows the Qt `bin` d
 ## Coverage
 
 `linux-coverage` builds with instrumentation. CI runs gcovr and `coverage_gate.py` against
-`tools/coverage-floors.json`. Floors are per component: `default` applies to any component not
-listed. The gate prints a hint when a component is above its floor; raise the floor in the same
+`tools/coverage-floors.json`. The target for every component is 90% statement and 80% branch, set once
+as `default` with no per-component overrides. A component that is temporarily below the target is
+listed with its measured value and raised in the same pull request as the tests that lift it, until it
+reaches the default. The gate prints a hint when a component is above its floor; raise the floor in the same
 pull request so coverage only moves up.
 
 A line that cannot be reached by a test, such as a failing system call, is excluded with a
