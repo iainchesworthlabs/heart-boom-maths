@@ -54,8 +54,9 @@ Item {
                                      SMALL);
     QObject* host = h.root();
     CHECK(property_of(host, "fontsReady").toBool());
-    CHECK(property_of(host, "display").toString() == "Bangers");
-    CHECK(property_of(host, "body").toString() == "Lilita One");
+    // The crossed seven is the default: the fonts are the modified copies, under new names.
+    CHECK(property_of(host, "display").toString() == "HBM Display");
+    CHECK(property_of(host, "body").toString() == "HBM Body");
     CHECK(property_of(host, "background").toString().toLower() == "#ffe14d");
     CHECK(property_of(host, "ink").toString().toLower() == "#111111");
     CHECK(property_of(host, "compact").toString() == "compact");
@@ -71,7 +72,7 @@ Item {
     CHECK(property_of(host, "two").toString() == "TWO");
 }
 
-TEST_CASE("The crossed-seven switch swaps in the two renamed numeral fonts", "[ui][theme]")
+TEST_CASE("The crossed seven is on, and turning it off gives back the original fonts", "[ui][theme]")
 {
     auto h = QmlHarness::from_source(R"(
 import QtQuick
@@ -82,15 +83,12 @@ Item {
     property bool fontsReady: Theme.fontsReady
     property string display: Theme.displayFont
     property string body: Theme.bodyFont
-    Component.onCompleted: {
-        crossedSevenAtStart = Theme.crossedSeven
-        Theme.crossedSeven = true
-    }
+    Component.onCompleted: crossedSevenAtStart = Theme.crossedSeven
 }
 )",
                                      SMALL);
     QObject* host = h.root();
-    CHECK_FALSE(property_of(host, "crossedSevenAtStart").toBool());
+    CHECK(property_of(host, "crossedSevenAtStart").toBool());
     CHECK(property_of(host, "fontsReady").toBool());
     // A modified font takes a new name: Lilita One reserves its own.
     CHECK(property_of(host, "display").toString() == "HBM Display");

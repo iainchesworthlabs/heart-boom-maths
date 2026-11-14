@@ -208,7 +208,7 @@ FocusScope {
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
                             textFormat: Text.StyledText
-                            text: qsTr("<font color=\"%1\">Bangers</font> by Vernon Adams<br>© 2010 The Bangers Project Authors<br>SIL Open Font License 1.1").arg(Theme.red)
+                            text: qsTr("<font color=\"%1\">HBM Display</font>, from Bangers<br>© 2010 The Bangers Project Authors<br>SIL Open Font License 1.1").arg(Theme.red)
                             color: Theme.ink
                             font.family: Theme.bodyFont
                             font.pixelSize: 16 * frame.unit
@@ -217,7 +217,7 @@ FocusScope {
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
                             textFormat: Text.StyledText
-                            text: qsTr("<font color=\"%1\">Lilita One</font> by Juan Montoreano<br>© 2011 Juan Montoreano<br>SIL Open Font License 1.1").arg(Theme.red)
+                            text: qsTr("<font color=\"%1\">HBM Body</font>, from Lilita One<br>© 2011 Juan Montoreano<br>SIL Open Font License 1.1").arg(Theme.red)
                             color: Theme.ink
                             font.family: Theme.bodyFont
                             font.pixelSize: 16 * frame.unit
