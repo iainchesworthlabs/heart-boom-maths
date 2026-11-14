@@ -14,7 +14,7 @@ the written result of the iOS part of the M2 spike and the iOS half of M5 ([Mile
 `ios-game-release` is a cross-build, so it needs two Qt kits of the pinned version (the `qt` key of
 `.github/toolchain-versions.json`):
 
-- the **iOS kit**, with the `qtmultimedia` module, named by `HEART_BOOM_MATHS_QT_IOS_ROOT`. Its `qt.toolchain.cmake` is the
+- the **iOS kit**, without the `qtmultimedia` module (sound comes from AVFoundation, [Audio](audio.md)), named by `HEART_BOOM_MATHS_QT_IOS_ROOT`. Its `qt.toolchain.cmake` is the
   preset's toolchain file;
 - the **macOS desktop kit**, named by `ICL_QT_ROOT`, which becomes `QT_HOST_PATH`: the tools that run on the Mac while
   building (`moc`, `rcc`, `qmlcachegen`, `qmlimportscanner`).
@@ -58,8 +58,8 @@ are then removed.
 
 ## What the spike found
 
-- **Qt for iOS is static only.** There are no dynamic Qt libraries on iOS. The game, Qt, the QML module, the Qt Multimedia
-  backend and the plugins end up in one executable. `qt_add_executable` makes the target an iOS bundle, and the static
+- **Qt for iOS is static only.** There are no dynamic Qt libraries on iOS. The game, Qt, the QML module and the plugins end
+  up in one executable. `qt_add_executable` makes the target an iOS bundle, and the static
   QML and platform plugins are imported by Qt's own finalisation (`qmlimportscanner`, from the host kit).
 - **The game is GPL-3.0-or-later**, and Qt is available under the GPL, the LGPL and a commercial licence. The About screen
   already carries the Qt notice and the source address.
@@ -69,6 +69,17 @@ are then removed.
   written advice on the licence position (to be taken before any upload), and, if the answer is a commercial Qt licence,
   the licence itself and the way it is applied to the iOS build alone. The CI compile of this page proves the game builds;
   it says nothing about whether it may be distributed through the store. Nothing in the repository uploads the game.
+
+## Sound
+
+The iPhone and iPad build has sound, from AVFoundation and not from Qt Multimedia, whose FFmpeg backend cannot link into
+the static kit. `src/platform/ios/avf_audio_backend.mm` is a thin shim over `AVAudioSession` and `AVAudioPlayer`, and the
+rules (what loads, when the session is activated, what an interruption stops and what comes back) are plain C++ in
+`ClipAudioBackend`, tested on every desktop. The category is Ambient: the game follows the silent switch, keeps the player's
+own music playing and records nothing, so Info.plist still holds no usage text. [Audio](audio.md) has the detail.
+
+The sound files are Qt resources inside the executable. `verify_game_app.sh` checks that the executable links
+AVFoundation and that the name of every file of `apps/game/audio` is in its resource table.
 
 ## Game Center
 
@@ -121,7 +132,10 @@ fails at Apple's end and is logged and swallowed.
 | `NullScoreService` elsewhere, the Settings row hidden | Every desktop, in CI | Existing controller and UI tests |
 | The icon equals its script | Every desktop, in CI | `game.icon_placeholder` |
 | The game compiles and links for a device against static Qt, and the bundle has the right keys, entitlement file, GameKit and none of the forbidden frameworks | A `macos-26` runner | `ios-game-build.yml` |
-| The Objective-C++ shim | A `macos-26` runner (compile only) | `ios-game-build.yml`. Not run by any test |
+| The sound rules: the clips loaded at start-up, volumes, looping, the session activated by the first sound, interruption and reset, a clip that fails to load | Every desktop, in CI | `game.*` tests in `tests/test_clip_audio.cpp`, over a fake host and fake players |
+| The sound files are in the executable, and AVFoundation is linked | A `macos-26` runner | `verify_game_app.sh` |
+| The Objective-C++ shims (GameKit, AVFoundation) | A `macos-26` runner (compile only) | `ios-game-build.yml`. Not run by any test |
+| The game makes sound on a device, goes quiet with the silent switch, and recovers after a phone call, Siri and a Screen Time lock | **Not done**: needs a device | Owner |
 | The game starts on a device, plays, and pauses and saves when it leaves the foreground | **Not done**: needs a device | Owner |
 | Game Center sign-in, a real submission, a child account, Screen Time | **Not done**: needs a device and the leaderboard | Owner (below) |
 
@@ -149,6 +163,7 @@ fails at Apple's end and is logged and swallowed.
 
 The Mac side has not been run by the author of this page, so these are where a first red run would most likely be:
 Qt's own handling of the launch screen when the target has its own `Info.plist.in` (the property list gives
-`UILaunchScreen` itself); the static plugin import of `qmlimportscanner` and the Qt Multimedia plugin for iOS; and the
-`modules: qtmultimedia` install for the iOS kit by `aqtinstall`. The workflow prints the kits it found and the errors of the
+`UILaunchScreen` itself); the static plugin import of `qmlimportscanner`; the Objective-C++ of the two shims, which no compiler has seen against the
+real SDK yet (`avf_audio_backend.mm` was only checked against hand-written stubs of the AVFoundation types); and the
+name search of `verify_game_app.sh` for the sound files in the executable. The workflow prints the kits it found and the errors of the
 build first, to make each of them quick to read.
