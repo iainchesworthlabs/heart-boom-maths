@@ -162,6 +162,8 @@ FrameStatistics summarise_frames(std::span<const PhaseFrame> frames, double refr
     return stats;
 }
 
+ProfileRun::~ProfileRun() = default;
+
 ProfileRun::ProfileRun(GameController& controller, QQuickWindow& window, RenderProfiler& render, RunOptions options,
                        QObject* parent)
     : QObject(parent), m_Controller(controller), m_Window(window), m_Render(render), m_Options(std::move(options))

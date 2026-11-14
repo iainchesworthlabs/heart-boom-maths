@@ -93,6 +93,9 @@ class ProfileRun : public QObject
 public:
     ProfileRun(GameController& controller, QQuickWindow& window, RenderProfiler& render, RunOptions options,
                QObject* parent = nullptr);
+    // Out of line, where Phase is a complete type: the vector of phases cannot be destroyed before that (GCC and Clang
+    // refuse an incomplete element type in an inline destructor, which moc instantiates).
+    ~ProfileRun() override;
 
     void start();
 
