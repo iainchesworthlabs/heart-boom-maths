@@ -716,7 +716,9 @@ Item {
                 return child->mapRectToScene(QRectF(0, 0, child->width(), child->height()));
             }
         }
-        FAIL("no part " << name);
+        // FAIL_CHECK, not FAIL: MSVC at /O1 sees that FAIL never returns and reports the return as unreachable (C4702,
+        // an error under /WX). FAIL_CHECK records the failure and goes on.
+        FAIL_CHECK("no part " << name);
         return QRectF();
     };
     // About 14 between the end of the name and the tag, and the score ends 12 inside the row.
