@@ -314,7 +314,10 @@ LevelInfo make_level_info(const Tuning& tuning, int level)
 // Lists every question of one kind, in a fixed order, until `cap` questions are in `out`.
 void walk_terms(const LevelInfo& info, int depth, int running, Question& q, std::size_t cap, std::vector<Question>& out)
 {
-    if (depth == q.term_count)
+    // The clamp tells the compiler the recursion never indexes past the four terms, which it cannot prove from
+    // `term_count` alone once it inlines the recursion.
+    const int count = std::min(q.term_count, static_cast<int>(q.terms.size()));
+    if (depth >= count)
     {
         q.answer = running;
         out.push_back(q);

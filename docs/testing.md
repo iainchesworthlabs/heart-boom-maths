@@ -52,10 +52,10 @@ is a bug in the change, not a file to regenerate. The `[replay]` test failure sa
 ## Coverage
 
 `linux-coverage` builds with instrumentation. CI runs gcovr and `coverage_gate.py` against
-`tools/coverage-floors.json`. The target for every component is 90% statement and 80% branch, set once
-as `default` with no per-component overrides. A component that is temporarily below the target is
-listed with its measured value and raised in the same pull request as the tests that lift it, until it
-reaches the default. The gate prints a hint when a component is above its floor; raise the floor in the same
+`tools/coverage-floors.json`. The target for every component is 90% statement and 80% branch. The gate needs
+each component listed by its path, so `libs/core` and `apps/game` appear with the same 90 and 80 as `default`. A
+component that is temporarily below the target is listed with its measured value and raised in the same pull request as
+the tests that lift it, until it reaches the target. The gate prints a hint when a component is above its floor; raise the floor in the same
 pull request so coverage only moves up.
 
 A line that cannot be reached by a test, such as a failing system call, is excluded with a
