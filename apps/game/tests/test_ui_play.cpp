@@ -3,11 +3,13 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
 
 #include <QByteArray>
 #include <QQuickItem>
 #include <QTest>
 #include <memory>
+#include <vector>
 
 using namespace hbm_test;
 using namespace heart_boom_maths::game;
@@ -174,6 +176,47 @@ TEST_CASE("The play screen shows the question, four tiles and the stats in every
         CHECK(bottom_right.x() <= arrangement.size.width());
         CHECK(bottom_right.y() <= arrangement.size.height());
     }
+}
+
+TEST_CASE("The digits of the question and its slot share one centre line at every size", "[ui][play][question]")
+{
+    struct Arrangement
+    {
+        const char* name;
+        QSize size;
+    };
+    const Arrangement arrangement = GENERATE(Arrangement{"phone", PHONE}, Arrangement{"tablet", TABLET},
+                                             Arrangement{"desktop", DESKTOP});
+    CAPTURE(arrangement.name);
+    Shell s(arrangement.size);
+    QQuickItem* card = s.h.find_item("questionCard");
+    QQuickItem* slot = s.h.find_item("questionSlot");
+    REQUIRE(card != nullptr);
+    REQUIRE(slot != nullptr);
+    const double slot_centre = slot->mapToScene(QPointF(0, slot->height() / 2)).y();
+    // The terms are delegates of a Repeater, so they hang from the card's visual tree.
+    std::vector<QQuickItem*> pending{card};
+    int terms = 0;
+    while (!pending.empty())
+    {
+        QQuickItem* item = pending.back();
+        pending.pop_back();
+        for (QQuickItem* child : item->childItems())
+        {
+            pending.push_back(child);
+        }
+        if (item->objectName() != QLatin1String("questionTerm") || !item->isVisible())
+        {
+            continue;
+        }
+        ++terms;
+        const double centre = item->mapToScene(QPointF(0, item->height() / 2)).y();
+        CHECK_THAT(centre, Catch::Matchers::WithinAbs(slot_centre, 1.0));
+    }
+    CHECK(terms >= 3);
+    // The card itself is centred on that line too.
+    const double card_centre = card->mapToScene(QPointF(0, card->height() / 2)).y();
+    CHECK_THAT(slot_centre, Catch::Matchers::WithinAbs(card_centre, 1.5));
 }
 
 TEST_CASE("The hint button is disabled when the wallet cannot pay and enabled when it can", "[ui][play][hint]")

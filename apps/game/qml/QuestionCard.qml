@@ -62,8 +62,23 @@ ComicCard {
                 readonly property real available: root.width - 2 * (root.contentPadding + root.borderWidth)
                 readonly property real fitted: line.implicitWidth > available && line.implicitWidth > 0 ? available / line.implicitWidth : 1
 
+                // Every part of a line is as tall as the tallest of them (the slot, or the digits when the line has no
+                // slot), and its content sits in the middle of that, as in the board's centred flex row. Without it the
+                // digits would hang from the top of the line, well above the middle of the slot.
+                readonly property real digitHeight: probe.implicitHeight
+                readonly property real partHeight: modelData.indexOf("?") >= 0 ? Math.max(root.slotHeight, digitHeight) : digitHeight
+
                 width: line.implicitWidth * fitted
                 height: line.implicitHeight * fitted
+
+                Text {
+                    id: probe
+
+                    visible: false
+                    text: "0"
+                    font.family: Theme.bodyFont
+                    font.pixelSize: root.activeFontSize
+                }
 
                 Row {
                     id: line
@@ -82,11 +97,12 @@ ComicCard {
                             readonly property bool isSlot: modelData === "?"
 
                             width: isSlot ? Math.max(root.slotWidth, root.slotValue !== "" ? filledText.implicitWidth + 24 : 0) : word.implicitWidth
-                            height: isSlot ? root.slotHeight : word.implicitHeight
+                            height: rowBox.partHeight
 
                             Text {
                                 id: word
 
+                                objectName: "questionTerm"
                                 visible: !part.isSlot
                                 anchors.verticalCenter: parent.verticalCenter
                                 text: Theme.operatorGlyph(part.modelData)
@@ -97,7 +113,9 @@ ComicCard {
 
                             DashedBox {
                                 objectName: "questionSlot"
-                                anchors.fill: parent
+                                anchors.centerIn: parent
+                                width: parent.width
+                                height: root.slotHeight
                                 visible: part.isSlot && root.slotValue === ""
                                 lineColor: Theme.red
                                 lineWidth: root.slotBorder
@@ -115,7 +133,9 @@ ComicCard {
                             // The answer has landed: a solid green slot holding the number.
                             Rectangle {
                                 objectName: "questionSlotFilled"
-                                anchors.fill: parent
+                                anchors.centerIn: parent
+                                width: parent.width
+                                height: root.slotHeight
                                 visible: part.isSlot && root.slotValue !== ""
                                 radius: root.slotRadius
                                 color: Theme.green
