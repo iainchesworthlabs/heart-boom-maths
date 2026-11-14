@@ -116,7 +116,6 @@ set(HEART_BOOM_MATHS_QML_FILES
     qml/PauseOverlay.qml
     qml/Placeholder.qml
     qml/PlayFuse.qml
-    qml/PlayGap.qml
     qml/PlayHeart.qml
     qml/PlayHint.qml
     qml/PlayMetrics.qml

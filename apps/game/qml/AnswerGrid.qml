@@ -31,11 +31,7 @@ GridLayout {
             objectName: "tile" + index
             Layout.fillWidth: true
             Layout.preferredWidth: 1
-            // A tile may shrink from its height to `tileMinHeight` (a layout only shrinks what fills) but never grow.
-            Layout.fillHeight: true
             Layout.preferredHeight: root.metrics.tileHeight
-            Layout.minimumHeight: root.metrics.tileMinHeight
-            Layout.maximumHeight: root.metrics.tileHeight
             value: root.values.length > index ? String(root.values[index]) : ""
             look: root.looks.length > index ? root.looks[index] : "normal"
             interactive: root.interactive

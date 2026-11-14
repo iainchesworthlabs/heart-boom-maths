@@ -141,14 +141,10 @@ Item {
             anchors.leftMargin: sizes.paddingSide
             anchors.rightMargin: sizes.paddingSide
             anchors.bottomMargin: Math.min(sizes.paddingBottom, root.height * 0.05)
-            // The alert adds a banner, and on some windows (a tablet in portrait, a short phone) the column then does not
-            // fit. Each gap is a spacer that can shrink to `gapMin`, and so can the question card and the tiles; every
-            // other part keeps its height. A window with room for it keeps the board's gaps.
-            spacing: 0
+            spacing: sizes.gap
 
             PlayTopBar {
                 Layout.fillWidth: true
-                Layout.minimumHeight: implicitHeight
                 metrics: sizes
                 level: root.game.level
                 endless: root.game.endless
@@ -157,13 +153,8 @@ Item {
                 onPauseClicked: root.game.pause()
             }
 
-            PlayGap {
-                metrics: sizes
-            }
-
             RowLayout {
                 Layout.fillWidth: true
-                Layout.minimumHeight: implicitHeight
                 spacing: sizes.rowGap
 
                 PlayHeart {
@@ -186,14 +177,9 @@ Item {
                 }
             }
 
-            PlayGap {
-                metrics: sizes
-            }
-
             PlayFuse {
                 Layout.fillWidth: true
                 Layout.preferredHeight: sizes.fuseHeight + (root.gainText !== "" ? sizes.gainReserve : 0)
-                Layout.minimumHeight: Layout.preferredHeight
                 metrics: sizes
                 fraction: root.fuseFraction
                 alertFraction: root.fuseAlertFraction
@@ -203,14 +189,9 @@ Item {
                 gainText: root.gainText
             }
 
-            PlayGap {
-                metrics: sizes
-            }
-
             FeedbackTag {
                 objectName: "alertBanner"
                 Layout.fillWidth: true
-                Layout.minimumHeight: implicitHeight
                 visible: root.alertShown
                 tone: "alert"
                 text: root.hurryText
@@ -219,19 +200,10 @@ Item {
                 shadowOffset: sizes.bannerShadow
             }
 
-            PlayGap {
-                metrics: sizes
-                visible: root.alertShown
-            }
-
             // The question, with the hint button or the line that follows an answer under it, centred in what is left.
             Item {
-                id: middle
-
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.preferredHeight: card.maximumHeight + sizes.messageGap + sizes.hintHeight
-                Layout.minimumHeight: card.minimumHeight + sizes.messageGap + sizes.hintHeight
 
                 Column {
                     anchors.centerIn: parent
@@ -239,15 +211,9 @@ Item {
                     spacing: sizes.messageGap
 
                     QuestionCard {
-                        id: card
-
                         objectName: "questionCard"
-                        // The room it would like, and the least it can do with; it takes what the middle has between them.
-                        readonly property real maximumHeight: contentHeight + 2 * (multiLine ? sizes.cardPaddingYMulti : sizes.cardPaddingY) + 2 * sizes.cardBorder
-                        readonly property real minimumHeight: Math.min(maximumHeight, contentHeight + 2 * sizes.cardPaddingMin + 2 * sizes.cardBorder)
-
                         width: parent.width
-                        height: Math.max(minimumHeight, Math.min(maximumHeight, middle.height - sizes.messageGap - sizes.hintHeight))
+                        height: contentHeight + 2 * (multiLine ? sizes.cardPaddingYMulti : sizes.cardPaddingY) + 2 * sizes.cardBorder
                         parts: root.shownParts
                         slotValue: root.slotValue
                         fontSize: sizes.cardFont
@@ -303,17 +269,9 @@ Item {
                 }
             }
 
-            PlayGap {
-                metrics: sizes
-            }
-
             AnswerGrid {
                 objectName: "answerGrid"
                 Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.preferredHeight: 2 * sizes.tileHeight + sizes.tileGap
-                Layout.minimumHeight: 2 * sizes.tileMinHeight + sizes.tileGap
-                Layout.maximumHeight: 2 * sizes.tileHeight + sizes.tileGap
                 metrics: sizes
                 values: root.shownTiles
                 looks: root.tileLooks
