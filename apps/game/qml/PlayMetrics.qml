@@ -65,6 +65,8 @@ QtObject {
     readonly property real fuseZoneBorder: pick(3, 4, 4)
     readonly property real stripePeriod: pick(12, 16, 14)
     readonly property real starSize: pick(18, 28, 24)
+    // The room kept under the fuse while the green "+N s" tag hangs from it, so the tag clears what is below.
+    readonly property real gainReserve: pick(30, 28, 34)
 
     // The question card.
     readonly property real cardBorder: pick(5, 6, 6)
@@ -78,6 +80,9 @@ QtObject {
     readonly property real slotRadius: pick(14, 22, 24)
     readonly property real partSpacing: pick(10, 16, 20)
     readonly property real cardPaddingY: pick(26, 40, 0)
+    // A sentence on two lines (three or four terms) has a little less room above and below and a wider gap between parts.
+    readonly property real cardPaddingYMulti: pick(24, 38, 0)
+    readonly property real partSpacingMulti: pick(12, 18, 22)
 
     // The hint button and the messages.
     readonly property real hintHeight: pick(44, 60, 52)

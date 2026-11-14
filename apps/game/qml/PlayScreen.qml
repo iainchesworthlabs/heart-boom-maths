@@ -179,7 +179,7 @@ Item {
 
             PlayFuse {
                 Layout.fillWidth: true
-                Layout.preferredHeight: sizes.fuseHeight
+                Layout.preferredHeight: sizes.fuseHeight + (root.gainText !== "" ? sizes.gainReserve : 0)
                 metrics: sizes
                 fraction: root.fuseFraction
                 alertFraction: root.fuseAlertFraction
@@ -213,7 +213,7 @@ Item {
                     QuestionCard {
                         objectName: "questionCard"
                         width: parent.width
-                        height: contentHeight + 2 * sizes.cardPaddingY + 2 * sizes.cardBorder
+                        height: contentHeight + 2 * (multiLine ? sizes.cardPaddingYMulti : sizes.cardPaddingY) + 2 * sizes.cardBorder
                         parts: root.shownParts
                         slotValue: root.slotValue
                         fontSize: sizes.cardFont
@@ -222,7 +222,7 @@ Item {
                         slotHeight: sizes.slotHeight
                         slotBorder: sizes.slotBorder
                         slotRadius: sizes.slotRadius
-                        partSpacing: sizes.partSpacing
+                        partSpacing: multiLine ? sizes.partSpacingMulti : sizes.partSpacing
                         borderWidth: sizes.cardBorder
                         radius: sizes.cardRadius
                         shadowOffset: sizes.cardShadow
@@ -332,7 +332,7 @@ Item {
 
                         PlayFuse {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: sizes.fuseHeight
+                            Layout.preferredHeight: sizes.fuseHeight + (root.gainText !== "" ? sizes.gainReserve : 0)
                             metrics: sizes
                             fraction: root.fuseFraction
                             alertFraction: root.fuseAlertFraction
@@ -398,7 +398,7 @@ Item {
                         slotHeight: sizes.slotHeight
                         slotBorder: sizes.slotBorder
                         slotRadius: sizes.slotRadius
-                        partSpacing: sizes.partSpacing
+                        partSpacing: multiLine ? sizes.partSpacingMulti : sizes.partSpacing
                         borderWidth: sizes.cardBorder
                         radius: sizes.cardRadius
                         shadowOffset: sizes.cardShadow
