@@ -89,6 +89,7 @@ std::string random_jsonish(Rng& rng, std::size_t length)
                                                   "music",
                                                   "won_once",
                                                   "game_center",
+                                                  "haptics",
                                                   " ",
                                                   "\n",
                                                   "\xC3",
