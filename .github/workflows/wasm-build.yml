@@ -201,7 +201,7 @@ jobs:
           echo "HEART_BOOM_MATHS_QT_WASM_ROOT=$wasm_root" >> "$GITHUB_ENV"
           echo "ICL_QT_ROOT=$host_root" >> "$GITHUB_ENV"
           # Qt's own record of the Emscripten release it was built with, against the one just installed.
-          wanted="$(sed -n 's/^#define QT_EMCC_VERSION "\(.*\)"/\1/p' "$wasm_root/include/QtCore/qconfig.h" | tr -d '')"
+          wanted="$(sed -n 's/^#define QT_EMCC_VERSION "\(.*\)"/\1/p' "$wasm_root/include/QtCore/qconfig.h" | tr -d '\r')"
           have="$(emcc --version | head -n 1)"
           cmake --version | head -n 1
           echo "Qt wants Emscripten $wanted; installed: $have"
