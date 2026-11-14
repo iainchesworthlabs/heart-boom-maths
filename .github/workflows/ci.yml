@@ -18,6 +18,12 @@ on:
   # Runs every leg on the chosen branch (`gh workflow run ci.yml --ref <branch>`), so a change to
   # threading, the standard library or platform code can be tried on macOS and Windows before it is queued.
   workflow_dispatch:
+    inputs:
+      runner_mode:
+        description: Where the jobs run. "variable" follows the CI_RUNNER_MODE repository variable (docs/ci.md, Runners).
+        type: choice
+        options: [variable, hosted, self-hosted, overflow]
+        default: variable
 
 permissions: {}
 
@@ -28,21 +34,60 @@ concurrency:
 jobs:
   policy:
     name: Policy
+    needs: plan
     permissions:
       contents: read
       pull-requests: read
     uses: iainchesworthlabs/icl-common-infra/.github/workflows/policy.yml@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+    with:
+      runner: ${{ needs.plan.outputs.linux_runner }}
 
   plan:
     name: Plan
-    runs-on: ubuntu-24.04
+    # The one job that cannot read the routing from another job, so it spells the same mapping as the
+    # "Choose runners" step below out in an expression. Keep the two in step. A pull request from a
+    # fork always stays on the hosted image: its code must not reach a runner inside the owner's
+    # network (docs/ci.md, Runners).
+    runs-on: >-
+      ${{ fromJSON(
+        (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && '["ubuntu-24.04"]'
+        || ((github.event_name == 'workflow_dispatch' && inputs.runner_mode != 'variable' && inputs.runner_mode) || vars.CI_RUNNER_MODE) == 'overflow' && '["self-hosted","Linux","X64"]'
+        || ((github.event_name == 'workflow_dispatch' && inputs.runner_mode != 'variable' && inputs.runner_mode) || vars.CI_RUNNER_MODE) == 'self-hosted' && '["self-hosted","Linux","X64","shared"]'
+        || '["ubuntu-24.04"]') }}
     timeout-minutes: 5
     permissions:
       contents: read
     outputs:
       build: ${{ steps.plan.outputs.build }}
       docs_only: ${{ steps.plan.outputs.docs_only }}
+      linux_runner: ${{ steps.runners.outputs.linux }}
+      windows_runner: ${{ steps.runners.outputs.windows }}
     steps:
+      - name: Choose runners
+        id: runners
+        env:
+          EVENT: ${{ github.event_name }}
+          IS_FORK: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+          DISPATCH_MODE: ${{ inputs.runner_mode }}
+          VARIABLE_MODE: ${{ vars.CI_RUNNER_MODE }}
+        run: |
+          set -euo pipefail
+          mode="$VARIABLE_MODE"
+          if [ "$EVENT" = "workflow_dispatch" ] && [ "$DISPATCH_MODE" != "variable" ]; then mode="$DISPATCH_MODE"; fi
+          if [ "$IS_FORK" = "true" ]; then mode=hosted; fi
+          # "overflow" sends the exact label set the AWS spot dispatcher matches, so a queued job
+          # launches a spot instance when the on-premises fleet is busy. Adding "shared" keeps the
+          # job on the on-premises fleet, because the dispatcher ignores a job that carries it.
+          case "$mode" in
+            overflow)    linux='["self-hosted","Linux","X64"]';          windows='["self-hosted","Windows","X64"]' ;;
+            self-hosted) linux='["self-hosted","Linux","X64","shared"]'; windows='["self-hosted","Windows","X64","shared"]' ;;
+            hosted|"")   linux='["ubuntu-26.04"]';                       windows='["windows-2025"]' ;;
+            *)
+              echo "::warning::Unknown CI_RUNNER_MODE '$mode'; using the hosted runners."
+              linux='["ubuntu-26.04"]'; windows='["windows-2025"]' ;;
+          esac
+          echo "Runner mode: ${mode:-hosted}" >> "$GITHUB_STEP_SUMMARY"
+          { echo "linux=$linux"; echo "windows=$windows"; } >> "$GITHUB_OUTPUT"
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -75,8 +120,8 @@ jobs:
     with:
       legs: >-
         [
-          {"name": "linux-gcc-release", "runner": ["ubuntu-26.04"], "compiler": "gcc", "preset": "linux-release", "qt": true},
-          {"name": "linux-clang-asan-ubsan", "runner": ["ubuntu-26.04"], "compiler": "clang", "preset": "linux-asan-ubsan", "qt": true}
+          {"name": "linux-gcc-release", "runner": ${{ needs.plan.outputs.linux_runner }}, "compiler": "gcc", "preset": "linux-release", "qt": true},
+          {"name": "linux-clang-asan-ubsan", "runner": ${{ needs.plan.outputs.linux_runner }}, "compiler": "clang", "preset": "linux-asan-ubsan", "qt": true}
         ]
 
   build-full:
@@ -89,19 +134,19 @@ jobs:
     with:
       legs: >-
         [
-          {"name": "linux-gcc-debug", "runner": ["ubuntu-26.04"], "compiler": "gcc", "preset": "linux-debug", "qt": true, "vcpkg_features": "profiling"},
-          {"name": "linux-clang-tsan", "runner": ["ubuntu-26.04"], "compiler": "clang", "preset": "linux-tsan", "qt": true},
+          {"name": "linux-gcc-debug", "runner": ${{ needs.plan.outputs.linux_runner }}, "compiler": "gcc", "preset": "linux-debug", "qt": true, "vcpkg_features": "profiling"},
+          {"name": "linux-clang-tsan", "runner": ${{ needs.plan.outputs.linux_runner }}, "compiler": "clang", "preset": "linux-tsan", "qt": true},
           {"name": "macos-release", "runner": ["macos-26"], "preset": "macos-release", "qt": true},
           {"name": "macos-xcode27-release", "runner": ["xcode-27"], "preset": "macos-release", "qt": true, "experimental": true},
-          {"name": "windows-msvc-release", "runner": ["windows-2025"], "preset": "windows-msvc-release", "qt": true, "config": "Release", "msvc": true},
-          {"name": "windows-msvc-asan", "runner": ["windows-2025"], "preset": "windows-msvc-asan", "qt": true, "config": "Debug", "msvc": true}
+          {"name": "windows-msvc-release", "runner": ${{ needs.plan.outputs.windows_runner }}, "preset": "windows-msvc-release", "qt": true, "config": "Release", "msvc": true},
+          {"name": "windows-msvc-asan", "runner": ${{ needs.plan.outputs.windows_runner }}, "preset": "windows-msvc-asan", "qt": true, "config": "Debug", "msvc": true}
         ]
 
   coverage:
     name: Coverage
     needs: plan
     if: needs.plan.outputs.build == 'true' && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
-    runs-on: ubuntu-26.04
+    runs-on: ${{ fromJSON(needs.plan.outputs.linux_runner || '["ubuntu-26.04"]') }}
     timeout-minutes: 45
     permissions:
       contents: read
@@ -153,8 +198,9 @@ jobs:
 
   dependency-scan:
     name: Scan dependency diff
+    needs: plan
     if: github.event_name != 'push'
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(needs.plan.outputs.linux_runner || '["ubuntu-24.04"]') }}
     timeout-minutes: 10
     permissions:
       contents: read
@@ -172,6 +218,7 @@ jobs:
     name: CI Status
     if: always()
     needs: [policy, plan, build-fast, build-full, coverage, zizmor, dependency-scan]
+    # Always hosted: this is the job that must report when a self-hosted fleet is down.
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:

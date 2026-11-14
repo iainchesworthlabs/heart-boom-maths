@@ -12,6 +12,12 @@ nav:
   - Home: index.md
   - Building: building.md
   - Architecture: architecture.md
+  - Game:
+      - Specification: SPEC.md
+      - Game architecture: game-architecture.md
+      - Decisions: DECISIONS.md
+      - Milestones: MILESTONES.md
+      - Compliance: COMPLIANCE.md
   - Testing: testing.md
   - Continuous integration: ci.md
   - Releasing: releasing.md

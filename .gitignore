@@ -15,3 +15,6 @@ __pycache__/
 .venv/
 .cache/
 compile_commands.json
+
+# Design spec, boards and handover notes: local only.
+/private/

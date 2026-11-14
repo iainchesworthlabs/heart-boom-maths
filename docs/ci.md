@@ -18,6 +18,39 @@ commit SHA. Dependabot proposes the SHA bump; the pull request also needs
 The Plan job reads `.github/ci/plan.json`. A change to documentation only builds nothing. A path
 the plan does not recognise builds everything.
 
+## Runners
+
+Where the jobs run is one setting, the `CI_RUNNER_MODE` repository variable. It is read fresh on every run.
+
+| Mode | Linux and Windows jobs run on | Labels |
+|---|---|---|
+| unset or `hosted` | GitHub-hosted images (the default) | `ubuntu-26.04`, `windows-2025` |
+| `self-hosted` | The organisation's on-premises fleet (runner group *Labs CI Runners*) | `self-hosted`, `Linux` or `Windows`, `X64`, `shared` |
+| `overflow` | The same fleet, plus AWS spot instances that start when the fleet is busy (runner group *ci-aws-overflow*) | `self-hosted`, `Linux` or `Windows`, `X64` |
+
+macOS legs, the zizmor job and **CI Status** always stay hosted. CI Status must report even when a fleet is down.
+
+```bash
+gh variable set CI_RUNNER_MODE --body overflow     # on: self-hosted or overflow
+gh variable delete CI_RUNNER_MODE                  # off: back to hosted
+gh workflow run ci.yml --ref <branch> -f runner_mode=overflow   # one run only, the variable untouched
+```
+
+- **Pull requests from forks always run hosted**, whatever the variable says. Fork code must not reach a runner inside
+  the owner's network, and this repository is public.
+- **The difference between `self-hosted` and `overflow` is the `shared` label.** The AWS dispatcher launches a spot
+  instance only for a job whose labels are exactly `self-hosted, Linux, X64` (or the Windows equivalent). A job that also
+  carries `shared` is never sent to AWS.
+- **`overflow` needs two grants outside this repository.** The repository must be in the *ci-aws-overflow* runner group
+  (done), and listed in `repository_white_list` in `ci-runners/terraform-aws/terraform.tfvars`, which takes a Terraform
+  apply. Without the second, a job waits for the on-premises fleet only.
+- **A dead fleet leaves jobs queued, not failed.** Delete the variable and re-run them.
+- **Faster off switches for AWS only:** remove the repository from the *ci-aws-overflow* group (takes effect at once),
+  or set `overflow_enabled = false` in `ci-runners` (needs an apply). The AWS budget also cuts launches off by itself at
+  its monthly limit.
+- **Try a mode with `workflow_dispatch` before setting the variable.** The shared build workflow has not been run on the
+  self-hosted images with this project's Qt and MSVC pins.
+
 ## Required checks
 
 Two jobs defined in `ci.yml` are the required checks: **CI Status** and **Scan dependency diff**.
