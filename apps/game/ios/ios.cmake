@@ -2,7 +2,7 @@
 # The iPhone and iPad bundle of the game. Included by apps/game/CMakeLists.txt when the target is iOS (the
 # `ios-game-release` preset), after the heart_boom_maths_game target exists. Qt's qt_add_executable already makes the target
 # a bundle on iOS; this file gives it the property list, the entitlements, the asset catalogue and the frameworks the game
-# links on its own (GameKit for the Game Center score, AVFoundation for sound).
+# links on its own (GameKit for the Game Center score, AVFoundation for sound, CoreHaptics for the Taptic Engine check).
 #
 # Unsigned by default: the build needs no Apple account. A signed build is the release workflow's, with the owner's
 # certificate and provisioning profile (docs/ios.md, docs/releasing.md).
@@ -59,11 +59,11 @@ else()
     message(STATUS "iOS Game Center entitlement: OFF (the bundle is signed without it; sign-in to Game Center will fail)")
 endif()
 
-# Objective-C++ with reference counting, like the platform sources of apps/ios. GameKit and AVFoundation are the Apple
-# frameworks the game links itself (src/platform/ios/score_platform.mm and avf_audio_backend.mm): Qt's own frameworks come
-# with its static libraries.
+# Objective-C++ with reference counting, like the platform sources of apps/ios. GameKit, AVFoundation and CoreHaptics are
+# the Apple frameworks the game links itself (src/platform/ios/score_platform.mm, avf_audio_backend.mm and
+# haptics_platform.mm): Qt's own frameworks come with its static libraries.
 set_property(TARGET heart_boom_maths_game APPEND PROPERTY COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>")
-target_link_libraries(heart_boom_maths_game PRIVATE "-framework GameKit" "-framework AVFoundation" "-framework UIKit" "-framework Foundation")
+target_link_libraries(heart_boom_maths_game PRIVATE "-framework GameKit" "-framework AVFoundation" "-framework CoreHaptics" "-framework UIKit" "-framework Foundation")
 
 # Signing, for a build that is signed. They sign the application target alone: signing every Xcode target forces Xcode to
 # sign static libraries, which have no bundle identifier and were never meant to be signed.
