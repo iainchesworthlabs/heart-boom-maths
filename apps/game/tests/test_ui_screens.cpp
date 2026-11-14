@@ -5,8 +5,10 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
 
 #include <QByteArray>
+#include <QColor>
 #include <QDate>
 #include <QLocale>
 #include <QQuickItem>
@@ -762,6 +764,34 @@ TEST_CASE("The gate shows the words, a keypad and OPEN that stays grey until the
     s.tap("keyDelete");
     CHECK_FALSE(s.gate_open_enabled());
     CHECK(s.rig.links.opened.empty());
+}
+
+TEST_CASE("The gate in a phone window matches the board: CANCEL and OPEN at 140 and 188, OPEN grey in its own tones",
+          "[ui][gate]")
+{
+    Screens s(PHONE);
+    s.tap("settingsButton");
+    s.tap("aboutButton");
+    s.tap("privacyButton");
+    REQUIRE(s.visible("gateScreen"));
+
+    const auto top_of = [&](const char* name) { return s.item(name)->mapToScene(QPointF(0, 0)).y(); };
+    const auto left_of = [&](const char* name) { return s.item(name)->mapToScene(QPointF(0, 0)).x(); };
+    // CANCEL runs from x 24 and OPEN ends at 366, with 14 between them; OPEN is 1.4 times CANCEL once the room both
+    // always take (border and padding) is taken off.
+    CHECK_THAT(left_of("cancelButton"), Catch::Matchers::WithinAbs(24.0, 0.6));
+    CHECK_THAT(s.item("cancelButton")->width(), Catch::Matchers::WithinAbs(140.0, 1.0));
+    CHECK_THAT(left_of("openButton"), Catch::Matchers::WithinAbs(178.0, 1.0));
+    CHECK_THAT(s.item("openButton")->width(), Catch::Matchers::WithinAbs(188.0, 1.0));
+    CHECK_THAT(left_of("openButton") + s.item("openButton")->width(), Catch::Matchers::WithinAbs(366.0, 0.6));
+    // The prompt card holds two lines of 24 and two of 35.7, so the display and the keypad sit where the board has them.
+    CHECK_THAT(top_of("gatePrompt"), Catch::Matchers::WithinAbs(114.0, 1.0));
+    CHECK_THAT(s.item("gatePrompt")->height(), Catch::Matchers::WithinAbs(171.4, 1.0));
+    CHECK_THAT(top_of("gateDisplay"), Catch::Matchers::WithinAbs(299.0, 1.5));
+    CHECK_THAT(top_of("key1"), Catch::Matchers::WithinAbs(381.0, 1.5));
+    // OPEN waits in the grey of a switch that is off with grey words, not in the hint button's pair.
+    CHECK(property_of(s.h.find("openButton"), "fillColor").value<QColor>() == QColor("#D9D9D9"));
+    CHECK(property_of(s.h.find("openButton"), "textColor").value<QColor>() == QColor("#6B7280"));
 }
 
 TEST_CASE("A wrong number is said in words with a mark, a new number is dealt and nothing opens", "[ui][gate]")

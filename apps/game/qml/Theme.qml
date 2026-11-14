@@ -24,6 +24,7 @@ QtObject {
     readonly property color disabledFill: "#E8E8E8"
     readonly property color disabledText: "#4A4A4A"
     readonly property color switchOff: "#D9D9D9" // the track of a switch that is off
+    readonly property color lockedText: "#6B7280" // the label of OPEN while the parental gate is still locked
 
     // ---- Shape (compact; a screen scales these up for the regular size class) --------------------------------------
     readonly property int outlineSmall: 4 // small controls
