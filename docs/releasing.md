@@ -62,7 +62,7 @@ job of `release.yml` and `ios-build.yml`.
   other run (`gh workflow run release.yml --ref <branch>`) has Apple validate the IPA and stops. The IPA is a workflow
   artifact for 7 days under the name `ios-appstore`, and is never put on the release.
 - **One identifier.** `HEART_BOOM_MATHS_APPLICATION_ID` in `CMakeLists.txt` is the bundle identifier
-  (`com.iainchesworthlabs.<app>`, the same string as the Android application id will be). The two workflows repeat it as
+  (`com.iainchesworthlabs.<app>`, the same string as the Android application id). The two workflows repeat it as
   `BUNDLE_ID`, and `verify_app.sh` fails when the bundle says otherwise. `tools/instantiate.py` sets all three.
 - **Build number.** `CFBundleVersion` is `HEART_BOOM_MATHS_IOS_BUILD_NUMBER` (the run number in the release job), or the
   project version when empty. TestFlight refuses a number that is not higher than every earlier one for the same version.
@@ -86,3 +86,40 @@ What the owner does in Apple's developer portal and App Store Connect, once per 
 5. Add the repository to the selected repositories of the organisation secrets above, and set `SIGN_IOS_UPLOAD` to `true`.
 
 The agent that works in the repository does none of these: secrets, variables and the Apple account are the owner's.
+
+### Android and Google Play
+
+`apps/game/android` holds the manifest and resources, and `cmake/HbmAndroid.cmake` the identity and version of the package
+(`docs/android.md` says how it is built and what the checks prove).
+
+- **`android-build.yml`** builds the unsigned release packages and a debug-signed APK on every change that the Android build
+  reads, and looks inside them with `apps/game/android/verify_package.sh` (no permission, not debuggable in the release,
+  one architecture). It needs no secret and is not a required check (see `docs/ci.md`).
+- **The `android` job of `release.yml`** runs only when the repository variable `SIGN_ANDROID_UPLOAD` is `true`; with it
+  unset the release is made without Android and no signing secret is read. It writes the upload key from the secrets to a
+  file that only the job's user can read, builds with `QT_ANDROID_SIGN_AAB` and `QT_ANDROID_SIGN_APK` (Qt reads the key from
+  `QT_ANDROID_KEYSTORE_PATH`, `_ALIAS`, `_STORE_PASS` and `_KEY_PASS`), checks the signed APK (not debuggable, no permission,
+  not signed with Android's debug key) and the AAB (`jarsigner -verify`), removes the key, and keeps the packages as the
+  workflow artifact `android-aab-signed` for 7 days. It does not upload to Google Play and does not put anything on the
+  release (only an artifact named `release-*` goes there); the owner adds the AAB to the internal testing track by hand.
+  The job has not run: it needs the owner's key, and the first run is the test of it. Run it on a branch first
+  (`gh workflow run release.yml --ref <branch>`), which signs and checks but publishes nothing.
+- **One identifier.** `HEART_BOOM_MATHS_APPLICATION_ID` in `CMakeLists.txt` is the application id, the same string as the
+  iOS bundle identifier. `android-build.yml` does not repeat it; `verify_package.sh` holds the package to it.
+- **Version code.** The number of the run (`ICL_BUILD_NUMBER`), which only grows, and Play refuses a number that is not
+  higher than every earlier upload. Upload only builds of `release.yml`: each workflow has its own run number.
+- **Signing names.** The signing needs, by name only: the organisation secrets `ANDROID_KEYSTORE_BASE64`,
+  `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` (shared with the repository; the standard in
+  `icl-common-infra` calls it one upload key for every application), and the repository variable `SIGN_ANDROID_UPLOAD`.
+
+What the owner does, once per application (details in `docs/secrets.md` of `icl-common-infra`):
+
+1. Play Console: create the application for the id `com.iainchesworthlabs.heartboommaths`, and complete the listing, the
+   content rating, the target audience and the Data safety form (`docs/store/google-play.md`).
+2. Choose Play App Signing, and register the upload key's certificate. The upload key is the one in the secrets above; its
+   offline copy is the owner's.
+3. Add the repository to the selected repositories of the four organisation secrets, and set `SIGN_ANDROID_UPLOAD` to `true`.
+4. After a tag, download the `android-aab-signed` artifact of the run and add the AAB to a release on the internal testing
+   track. Test on devices (`docs/android.md`, "What only a device shows") before production.
+
+The agent that works in the repository does none of these either.
