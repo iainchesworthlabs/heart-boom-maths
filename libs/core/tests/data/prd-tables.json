@@ -1,0 +1,154 @@
+{
+  "format": 1,
+  "source": "Heart Boom Maths PRD (v1 draft, rev 68, 14 Nov 2026). Values copied from the PRD tables. Do not edit to make a test pass: change the PRD first.",
+  "levels": [
+    {
+      "level": 1,
+      "prd_shape": "a + b",
+      "prd_operations": "Add",
+      "largest_number": 5
+    },
+    {
+      "level": 2,
+      "prd_shape": "a − b",
+      "prd_operations": "Take away",
+      "largest_number": 5
+    },
+    {
+      "level": 3,
+      "prd_shape": "a ± b",
+      "prd_operations": "Mixed",
+      "largest_number": 10
+    },
+    {
+      "level": 4,
+      "prd_shape": "a ± b",
+      "prd_operations": "Mixed",
+      "largest_number": 20
+    },
+    {
+      "level": 5,
+      "prd_shape": "a + ? = c",
+      "prd_operations": "Add",
+      "largest_number": 20
+    },
+    {
+      "level": 6,
+      "prd_shape": "a + b + c",
+      "prd_operations": "Add",
+      "largest_number": 20
+    },
+    {
+      "level": 7,
+      "prd_shape": "a ± b",
+      "prd_operations": "Mixed",
+      "largest_number": 50
+    },
+    {
+      "level": 8,
+      "prd_shape": "a + b − c",
+      "prd_operations": "Mixed",
+      "largest_number": 50
+    },
+    {
+      "level": 9,
+      "prd_shape": "a ± b",
+      "prd_operations": "Mixed",
+      "largest_number": 100
+    },
+    {
+      "level": 10,
+      "prd_shape": "a + b + c − d",
+      "prd_operations": "Mixed",
+      "largest_number": 100
+    },
+    {
+      "level": 11,
+      "prd_shape": "a ± b",
+      "prd_operations": "Mixed",
+      "largest_number": 500
+    },
+    {
+      "level": 12,
+      "prd_shape": "a ± b",
+      "prd_operations": "Mixed",
+      "largest_number": 1000
+    }
+  ],
+  "endless_ramp_rows": [
+    {
+      "level": 13,
+      "level_seconds": 58,
+      "bonus_seconds": 7,
+      "multi_term_percent": 40,
+      "alert_share_percent": 17
+    },
+    {
+      "level": 16,
+      "level_seconds": 52,
+      "bonus_seconds": 6,
+      "multi_term_percent": 65,
+      "multi_term_percent_is_approximate": true,
+      "alert_share_percent": 19
+    },
+    {
+      "level": 20,
+      "level_seconds": 44,
+      "bonus_seconds": 5,
+      "multi_term_percent": 100,
+      "alert_share_percent": 23
+    },
+    {
+      "level": 25,
+      "level_seconds": 34,
+      "bonus_seconds": 3,
+      "multi_term_percent": 100,
+      "alert_share_percent": 29
+    },
+    {
+      "level": 27,
+      "level_seconds": 30,
+      "bonus_seconds": 3,
+      "multi_term_percent": 100,
+      "alert_share_percent": 33,
+      "applies_to": "27 and up"
+    }
+  ],
+  "endless_formulas_text": {
+    "level_seconds": "60 - 2k, floor 30 s (reached at level 27)",
+    "bonus_seconds": "7 - floor((k - 1) / 3), floor 3 s (reached at level 25)",
+    "multi_term_percent": "40% at level 13 rising to 100% at level 20",
+    "k": "endless level number, level 13 is k = 1"
+  },
+  "scoring": {
+    "correct_answer_points": "10 x streak multiplier",
+    "correct_answer_coins": 1,
+    "every_5th_correct_in_a_row_bonus_coins": 1,
+    "wrong_answer_points": 0,
+    "wrong_answer_coins": 0,
+    "perfect_level_bonus_points": 100,
+    "perfect_level_coins": 5,
+    "time_left_points_per_second": 10,
+    "win_bonus_coins_paid_once": 1000,
+    "hint_cost_coins": 2
+  },
+  "streak": {
+    "run_for_x2": 3,
+    "run_for_x3": 6,
+    "cap": 3,
+    "wrong_answer": "run restarts at 0, step drops by one (x3 to x2, x2 to x1)"
+  },
+  "tuning_defaults_table": {
+    "level_seconds": 60,
+    "alert_seconds": 10,
+    "right_answer_seconds": 7,
+    "wrong_answer_seconds": 3,
+    "questions_per_level": 10,
+    "answer_tiles": 4,
+    "base_points": 10,
+    "time_bonus_points_per_second": 10,
+    "hint_cost_coins": 2,
+    "top10_size": 10,
+    "name_max_length": 12
+  }
+}

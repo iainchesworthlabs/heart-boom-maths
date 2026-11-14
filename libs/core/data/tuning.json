@@ -1,0 +1,135 @@
+{
+  "format": 1,
+  "note": "Playtest defaults. The core loads these through Tuning::defaults(). tests/data/prd-tables.json holds the PRD's own numbers and a test must keep the two equal.",
+  "ticks_per_second": 20,
+  "questions_per_level": 10,
+  "answer_tiles": 4,
+  "campaign_levels": 12,
+  "level_seconds": 60,
+  "alert_seconds": 10,
+  "right_answer_seconds": 7,
+  "wrong_answer_seconds": 3,
+  "right_answer_time_capped_at_level_time": true,
+  "base_points": 10,
+  "multiplier_steps": [
+    {
+      "run": 3,
+      "step": 2
+    },
+    {
+      "run": 6,
+      "step": 3
+    }
+  ],
+  "streak_bonus_coin_every": 5,
+  "time_bonus_points_per_second": 10,
+  "perfect_level_bonus_points": 100,
+  "perfect_level_coins": 5,
+  "win_bonus_coins": 1000,
+  "hint_cost_coins": 2,
+  "hint_tiles_removed": 2,
+  "top10_size": 10,
+  "name_max_length": 12,
+  "operand_minimum": 1,
+  "levels": [
+    {
+      "level": 1,
+      "display": "a + b",
+      "shape": "two_term",
+      "operations": "add",
+      "largest_number": 5
+    },
+    {
+      "level": 2,
+      "display": "a − b",
+      "shape": "two_term",
+      "operations": "take_away",
+      "largest_number": 5
+    },
+    {
+      "level": 3,
+      "display": "a ± b",
+      "shape": "two_term",
+      "operations": "mixed",
+      "largest_number": 10
+    },
+    {
+      "level": 4,
+      "display": "a ± b",
+      "shape": "two_term",
+      "operations": "mixed",
+      "largest_number": 20
+    },
+    {
+      "level": 5,
+      "display": "a + ? = c",
+      "shape": "missing_addend",
+      "operations": "add",
+      "largest_number": 20
+    },
+    {
+      "level": 6,
+      "display": "a + b + c",
+      "shape": "three_term",
+      "operations": "add",
+      "largest_number": 20
+    },
+    {
+      "level": 7,
+      "display": "a ± b",
+      "shape": "two_term",
+      "operations": "mixed",
+      "largest_number": 50
+    },
+    {
+      "level": 8,
+      "display": "a + b − c",
+      "shape": "three_term",
+      "operations": "mixed",
+      "largest_number": 50
+    },
+    {
+      "level": 9,
+      "display": "a ± b",
+      "shape": "two_term",
+      "operations": "mixed",
+      "largest_number": 100
+    },
+    {
+      "level": 10,
+      "display": "a + b + c − d",
+      "shape": "four_term",
+      "operations": "mixed",
+      "largest_number": 100
+    },
+    {
+      "level": 11,
+      "display": "a ± b",
+      "shape": "two_term",
+      "operations": "mixed",
+      "largest_number": 500
+    },
+    {
+      "level": 12,
+      "display": "a ± b",
+      "shape": "two_term",
+      "operations": "mixed",
+      "largest_number": 1000
+    }
+  ],
+  "endless": {
+    "first_level": 13,
+    "largest_number": 1000,
+    "level_seconds_start": 60,
+    "level_seconds_per_k": 2,
+    "level_seconds_floor": 30,
+    "bonus_seconds_start": 7,
+    "bonus_seconds_drop_every_k": 3,
+    "bonus_seconds_floor": 3,
+    "multi_term_percent_start": 40,
+    "multi_term_percent_end": 100,
+    "multi_term_percent_span_k": 7,
+    "wrong_answer_seconds": 3,
+    "alert_seconds": 10
+  }
+}
