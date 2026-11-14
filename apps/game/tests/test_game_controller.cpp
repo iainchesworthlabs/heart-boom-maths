@@ -9,6 +9,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <QSignalSpy>
+#include <functional>
 #include <memory>
 
 using namespace heart_boom_maths;
@@ -1198,4 +1199,150 @@ TEST_CASE("SAVE needs a letter and SKIP takes the best-score mark away", "[integ
     CHECK_FALSE(c.new_best());
     CHECK(entry_spy.count() == 1);
     CHECK(c.best_score() == 0);
+}
+
+// ---- Journeys and lifecycle: what the controller does when the app is interrupted or the save is odd
+// ------------------
+
+namespace
+{
+
+/// A save whose run is the snapshot of a game that was brought to some state by `play`, as a hand-made file would hold.
+std::string save_with_snapshot_after(const std::function<void(GameSession&)>& play)
+{
+    GameSession session(Tuning::defaults(), 20261114);
+    session.start_game();
+    play(session);
+    SaveData data;
+    data.coins = 4;
+    data.run = session.snapshot();
+    return *serialise(data);
+}
+
+void answer_all_right(GameSession& session)
+{
+    for (int i = 0; i < 10; ++i)
+    {
+        session.answer(session.view().question.correct_tile);
+    }
+}
+
+} // namespace
+
+TEST_CASE("A saved run that is not a paused level is refused and spent", "[integration][controller][journey]")
+{
+    SECTION("a level-clear card")
+    {
+        MemorySaveStore memory(save_with_snapshot_after(answer_all_right));
+        Rig rig(memory);
+        CHECK(rig.controller.has_saved_run());
+        CHECK(rig.controller.saved_run().isEmpty()); // no caption for a run CONTINUE would not bring back
+        int failed = 0;
+        QObject::connect(&rig.controller, &GameController::continueFailed, [&] { ++failed; });
+        CHECK_FALSE(rig.controller.continueGame());
+        CHECK(failed == 1);
+        CHECK(rig.controller.state() == State::Idle);
+        CHECK(rig.controller.level() == 0);
+        CHECK_FALSE(saved(memory).run.has_value());
+        CHECK(saved(memory).coins == 4);
+    }
+    SECTION("a finished game")
+    {
+        MemorySaveStore memory(save_with_snapshot_after(
+            [](GameSession& session)
+            {
+                session.pause();
+                session.quit();
+            }));
+        Rig rig(memory);
+        CHECK_FALSE(rig.controller.continueGame());
+        CHECK(rig.controller.state() == State::Idle);
+        CHECK_FALSE(rig.controller.has_saved_run());
+    }
+    SECTION("a paused level is still resumed")
+    {
+        MemorySaveStore memory(save_with_snapshot_after([](GameSession& session) { session.pause(); }));
+        Rig rig(memory);
+        CHECK(rig.controller.saved_run().value(QStringLiteral("level")).toInt() == 1);
+        CHECK(rig.controller.continueGame());
+        CHECK(rig.controller.state() == State::Paused);
+    }
+}
+
+TEST_CASE("The parental gate is closed when the app leaves the foreground", "[integration][controller][journey]")
+{
+    MemorySaveStore memory;
+    Rig rig(memory);
+    GameController& c = rig.controller;
+
+    REQUIRE(c.requestLink(QStringLiteral("https://example.org/privacy")));
+    REQUIRE(c.gate_active());
+    c.on_application_state(false);
+    CHECK_FALSE(c.gate_active());
+    CHECK(c.gate_words().isEmpty());
+    c.on_application_state(true);
+    CHECK_FALSE(c.gate_active()); // it does not come back
+    CHECK(rig.links.opened.empty());
+    CHECK_FALSE(c.submitGate(QStringLiteral("123"))); // and no number opens anything
+
+    // The same for the Game Center switch.
+    MemorySaveStore apple_memory;
+    Rig apple(apple_memory, true);
+    apple.controller.requestGameCenter(true);
+    REQUIRE(apple.controller.gate_active());
+    apple.controller.on_application_state(false);
+    CHECK_FALSE(apple.controller.gate_active());
+    CHECK_FALSE(apple.controller.game_center_enabled());
+}
+
+TEST_CASE("Leaving the foreground in every state keeps what the save promises", "[integration][controller][journey]")
+{
+    MemorySaveStore memory;
+    Rig rig(memory);
+    GameController& c = rig.controller;
+
+    // Title: nothing to pause.
+    c.on_application_state(false);
+    c.on_application_state(true);
+    CHECK(c.state() == State::Idle);
+
+    // Playing: pauses, and the run is on disk.
+    c.startGame();
+    rig.answer_right();
+    c.on_application_state(false);
+    REQUIRE(c.state() == State::Paused);
+    CHECK(saved(memory).run.has_value());
+    // Paused: leaving again keeps the run.
+    c.on_application_state(true);
+    c.on_application_state(false);
+    CHECK(saved(memory).run.has_value());
+    c.on_application_state(true);
+    c.resume();
+    CHECK_FALSE(saved(memory).run.has_value());
+
+    // Level clear: the wallet is on disk, there is no run to bring back.
+    for (int i = 0; i < 9; ++i)
+    {
+        rig.answer_right();
+    }
+    REQUIRE(c.state() == State::LevelClear);
+    const std::int64_t wallet = c.wallet();
+    c.on_application_state(false);
+    CHECK(c.state() == State::LevelClear);
+    CHECK(saved(memory).coins == wallet);
+    CHECK_FALSE(saved(memory).run.has_value());
+    c.on_application_state(true);
+
+    // Bomb, then name entry: the wallet is on disk, the name is still waiting for the child.
+    c.nextLevel();
+    rig.play_for_ms(61'000);
+    REQUIRE(c.state() == State::GameOver);
+    REQUIRE(c.name_entry_pending());
+    c.on_application_state(false);
+    c.on_application_state(true);
+    CHECK(c.name_entry_pending());
+    CHECK(saved(memory).top10.empty()); // not saved until SAVE: a kill here loses the entry
+    CHECK(saved(memory).coins == c.wallet());
+    CHECK(c.saveName(QStringLiteral("zoe")) == 1);
+    CHECK(saved(memory).top10.size() == 1);
 }

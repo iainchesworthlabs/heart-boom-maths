@@ -67,6 +67,14 @@ bool same_question(const Question& a, const Question& b) noexcept
            a.answer == b.answer && a.tiles == b.tiles && a.correct_tile == b.correct_tile;
 }
 
+/// A saved run is only ever written from the pause screen, so only a running or paused session is resumed. The core
+/// would also restore a level-clear card, a win or a finished game from a hand-made file, and the screens for those
+/// have numbers that only the events of the game on screen fill in.
+bool is_resumable(SessionState state) noexcept
+{
+    return state == SessionState::PLAYING || state == SessionState::PAUSED;
+}
+
 } // namespace
 
 GameOptions GameOptions::with_random_seed()
@@ -156,7 +164,9 @@ bool GameController::continueGame()
     // The run is spent as soon as it is read, whether or not it restores (SPEC: it resumes once).
     m_Save.run.reset();
     emit savedRunChanged();
-    const bool restored = m_Session.restore(values);
+    // A scratch session decides first, so a run the game would not offer leaves the real session untouched.
+    GameSession scratch(*m_Tuning, 0);
+    const bool restored = scratch.restore(values) && is_resumable(scratch.view().state) && m_Session.restore(values);
     if (!restored)
     {
         qCWarning(lcGame) << "The saved run could not be restored; starting clean";
@@ -399,6 +409,8 @@ void GameController::on_application_state(bool active)
         sync_driver(); // a paused run stays paused: the driver only runs while playing
         return;
     }
+    // A grown-up's question does not wait for them to come back: whoever picks the device up next meets no open gate.
+    cancelGate();
     if (m_Session.view().state == SessionState::PLAYING)
     {
         m_Session.pause();
@@ -999,7 +1011,7 @@ QVariantMap GameController::saved_run() const
     // Asking the core is the only way to read the snapshot without knowing its layout. A scratch session takes it, so
     // the one in play is untouched, and a run the core would refuse shows no caption.
     GameSession scratch(*m_Tuning, 0);
-    if (!scratch.restore(*m_Save.run))
+    if (!scratch.restore(*m_Save.run) || !is_resumable(scratch.view().state))
     {
         return {};
     }
