@@ -37,11 +37,44 @@ hbm_generate_notices_text("${CMAKE_CURRENT_BINARY_DIR}/generated/notices.txt"
     EXCLUDE catch2
     LICENCE_FILES
         "${CMAKE_CURRENT_SOURCE_DIR}/fonts/Bangers-OFL.txt"
-        "${CMAKE_CURRENT_SOURCE_DIR}/fonts/LilitaOne-OFL.txt")
+        "${CMAKE_CURRENT_SOURCE_DIR}/fonts/LilitaOne-OFL.txt"
+        "${CMAKE_CURRENT_SOURCE_DIR}/audio/Sounds.txt")
 qt_add_resources(heart_boom_maths_app notices
     PREFIX /heart_boom_maths
     BASE "${CMAKE_CURRENT_BINARY_DIR}/generated"
     FILES "${CMAKE_CURRENT_BINARY_DIR}/generated/notices.txt")
+
+# Sound. The rules of when a sound plays are plain C++ over a thin backend. The backend that talks to the sound device
+# needs Qt Multimedia, an add-on module of the Qt kit; without it the game still builds and starts silent. The module's
+# own package is looked for, not the component of Qt6, because a missing component must not fail the whole find.
+target_sources(heart_boom_maths_app PRIVATE
+    src/services/audio_assets.cpp
+    src/services/audio_factory.cpp
+    src/services/backed_audio_service.cpp
+    src/services/first_gesture_filter.cpp)
+find_package(Qt6Multimedia "${Qt6_VERSION}" QUIET CONFIG HINTS "${Qt6_DIR}/..")
+if(Qt6Multimedia_FOUND)
+    target_sources(heart_boom_maths_app PRIVATE src/services/qt_audio_backend.cpp)
+    target_link_libraries(heart_boom_maths_app PRIVATE Qt6::Multimedia)
+else()
+    message(STATUS "Qt Multimedia was not found: the game will be silent (install the qtmultimedia module of the Qt kit)")
+    target_sources(heart_boom_maths_app PRIVATE src/services/no_audio_backend.cpp)
+endif()
+# The files are made by tools/assets/make_placeholder_sounds.py and are replaced by a sound designer's work.
+set(HEART_BOOM_MATHS_AUDIO_FILES
+    audio/coin_chime.wav
+    audio/soft_buzz.wav
+    audio/rising_tone.wav
+    audio/ticking.wav
+    audio/cartoon_pop.wav
+    audio/fanfare.wav
+    audio/whoosh.wav
+    audio/music_menu.wav
+    audio/music_play.wav)
+qt_add_resources(heart_boom_maths_app audio
+    PREFIX /heart_boom_maths/audio
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/audio"
+    FILES ${HEART_BOOM_MATHS_AUDIO_FILES})
 
 qt_add_executable(heart_boom_maths_game src/main.cpp)
 # The program is named heart-boom-maths while the target is heart_boom_maths_game, so the QML module and the target stay
@@ -128,6 +161,18 @@ if(HEART_BOOM_MATHS_BUILD_TESTS)
         TEST_SPEC "[integration]"
         DISCOVERY_MODE PRE_TEST
         PROPERTIES LABELS integration TIMEOUT 60 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+    # The sound rules over a recording backend, the factory, the first-gesture filter and the placeholder sound files.
+    target_sources(heart_boom_maths_game_tests PRIVATE tests/test_audio.cpp)
+    find_package(Python3 QUIET COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME game.audio_placeholders
+            COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/assets/make_placeholder_sounds.py" --check
+                --output-dir "${CMAKE_CURRENT_SOURCE_DIR}/audio")
+        set_tests_properties(game.audio_placeholders PROPERTIES LABELS unit TIMEOUT 120)
+    else()
+        message(STATUS "No Python 3 found: game.audio_placeholders is not added")
+    endif()
 
     # The build information script, run with a CI build number to see it end up in the header.
     add_test(NAME game.build_info_script

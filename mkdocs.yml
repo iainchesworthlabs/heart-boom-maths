@@ -18,6 +18,7 @@ nav:
       - Decisions: DECISIONS.md
       - Milestones: MILESTONES.md
       - Compliance: COMPLIANCE.md
+      - Audio: audio.md
   - Release:
       - Privacy policy: privacy-policy.md
       - Release checklist: release-checklist.md

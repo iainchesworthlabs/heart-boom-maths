@@ -51,6 +51,11 @@ public:
         ++resumes;
     }
 
+    void unlock() override
+    {
+        ++unlocks;
+    }
+
     [[nodiscard]] int count(SoundId id) const
     {
         return static_cast<int>(std::count(effects.begin(), effects.end(), id));
@@ -63,6 +68,7 @@ public:
     bool music_enabled = true;
     int suspends = 0;
     int resumes = 0;
+    int unlocks = 0;
 };
 
 class RecordingLinks final : public LinkOpener

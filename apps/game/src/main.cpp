@@ -3,9 +3,10 @@
 #include "heart_boom_maths/save_store.hpp"
 #include "heart_boom_maths/version.hpp"
 #include "platform/platform.hpp"
-#include "services/audio_service.hpp"
+#include "services/audio_factory.hpp"
 #include "services/clock.hpp"
 #include "services/file_save_store.hpp"
+#include "services/first_gesture_filter.hpp"
 #include "services/score_service.hpp"
 #include "services/system_link_opener.hpp"
 
@@ -16,7 +17,9 @@
 #include <QQmlContext>
 #include <QQuickWindow>
 #include <QString>
+#include <QSysInfo>
 #include <QTimer>
+#include <QtLogging>
 #include <cstdio>
 #include <string>
 #include <string_view>
@@ -61,7 +64,17 @@ int main(int argc, char* argv[])
     // its save in memory.
     using namespace heart_boom_maths;
     game::SteadyClock clock;
-    game::NullAudioService audio;
+    // Sound is started by the player's first touch or key press on the web, and never in a test run or without a
+    // device.
+    game::AudioOptions audio_options;
+    audio_options.smoke_test = smoke_test;
+    const std::string qt_platform = QGuiApplication::platformName().toStdString();
+    audio_options.qt_platform = qt_platform;
+    audio_options.requires_unlock = QSysInfo::productType() == QStringLiteral("wasm");
+    game::AudioSelection audio = game::make_audio_service(audio_options);
+    qInfo("%s", std::string(game::describe(audio.choice)).c_str());
+    game::FirstGestureFilter first_gesture(*audio.service);
+    app.installEventFilter(&first_gesture);
     game::NullScoreService scores;
     game::SystemLinkOpener links;
     game::FileSaveStore file_store(game::FileSaveStore::default_directory());
@@ -70,7 +83,7 @@ int main(int argc, char* argv[])
     game::GameServices services;
     services.store = &store;
     services.quarantine = smoke_test ? nullptr : &file_store;
-    services.audio = &audio;
+    services.audio = audio.service.get();
     services.scores = &scores;
     services.links = &links;
     services.clock = &clock;
