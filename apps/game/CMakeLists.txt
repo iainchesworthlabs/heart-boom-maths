@@ -7,6 +7,7 @@ qt_standard_project_setup(REQUIRES 6.8)
 include(IclQtApp)
 include(HbmBuildInfo)
 include(HbmNotices)
+include(HbmWebSite)
 
 # Everything the screens bind to, and the screens themselves as one static QML module (HeartBoomMaths), so the application
 # and the ui tests load the same QML. The controller and AnswerFeedback are the module's C++ types; qml_types.hpp makes the
@@ -172,6 +173,15 @@ set_target_properties(heart_boom_maths_game PROPERTIES QT_QML_ROOT_PATH "${CMAKE
 
 # One directory per operating system holds the code that cannot be shared; CMake adds the one that matches the target.
 icl_platform_sources(heart_boom_maths_game)
+
+# The browser build is a site, not a program: the page, its script and style, Qt's loader and the module in <build>/site.
+if(EMSCRIPTEN)
+    hbm_add_web_site(heart_boom_maths_game
+        WEB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/web"
+        TITLE "${HEART_BOOM_MATHS_DISPLAY_NAME}"
+        LICENCE_FILE "${PROJECT_SOURCE_DIR}/LICENSE"
+        NOTICES_FILE "${CMAKE_CURRENT_BINARY_DIR}/generated/notices.txt")
+endif()
 
 target_include_directories(heart_boom_maths_game PRIVATE src)
 # The static QML module needs its backing library and its plugin, which registers the types and the QML files.

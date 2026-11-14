@@ -1,0 +1,34 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!--
+  The page of the browser build. CMake fills in the names between at-signs (cmake/HbmWebSite.cmake). Nothing here
+  reaches another origin: the policy below allows the page's own files and nothing else, so a mistake that added a font, a script or
+  a tracker from elsewhere would be blocked by the browser and found by the site check (tools/ci/check_web_site.py).
+  The policy is a meta element because a static host may not let the project set headers; the host can add the same
+  policy as a header, and frame-ancestors, which a meta element cannot carry.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+    <!-- One CSS pixel is one device-independent pixel for Qt; no pinch zoom, which would fight the touch input. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+    <meta name="referrer" content="no-referrer">
+    <title>@HBM_WEB_TITLE@</title>
+    <!-- An empty icon, so the browser does not ask the host for /favicon.ico. -->
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="page.css">
+  </head>
+  <body>
+    <div id="loading" role="status" aria-live="polite">
+      <p id="loading-title">@HBM_WEB_TITLE@</p>
+      <p id="loading-text">Loading the game...</p>
+      <div id="loading-bar" aria-hidden="true"></div>
+      <noscript>The game needs JavaScript. Turn it on for this page and reload.</noscript>
+    </div>
+    <div id="screen"></div>
+    <script src="@HBM_WEB_MODULE@.js" defer></script>
+    <script src="qtloader.js" defer></script>
+    <script src="start.js" defer></script>
+  </body>
+</html>
