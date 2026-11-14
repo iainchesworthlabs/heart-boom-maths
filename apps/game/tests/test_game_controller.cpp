@@ -912,3 +912,168 @@ TEST_CASE("The controller registers its types and properties with Qt", "[integra
         CHECK(meta.indexOfMethod(name) >= 0);
     }
 }
+
+TEST_CASE("The level-clear card adds up the answers of the level and reads the next level", "[integration][controller]")
+{
+    MemorySaveStore memory;
+    Rig rig(memory);
+    GameController& c = rig.controller;
+    c.startGame();
+    rig.play_level_right();
+    REQUIRE(c.state() == State::LevelClear);
+
+    // Ten right answers at x1, x1, x2 (from the third) and x3 (from the sixth): 10 + 10 + 20 * 3 + 30 * 5.
+    const QVariantMap card = c.level_clear();
+    CHECK(card.value("answerPoints").toInt() == 10 + 10 + 20 * 3 + 30 * 5);
+    CHECK(card.value("timeBonusPerSecond").toInt() == 10);
+    CHECK(card.value("answerCoins").toInt() == 10 + 2); // a coin each and the streak bonus at the fifth and tenth
+    CHECK(card.value("streakCoins").toInt() == 2);
+    CHECK(card.value("levelPoints").toInt() == card.value("answerPoints").toInt() + 600 + 100);
+    CHECK(card.value("levelCoins").toInt() == 10 + 2 + 5);
+    CHECK(card.value("levelPoints").toLongLong() == card.value("totalPoints").toLongLong());
+    CHECK(card.value("wallet").toLongLong() == c.wallet());
+    CHECK(card.value("complete").toBool());
+    CHECK(card.value("nextUp").toString() == QStringLiteral("Next up: level 2, take away, up to 5"));
+
+    // The next level starts its own count.
+    c.nextLevel();
+    rig.answer_right();
+    rig.answer_wrong();
+    for (int i = 0; i < 8; ++i)
+    {
+        rig.answer_right();
+    }
+    REQUIRE(c.state() == State::LevelClear);
+    const QVariantMap second = c.level_clear();
+    CHECK(second.value("level").toInt() == 2);
+    CHECK_FALSE(second.value("perfect").toBool());
+    CHECK(second.value("answerCoins").toInt() < 10 + 2);
+    CHECK(second.value("levelCoins").toInt() == second.value("answerCoins").toInt());
+    CHECK(second.value("levelPoints").toLongLong() + card.value("levelPoints").toLongLong() ==
+          second.value("totalPoints").toLongLong());
+}
+
+TEST_CASE("A level brought back by CONTINUE part way leaves its sums out of the card", "[integration][controller]")
+{
+    MemorySaveStore memory;
+    {
+        Rig first(memory);
+        first.controller.startGame();
+        first.answer_right();
+        first.answer_right();
+        first.controller.pause();
+    }
+    Rig second(memory);
+    GameController& c = second.controller;
+    REQUIRE(c.continueGame());
+    c.resume();
+    for (int i = 0; i < 8; ++i)
+    {
+        second.answer_right();
+    }
+    REQUIRE(c.state() == State::LevelClear);
+    const QVariantMap card = c.level_clear();
+    CHECK_FALSE(card.value("complete").toBool());
+    CHECK(card.value("levelPoints").toInt() == 0);
+    CHECK(card.value("levelCoins").toInt() == 0);
+    CHECK(card.value("totalPoints").toLongLong() == c.points()); // the numbers the core gave stay right
+    CHECK(card.value("timeBonusPoints").toInt() > 0);
+
+    // The next level counts again from its start.
+    c.nextLevel();
+    for (int i = 0; i < 10; ++i)
+    {
+        second.answer_right();
+    }
+    CHECK(c.level_clear().value("complete").toBool());
+    CHECK(c.level_clear().value("levelPoints").toInt() > 0);
+}
+
+TEST_CASE("The win says what it paid, and nothing when the bonus was paid before", "[integration][controller]")
+{
+    const auto win = [](Rig& rig)
+    {
+        rig.controller.startGame();
+        for (int level = 1; level <= 12; ++level)
+        {
+            rig.play_level_right();
+            if (level < 12)
+            {
+                rig.controller.nextLevel();
+            }
+        }
+    };
+    MemorySaveStore memory;
+    {
+        Rig first(memory);
+        QSignalSpy bonus_spy(&first.controller, &GameController::winBonusChanged);
+        CHECK(first.controller.campaign_levels() == 12);
+        win(first);
+        REQUIRE(first.controller.state() == State::Won);
+        CHECK(first.controller.win_bonus() == 1000);
+        CHECK(bonus_spy.count() == 1);
+        CHECK(first.controller.coins_earned() >= 1000);
+        CHECK(first.controller.coins_earned_known());
+    }
+    Rig second(memory); // the save says the bonus was paid
+    win(second);
+    REQUIRE(second.controller.state() == State::Won);
+    CHECK(second.controller.win_bonus() == 0);
+    CHECK(second.controller.coins_earned() < 1000);
+}
+
+TEST_CASE("Coins earned counts what the game paid, not what a hint cost", "[integration][controller]")
+{
+    MemorySaveStore memory;
+    Rig rig(memory);
+    GameController& c = rig.controller;
+    c.startGame();
+    CHECK(c.coins_earned() == 0);
+    rig.answer_right();
+    rig.answer_right();
+    c.useHint();
+    rig.answer_right();
+    CHECK(c.wallet() == 1);
+    c.pause();
+    c.quit();
+    CHECK(c.coins_earned() == 3);
+    CHECK(c.coins_earned_known());
+
+    // A new game starts the count again; a resumed game does not know its first part.
+    c.startGame();
+    CHECK(c.coins_earned() == 0);
+    c.pause();
+    {
+        Rig again(memory);
+        REQUIRE(again.controller.continueGame());
+        CHECK_FALSE(again.controller.coins_earned_known());
+        again.controller.quit();
+        CHECK_FALSE(again.controller.coins_earned_known());
+    }
+}
+
+TEST_CASE("SAVE needs a letter and SKIP takes the best-score mark away", "[integration][controller]")
+{
+    MemorySaveStore memory;
+    Rig rig(memory);
+    GameController& c = rig.controller;
+    CHECK(c.top10_size() == 10);
+    CHECK(c.canSaveName(QStringLiteral("a")));
+    CHECK(c.canSaveName(QStringLiteral(" a ")));
+    CHECK(c.canSaveName(QStringLiteral("sparky 1!")));
+    CHECK_FALSE(c.canSaveName(QString()));
+    CHECK_FALSE(c.canSaveName(QStringLiteral("   ")));
+    CHECK_FALSE(c.canSaveName(QStringLiteral("123 !?"))); // nothing but spaces is left of it
+
+    c.startGame();
+    rig.answer_right();
+    c.pause();
+    c.quit();
+    REQUIRE(c.name_entry_pending());
+    CHECK(c.new_best());
+    QSignalSpy entry_spy(&c, &GameController::nameEntryChanged);
+    c.skipName();
+    CHECK_FALSE(c.new_best());
+    CHECK(entry_spy.count() == 1);
+    CHECK(c.best_score() == 0);
+}

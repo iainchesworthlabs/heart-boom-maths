@@ -15,6 +15,7 @@ add_library(heart_boom_maths_app STATIC
     src/answer_feedback.cpp
     src/event_sounds.cpp
     src/game_controller.cpp
+    src/level_text.cpp
     src/parental_gate.cpp
     src/qml_types.hpp
     src/tick_driver.cpp
@@ -186,6 +187,7 @@ if(HEART_BOOM_MATHS_BUILD_TESTS)
         tests/test_event_sounds.cpp
         tests/test_file_save_store.cpp
         tests/test_game_controller.cpp
+        tests/test_level_text.cpp
         tests/test_parental_gate.cpp
         tests/test_tick_driver.cpp)
     target_link_libraries(heart_boom_maths_game_tests

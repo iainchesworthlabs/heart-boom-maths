@@ -2,6 +2,7 @@
 #include "game_controller.hpp"
 
 #include "event_sounds.hpp"
+#include "level_text.hpp"
 #include "services/notices.hpp"
 
 #include <QLoggingCategory>
@@ -129,6 +130,8 @@ void GameController::startGame()
     m_ScoreSubmitted = false;
     m_NameRank = 0;
     m_NewBest = false;
+    m_CoinsEarned = 0;
+    m_CoinsEarnedKnown = true;
     emit nameEntryChanged();
     if (m_HighlightRank != 0)
     {
@@ -161,6 +164,14 @@ bool GameController::continueGame()
         return false;
     }
     m_ScoreSubmitted = false;
+    // The save holds the session, not what the screens added up from its events: the coins of the game so far, and the
+    // answers of a level that was part way through, are not known.
+    m_CoinsEarned = 0;
+    m_CoinsEarnedKnown = false;
+    m_LevelCountsKnown = m_Session.view().questions_answered == 0;
+    m_LevelAnswerPoints = 0;
+    m_LevelAnswerCoins = 0;
+    m_LevelStreakCoins = 0;
     if (m_Session.view().state == SessionState::PLAYING)
     {
         // Only a paused run is ever written. Anything else waits on the pause screen too, never running by itself.
@@ -258,7 +269,14 @@ void GameController::skipName()
         return;
     }
     m_NameRank = 0;
+    // The score is not in the list, so it is not the best one.
+    m_NewBest = false;
     emit nameEntryChanged();
+}
+
+bool GameController::canSaveName(const QString& typed) const
+{
+    return normalise_name(typed.toStdString(), *m_Tuning).find_first_not_of(' ') != std::string::npos;
 }
 
 QString GameController::normaliseName(const QString& typed) const
@@ -508,12 +526,20 @@ void GameController::handle_event(const Event& event)
     switch (event.kind)
     {
     case EventKind::LEVEL_STARTED:
+        m_LevelAnswerPoints = 0;
+        m_LevelAnswerCoins = 0;
+        m_LevelStreakCoins = 0;
+        m_LevelCountsKnown = true;
         emit levelStarted(event.level);
         break;
     case EventKind::QUESTION_SHOWN:
         emit questionShown(event.question_number);
         break;
     case EventKind::ANSWER_CORRECT:
+        m_LevelAnswerPoints += event.points;
+        m_LevelAnswerCoins += event.coins;
+        m_LevelStreakCoins += event.streak_bonus_coins;
+        m_CoinsEarned += event.coins;
         remember_answer(event, true);
         emit answerCorrect(event.tile, event.points, event.coins, event.streak_bonus_coins, event.run, event.multiplier,
                            event.multiplier_rose, event.ticks_delta / ticks_per_second);
@@ -529,23 +555,35 @@ void GameController::handle_event(const Event& event)
         emit alertEntered();
         break;
     case EventKind::LEVEL_CLEARED:
+        m_CoinsEarned += event.coins;
         m_LevelClear = {
             {QStringLiteral("level"), event.level},
             {QStringLiteral("correctAnswers"), event.correct_answers},
             {QStringLiteral("secondsLeft"), event.seconds_left},
             {QStringLiteral("timeBonusPoints"), event.time_bonus_points},
+            {QStringLiteral("timeBonusPerSecond"), m_Tuning->time_bonus_points_per_second},
             {QStringLiteral("perfectBonusPoints"), event.perfect_bonus_points},
             {QStringLiteral("perfect"), event.perfect},
             {QStringLiteral("points"), event.points},
             {QStringLiteral("coins"), event.coins},
             {QStringLiteral("totalPoints"), static_cast<qlonglong>(event.total_points)},
             {QStringLiteral("wallet"), static_cast<qlonglong>(event.wallet)},
+            {QStringLiteral("answerPoints"), m_LevelAnswerPoints},
+            {QStringLiteral("answerCoins"), m_LevelAnswerCoins},
+            {QStringLiteral("streakCoins"), m_LevelStreakCoins},
+            {QStringLiteral("levelPoints"), m_LevelCountsKnown ? m_LevelAnswerPoints + event.points : 0},
+            {QStringLiteral("levelCoins"), m_LevelCountsKnown ? m_LevelAnswerCoins + event.coins : 0},
+            {QStringLiteral("complete"), m_LevelCountsKnown},
+            {QStringLiteral("nextUp"), to_qstring(next_up_text(*m_Tuning, event.level + 1))},
         };
         emit levelClearChanged();
         emit levelCleared();
         persist();
         break;
     case EventKind::GAME_WON:
+        m_CoinsEarned += event.coins;
+        m_WinBonus = event.coins;
+        emit winBonusChanged();
         emit gameWon(event.coins);
         persist();
         break;
@@ -853,6 +891,31 @@ int GameController::multiplier() const
 QVariantMap GameController::level_clear() const
 {
     return m_LevelClear;
+}
+
+int GameController::win_bonus() const
+{
+    return m_WinBonus;
+}
+
+int GameController::campaign_levels() const
+{
+    return m_Tuning->campaign_levels;
+}
+
+int GameController::top10_size() const
+{
+    return m_Tuning->top10_size;
+}
+
+qint64 GameController::coins_earned() const
+{
+    return m_CoinsEarned;
+}
+
+bool GameController::coins_earned_known() const
+{
+    return m_CoinsEarnedKnown;
 }
 
 GameController::EndReason GameController::end_reason() const
