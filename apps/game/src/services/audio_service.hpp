@@ -43,6 +43,11 @@ public:
     /// The app left the foreground: stop all sound until resume().
     virtual void suspend() = 0;
     virtual void resume() = 0;
+
+    /// The player has touched the screen or pressed a key for the first time. A browser starts no sound before that,
+    /// so a service for the web holds back what it is asked to play until then. Elsewhere it changes nothing, and a
+    /// service with no such need keeps this empty body.
+    virtual void unlock() {}
 };
 
 /// Plays nothing. The service until the Qt Multimedia one exists, and on a platform without audio.
