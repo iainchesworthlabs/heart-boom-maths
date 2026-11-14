@@ -61,15 +61,24 @@ public:
     void use_hint();
     void pause();
     void resume();
+    void quit();        // QUIT on the pause screen
+    void next_level();  // leaves the level-clear card
+    void keep_going();  // win screen: into level 13
+    void finish();      // win screen: end the run
+    void set_wallet(std::int64_t coins);   // from the save, before a game starts
+    void set_won_once(bool won_once);      // from the save, before a game starts
 
     const SessionView& view() const;
     std::vector<Event> take_events();
+    std::vector<std::int64_t> snapshot() const;
+    bool restore(std::span<const std::int64_t> values);
+    std::uint64_t state_hash() const;
 };
 ```
 
 Events: `level_started`, `question_shown`, `answer_correct`, `answer_wrong`, `hint_used`, `alert_entered`, `level_cleared`, `game_won`, `game_over`. Each event carries the numbers the screens and sounds need (points, coins, streak, seconds added), so the app never recomputes a rule. The app reads `view()` every frame for what to draw.
 
-Pause and resume work from the Playing state only. Clearing level 12 pays the 1,000-coin bonus once and moves on to level 13, the first endless level. The win screen is an app-layer choice between KEEP GOING and FINISH (see `SPEC.md`, Ending a game).
+The session is in one of six states (idle, playing, paused, level clear, won, game over), and a command the state does not accept is ignored. Pause and resume work from the Playing state only. Clearing level 12 pays the 1,000-coin bonus once and waits in the won state, where `keep_going()` starts level 13, the first endless level. The win screen is an app-layer choice between KEEP GOING and FINISH (see `SPEC.md`, Ending a game).
 
 ### Time
 
