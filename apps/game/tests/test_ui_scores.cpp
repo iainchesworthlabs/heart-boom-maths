@@ -38,8 +38,6 @@ struct SizeCase
     QSize size;
 };
 
-#define ALL_SIZES GENERATE(SizeCase{"phone", PHONE}, SizeCase{"tablet", TABLET}, SizeCase{"desktop", DESKTOP})
-
 std::string save_text(const std::vector<ScoreEntry>& top10, bool won_once = false)
 {
     SaveData data;
@@ -241,7 +239,7 @@ struct Shell
 TEST_CASE("The level-clear card shows the numbers the core gave, and NEXT LEVEL starts the next level",
           "[ui][scores][levelclear]")
 {
-    const SizeCase size = ALL_SIZES;
+    const SizeCase size = GENERATE(SizeCase{"phone", PHONE}, SizeCase{"tablet", TABLET}, SizeCase{"desktop", DESKTOP});
     CAPTURE(size.name);
     Shell s(size.size);
     s.start();
@@ -420,7 +418,7 @@ TEST_CASE("When an earlier game paid the win bonus the win screen says so and sh
 
 TEST_CASE("A game over by the bomb shows BOOM and the numbers of the game", "[ui][scores][gameover]")
 {
-    const SizeCase size = ALL_SIZES;
+    const SizeCase size = GENERATE(SizeCase{"phone", PHONE}, SizeCase{"tablet", TABLET}, SizeCase{"desktop", DESKTOP});
     CAPTURE(size.name);
     Shell s(size.size, save_text({{"OLD", 5000}}));
     s.blow_up_after(3); // 10 + 10 + 20 points, and the list has room
@@ -462,7 +460,7 @@ TEST_CASE("A game over by the bomb shows BOOM and the numbers of the game", "[ui
 TEST_CASE("A score that earns a place goes through name entry, then the top 10 with the new entry marked",
           "[ui][scores][nameentry][top10]")
 {
-    const SizeCase size = ALL_SIZES;
+    const SizeCase size = GENERATE(SizeCase{"phone", PHONE}, SizeCase{"tablet", TABLET}, SizeCase{"desktop", DESKTOP});
     CAPTURE(size.name);
     Shell s(size.size, save_text(short_list()));
     s.blow_up_after(3);
@@ -543,7 +541,7 @@ TEST_CASE("A new best score is marked NEW BEST on the game-over card once it is 
 
 TEST_CASE("SKIP drops the entry and lands on the game-over card; the top 10 stays empty", "[ui][scores][nameentry]")
 {
-    const SizeCase size = ALL_SIZES;
+    const SizeCase size = GENERATE(SizeCase{"phone", PHONE}, SizeCase{"tablet", TABLET}, SizeCase{"desktop", DESKTOP});
     CAPTURE(size.name);
     Shell s(size.size);
     s.blow_up_after(3);
@@ -679,7 +677,7 @@ TEST_CASE(
 
 TEST_CASE("The top 10 marks the new entry in a full list and drops the one pushed off", "[ui][scores][top10]")
 {
-    const SizeCase size = ALL_SIZES;
+    const SizeCase size = GENERATE(SizeCase{"phone", PHONE}, SizeCase{"tablet", TABLET}, SizeCase{"desktop", DESKTOP});
     CAPTURE(size.name);
     Shell s(size.size, save_text(full_list()));
     s.blow_up_after(3); // 40 points: above the 10th (10), the 9th (20) and the 8th (30)
