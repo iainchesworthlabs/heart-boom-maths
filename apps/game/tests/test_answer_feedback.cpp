@@ -157,6 +157,22 @@ TEST_CASE("The bomb is held as a boom, QUIT is not", "[unit][feedback]")
     }
 }
 
+TEST_CASE("QUIT during the hold of an answer ends the hold at once", "[unit][feedback][journey]")
+{
+    Held h;
+    h.feedback.set_wrong_hold_ms(60000);
+    h.rig.answer_wrong();
+    REQUIRE(h.feedback.kind() == Kind::Wrong);
+
+    // The pause button is tapped while the wrong tile is still shown, then QUIT: the name or game-over screen must not
+    // wait for a hold that belongs to a game that has ended.
+    h.rig.controller.pause();
+    CHECK(h.feedback.kind() == Kind::Wrong); // pausing alone changes nothing
+    h.rig.controller.quit();
+    REQUIRE(h.rig.controller.state() == GameController::State::GameOver);
+    CHECK(h.feedback.kind() == Kind::None);
+}
+
 TEST_CASE("The last answer of a level is held after the state has moved on", "[unit][feedback]")
 {
     Held h;
