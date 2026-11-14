@@ -118,6 +118,7 @@
         "HEART_BOOM_MATHS_BUILD_TESTS": "OFF",
         "HEART_BOOM_MATHS_BUILD_GAME": "ON",
         "HEART_BOOM_MATHS_BUILD_IOS_APP": "OFF",
+        "HEART_BOOM_MATHS_USE_QT_MULTIMEDIA": "OFF",
         "CMAKE_BUILD_TYPE": "Release"
       }
     },

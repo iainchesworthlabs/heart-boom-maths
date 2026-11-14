@@ -60,12 +60,17 @@ target_sources(heart_boom_maths_app PRIVATE
     src/services/audio_factory.cpp
     src/services/backed_audio_service.cpp
     src/services/first_gesture_filter.cpp)
-find_package(Qt6Multimedia "${Qt6_VERSION}" QUIET CONFIG HINTS "${Qt6_DIR}/..")
+# HEART_BOOM_MATHS_USE_QT_MULTIMEDIA=OFF builds the silent fallback even when the kit has the module. The iOS preset sets it:
+# the module's FFmpeg backend cannot link there, and iOS sound is meant to be a native AVFoundation backend (docs/audio.md).
+option(HEART_BOOM_MATHS_USE_QT_MULTIMEDIA "Link Qt Multimedia for sound when the kit has it" ON)
+if(HEART_BOOM_MATHS_USE_QT_MULTIMEDIA)
+    find_package(Qt6Multimedia "${Qt6_VERSION}" QUIET CONFIG HINTS "${Qt6_DIR}/..")
+endif()
 if(Qt6Multimedia_FOUND)
     target_sources(heart_boom_maths_app PRIVATE src/services/qt_audio_backend.cpp)
     target_link_libraries(heart_boom_maths_app PRIVATE Qt6::Multimedia)
 else()
-    message(STATUS "Qt Multimedia was not found: the game will be silent (install the qtmultimedia module of the Qt kit)")
+    message(STATUS "Qt Multimedia is not used: the game will be silent (install the qtmultimedia module of the Qt kit, or turn HEART_BOOM_MATHS_USE_QT_MULTIMEDIA on)")
     target_sources(heart_boom_maths_app PRIVATE src/services/no_audio_backend.cpp)
 endif()
 # Where the save lives. The file store is for every platform with a file system; the browser has none that lasts, so its
