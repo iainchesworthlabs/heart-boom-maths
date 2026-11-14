@@ -1,28 +1,26 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Window
 
-// A stub that proves the application, its fonts and its QML module build and start. The screens replace it from M3.
+// The application window. The controller is created by the application and given to this window as an initial property;
+// all navigation is in AppShell.qml.
 Window {
     id: root
 
+    required property GameController game
+
     width: 390
     height: 844
+    minimumWidth: 320
+    minimumHeight: 480
     visible: true
     title: qsTr("Heart Boom Maths")
-    color: "white"
+    color: Theme.background
 
-    FontLoader {
-        id: titleFont
-
-        source: "qrc:/heart_boom_maths/fonts/Bangers-Regular.ttf"
-    }
-
-    Text {
-        anchors.centerIn: parent
-        text: root.title
-        color: "black"
-        font.family: titleFont.name
-        font.pixelSize: 48
+    AppShell {
+        objectName: "appShell"
+        anchors.fill: parent
+        game: root.game
     }
 }
