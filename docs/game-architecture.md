@@ -148,7 +148,7 @@ One small JSON document per device. `libs/core` owns the schema. Platforms store
 | `sound`, `music` | The two Settings switches | When changed |
 | `game_center` | The Game Center switch (Apple only, default off) | When changed |
 | `top10` | Up to 10 entries of name and score | After name entry |
-| `run` | Saved run snapshot | On pause. Removed when resumed or ended |
+| `run` | Saved run snapshot | On pause. Removed as soon as CONTINUE loads it, and when a game ends |
 
 The plan's field table does not list `game_center`. The PRD and decision 6 require the switch to persist, so add it and note it in the schema.
 
