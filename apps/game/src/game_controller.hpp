@@ -189,6 +189,8 @@ class GameController final : public QObject
     Q_PROPERTY(QString privacyPolicyUrl READ privacy_policy_url CONSTANT FINAL)
     Q_PROPERTY(QString repositoryUrl READ repository_url CONSTANT FINAL)
 
+    // NOLINTBEGIN(readability-identifier-naming): QML sees these names, so signals, invokables, enumerators and signal
+    // parameters are camelCase and PascalCase (CLAUDE.md, Conventions).
 public:
     // The enumerators are PascalCase because QML requires a capital letter and these are the names it sees.
     enum class State
@@ -391,6 +393,7 @@ signals:
 
     // CONTINUE found a run it could not restore.
     void continueFailed();
+    // NOLINTEND(readability-identifier-naming)
 
 private:
     void process();

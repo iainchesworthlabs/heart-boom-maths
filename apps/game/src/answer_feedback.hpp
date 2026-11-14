@@ -52,6 +52,8 @@ class AnswerFeedback : public QObject
     Q_PROPERTY(int wrongHoldMs READ wrong_hold_ms WRITE set_wrong_hold_ms NOTIFY holdTimesChanged FINAL)
     Q_PROPERTY(int boomHoldMs READ boom_hold_ms WRITE set_boom_hold_ms NOTIFY holdTimesChanged FINAL)
 
+    // NOLINTBEGIN(readability-identifier-naming): QML sees these names, so signals, invokables, enumerators and signal
+    // parameters are camelCase and PascalCase (CLAUDE.md, Conventions).
 public:
     enum class Kind
     {
@@ -101,6 +103,7 @@ signals:
     void kindChanged();
     void heldChanged();
     void holdTimesChanged();
+    // NOLINTEND(readability-identifier-naming)
 
 private:
     void on_correct(int tile, int points, int coins, int streak_bonus_coins, int run, int multiplier,
