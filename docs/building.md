@@ -36,10 +36,13 @@ ctest --preset linux-debug
 |---|---|
 | `linux-debug` | Debug with Tracy available (feature `profiling`) |
 | `linux-release` | Optimised build |
-| `linux-asan-ubsan` | AddressSanitizer and UndefinedBehaviorSanitizer |
+| `linux-asan-ubsan` | AddressSanitizer and UndefinedBehaviorSanitizer, at -O1 (every sanitizer preset is, from `cmake/icl/IclSanitizers.cmake`) |
 | `linux-tsan` | ThreadSanitizer |
+| `linux-asan-o1`, `linux-ubsan` | The nightly's AddressSanitizer alone and UndefinedBehaviorSanitizer alone, at -O1 with assertions on. See [Nightly checks](testing.md#nightly-checks) |
+| `linux-static-analysis`, `linux-gcc-analyzer` | Inputs of the nightly's clang-tidy, cppcheck and GCC `-fanalyzer`; nothing is run |
 | `linux-coverage` | Instrumented build for gcovr |
 | `macos-release`, `windows-msvc-release`, `windows-msvc-asan` | Platform builds |
+| `macos-asan-ubsan`, `windows-msvc-analyze` | The nightly's Apple Clang sanitizers, and MSVC `/analyze` (build only) |
 | `ios-release` | The iPhone and iPad application (`apps/ios`), unsigned, on a Mac with Xcode; no tests and no Qt application |
 | `ios-game-release` | The whole game on an iPhone or iPad, linked statically against Qt for iOS, unsigned, on a Mac with Xcode. See iOS below and [iOS and Game Center](ios.md) |
 | `wasm-release` | The game in a browser (`apps/game`), single-threaded. See WebAssembly below |
