@@ -10,6 +10,7 @@ flaky tests stay visible. A phase that matches no tests fails, unless the phase 
 |---|---|---|
 | unit | `libs/*/tests` | `test_tuning.cpp` |
 | integration | `apps/game` (in `CMakeLists.txt`) | `game.version` runs the program and reads its answer |
+| unit, integration | `apps/game/tests` | `heart_boom_maths_game_tests`, Catch2 on the offscreen platform: the tick driver, the parental gate, the controller with a manual clock, the file save store. A case tagged `[unit]` or `[integration]` gets that label, and a Qt warning outside the game's own `hbm.game` log category aborts the test |
 | ui | `apps/game` (in `CMakeLists.txt`) | `game.smoke` starts the program on the offscreen platform and waits for the first frame; `game.qmllint` |
 
 The `game.*` tests exist only when a Qt kit was found. On Windows the Qt `bin` directory must be on `PATH`;

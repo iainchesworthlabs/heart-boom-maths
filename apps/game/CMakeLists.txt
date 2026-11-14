@@ -5,6 +5,43 @@ find_package(Qt6 6.8 REQUIRED COMPONENTS Quick)
 qt_standard_project_setup(REQUIRES 6.8)
 
 include(IclQtApp)
+include(HbmBuildInfo)
+include(HbmNotices)
+
+# Everything the screens bind to, as a library so the tests link it without the QML module. It holds no screen.
+add_library(heart_boom_maths_app STATIC
+    src/event_sounds.cpp
+    src/game_controller.cpp
+    src/parental_gate.cpp
+    src/tick_driver.cpp
+    src/services/build_info.cpp
+    src/services/file_save_store.cpp
+    src/services/notices.cpp
+    src/services/system_link_opener.cpp)
+target_include_directories(heart_boom_maths_app PUBLIC src "${CMAKE_CURRENT_BINARY_DIR}/generated")
+target_link_libraries(heart_boom_maths_app
+    PUBLIC heart_boom_maths::core Qt6::Core Qt6::Gui
+    PRIVATE icl::warnings icl::hardening icl::coverage)
+icl_relax_generated_warnings(heart_boom_maths_app)
+
+# Version, build number, commit and Qt version, written at configure time (see cmake/HbmBuildInfo.cmake).
+hbm_generate_build_info("${CMAKE_CURRENT_BINARY_DIR}/generated/build_info_data.hpp"
+    TEMPLATE "${CMAKE_CURRENT_SOURCE_DIR}/src/services/build_info_data.hpp.in"
+    APP_NAME "${HEART_BOOM_MATHS_DISPLAY_NAME}"
+    QT_VERSION "${Qt6_VERSION}")
+
+# One notices text for About: Qt, the dependencies (the configure fails when one has no licence file) and the fonts.
+hbm_generate_notices_text("${CMAKE_CURRENT_BINARY_DIR}/generated/notices.txt"
+    NAME "${HEART_BOOM_MATHS_DISPLAY_NAME}"
+    QT_VERSION "${Qt6_VERSION}"
+    EXCLUDE catch2
+    LICENCE_FILES
+        "${CMAKE_CURRENT_SOURCE_DIR}/fonts/Bangers-OFL.txt"
+        "${CMAKE_CURRENT_SOURCE_DIR}/fonts/LilitaOne-OFL.txt")
+qt_add_resources(heart_boom_maths_app notices
+    PREFIX /heart_boom_maths
+    BASE "${CMAKE_CURRENT_BINARY_DIR}/generated"
+    FILES "${CMAKE_CURRENT_BINARY_DIR}/generated/notices.txt")
 
 qt_add_executable(heart_boom_maths_game src/main.cpp)
 # The program is named heart-boom-maths while the target is heart_boom_maths_game, so the QML module and the target stay
@@ -41,7 +78,7 @@ qt_add_resources(heart_boom_maths_game fonts
 
 target_include_directories(heart_boom_maths_game PRIVATE src)
 target_link_libraries(heart_boom_maths_game
-    PRIVATE heart_boom_maths::core Qt6::Quick icl::warnings icl::hardening icl::coverage)
+    PRIVATE heart_boom_maths_app heart_boom_maths::core Qt6::Quick icl::warnings icl::hardening icl::coverage)
 # qmlcachegen, rcc and moc write C++ files that the strict warning set rejects with some compilers.
 icl_relax_generated_warnings(heart_boom_maths_game)
 
@@ -64,6 +101,39 @@ endif()
 if(HEART_BOOM_MATHS_BUILD_TESTS)
     # A display is not needed: the offscreen platform and the software renderer draw the first frame.
     set(game_test_environment QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software QSG_RENDER_LOOP=basic)
+
+    # The app layer without a screen: the controller, the tick driver, the gate and the services. Every test runs on the
+    # offscreen platform. A Qt warning aborts a test (tests/test_main.cpp). The `unit` and `integration` tags of the
+    # cases become the CTest labels.
+    find_package(Qt6 REQUIRED COMPONENTS Test)
+    add_executable(heart_boom_maths_game_tests
+        tests/test_main.cpp
+        tests/test_build_info.cpp
+        tests/test_event_sounds.cpp
+        tests/test_file_save_store.cpp
+        tests/test_game_controller.cpp
+        tests/test_parental_gate.cpp
+        tests/test_tick_driver.cpp)
+    target_link_libraries(heart_boom_maths_game_tests
+        PRIVATE heart_boom_maths_app Qt6::Test Catch2::Catch2 icl::warnings icl::coverage)
+    icl_relax_generated_warnings(heart_boom_maths_game_tests)
+    # PRE_TEST: the list of cases is read when ctest runs, not at build time, when the Qt libraries may not be on PATH.
+    catch_discover_tests(heart_boom_maths_game_tests
+        TEST_PREFIX "game."
+        TEST_SPEC "[unit]"
+        DISCOVERY_MODE PRE_TEST
+        PROPERTIES LABELS unit TIMEOUT 60 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+    catch_discover_tests(heart_boom_maths_game_tests
+        TEST_PREFIX "game."
+        TEST_SPEC "[integration]"
+        DISCOVERY_MODE PRE_TEST
+        PROPERTIES LABELS integration TIMEOUT 60 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+    # The build information script, run with a CI build number to see it end up in the header.
+    add_test(NAME game.build_info_script
+        COMMAND "${CMAKE_COMMAND}" "-DSOURCE_DIR=${PROJECT_SOURCE_DIR}" "-DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/build_info_check"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/build_info_check.cmake")
+    set_tests_properties(game.build_info_script PROPERTIES LABELS unit TIMEOUT 60)
 
     # Starts the real application, waits for the first frame and exits.
     add_test(NAME game.smoke COMMAND heart_boom_maths_game --smoke-test)

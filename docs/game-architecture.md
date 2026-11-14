@@ -264,7 +264,7 @@ One table in the app layer maps core events to sounds, using the feedback table 
 
 ### Parental gate
 
-One screen in the app layer. `GameController::request_link(url)` shows it and calls `LinkOpener::open` only when it is passed. The gate also guards the Game Center switch. The only links v1 needs are the privacy policy and the source repository, both on About. The code base has exactly one call that opens a URL, and a CI check fails if another appears. The form is a number written in words that the adult types back. It is checked against the current Apple and Google rules for children's apps before release.
+One screen in the app layer. `GameController::requestLink(url)` (QML-facing names are camelCase; only an https address is accepted) opens the gate, `submitGate(typed)` checks the number, and it calls `LinkOpener::open` only when it is passed. The gate also guards the Game Center switch. The only links v1 needs are the privacy policy and the source repository, both on About. The code base has exactly one call that opens a URL, and a CI check fails if another appears. The form is a number written in words that the adult types back. It is checked against the current Apple and Google rules for children's apps before release.
 
 ### Build information and notices
 
@@ -273,6 +273,16 @@ One screen in the app layer. `GameController::request_link(url)` shows it and ca
 A CMake step gathers the licence file of each vcpkg dependency, the Qt notice and the OFL text for the two fonts into one notices file, which ships as a resource. CI fails if a dependency has no licence file.
 
 v1 ships no analytics, crash reporting or advertising code, and the app makes no network requests of its own. The release checklist includes a traffic capture on a device.
+
+### As built (appcore)
+
+Deviations from the sketches above, all small:
+
+- `ScoreService` gains `set_enabled(bool)`, called when the Game Center switch changes, so the controller always calls `submit` once and the service stays idle while the switch is off. `available()` is false on a platform without a leaderboard, and the switch is then ignored.
+- `AudioService` gains `stop_effect(SoundId)` so the ticking can end when the timer leaves the alert zone, or the level stops running. `SoundId` and `MusicId` are in `services/audio_service.hpp`; `MusicId` is `NONE`, `MENU` and `PLAY` (a placeholder until music is chosen).
+- `SaveStore` only loads and stores, so moving a damaged file aside is a second interface, `SaveQuarantine`, that `FileSaveStore` also implements. The controller moves a damaged file to `save.json.bad` before its first write. A newer file stays untouched because `SaveManager` refuses every save after it.
+- The controller is built from `GameServices` (pointers) and `GameOptions` (tuning, session seed, gate seed source, build information). The clock is the `Clock` interface (`SteadyClock`, and `ManualClock` for tests), and `TickDriver` is plain C++ with integer arithmetic only.
+- The gate asks for a three-digit number in English words (`parental_gate.hpp`). A wrong answer deals a new number. Only the two link purposes and the Game Center switch use it.
 
 ## Tests
 

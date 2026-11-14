@@ -1,11 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "game_controller.hpp"
+#include "heart_boom_maths/save_store.hpp"
 #include "heart_boom_maths/version.hpp"
 #include "platform/platform.hpp"
+#include "services/audio_service.hpp"
+#include "services/clock.hpp"
+#include "services/file_save_store.hpp"
+#include "services/score_service.hpp"
+#include "services/system_link_opener.hpp"
 
 #include <QCoreApplication>
 #include <QGuiApplication>
 #include <QObject>
 #include <QQmlApplicationEngine>
+#include <QQmlContext>
 #include <QQuickWindow>
 #include <QString>
 #include <QTimer>
@@ -49,7 +57,31 @@ int main(int argc, char* argv[])
     QGuiApplication::setApplicationVersion(QString::fromUtf8(
         heart_boom_maths::VERSION_STRING.data(), static_cast<qsizetype>(heart_boom_maths::VERSION_STRING.size())));
 
+    // The services outlive the controller and the engine. A smoke test must not touch the player's save, so it keeps
+    // its save in memory.
+    using namespace heart_boom_maths;
+    game::SteadyClock clock;
+    game::NullAudioService audio;
+    game::NullScoreService scores;
+    game::SystemLinkOpener links;
+    game::FileSaveStore file_store(game::FileSaveStore::default_directory());
+    MemorySaveStore memory_store;
+    SaveStore& store = smoke_test ? static_cast<SaveStore&>(memory_store) : static_cast<SaveStore&>(file_store);
+    game::GameServices services;
+    services.store = &store;
+    services.quarantine = smoke_test ? nullptr : &file_store;
+    services.audio = &audio;
+    services.scores = &scores;
+    services.links = &links;
+    services.clock = &clock;
+    game::GameController controller(services, game::GameOptions::with_random_seed());
+    // Leaving the Active state (background, lock screen, a window losing focus) pauses and saves.
+    QObject::connect(&app, &QGuiApplication::applicationStateChanged, &controller,
+                     [&controller](Qt::ApplicationState state)
+                     { controller.on_application_state(state == Qt::ApplicationActive); });
+
     QQmlApplicationEngine engine;
+    engine.rootContext()->setContextProperty(QStringLiteral("game"), &controller);
     QObject::connect(
         &engine, &QQmlApplicationEngine::objectCreationFailed, &app, [] { QCoreApplication::exit(1); },
         Qt::QueuedConnection);
