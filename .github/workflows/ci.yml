@@ -110,6 +110,29 @@ jobs:
             python3 .icl-infra/scripts/plan_gate.py --config .github/ci/plan.json --force-all >> "$GITHUB_OUTPUT"
           fi
 
+  # The rules in CLAUDE.md that no compiler enforces: the core includes only the C++ standard library, and the game opens
+  # a URL in one place. Python only, so it runs on every pull request, drafts included, in a few seconds.
+  project-rules:
+    name: Project rules
+    needs: plan
+    runs-on: ${{ fromJSON(needs.plan.outputs.linux_runner || '["ubuntu-24.04"]') }}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Core includes only the standard library
+        run: |
+          python3 tools/ci/check_core_includes.py --self-test
+          python3 tools/ci/check_core_includes.py
+      - name: One call opens a URL
+        run: |
+          python3 tools/ci/check_link_open.py --self-test
+          python3 tools/ci/check_link_open.py
+
   build-fast:
     name: Build (fast)
     needs: plan
@@ -217,7 +240,7 @@ jobs:
   ci-status:
     name: CI Status
     if: always()
-    needs: [policy, plan, build-fast, build-full, coverage, zizmor, dependency-scan]
+    needs: [policy, plan, project-rules, build-fast, build-full, coverage, zizmor, dependency-scan]
     # Always hosted: this is the job that must report when a self-hosted fleet is down.
     runs-on: ubuntu-24.04
     timeout-minutes: 5
