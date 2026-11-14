@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Written by cmake/HbmBuildInfo.cmake at configure time. Do not edit.
+#pragma once
+
+namespace heart_boom_maths::game::generated
+{
+
+inline constexpr const char* BUILD_APP_NAME = "@HBM_BUILD_APP_NAME@";
+inline constexpr const char* BUILD_VERSION = "@HBM_BUILD_VERSION@";
+inline constexpr int BUILD_NUMBER = @HBM_BUILD_NUMBER@;
+inline constexpr const char* BUILD_COMMIT = "@HBM_BUILD_COMMIT@";
+inline constexpr const char* BUILD_BRANCH = "@HBM_BUILD_BRANCH@";
+inline constexpr const char* BUILD_DATE = "@HBM_BUILD_DATE@";
+inline constexpr const char* BUILD_QT_VERSION = "@HBM_BUILD_QT_VERSION@";
+
+} // namespace heart_boom_maths::game::generated

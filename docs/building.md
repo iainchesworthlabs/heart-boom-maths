@@ -54,6 +54,12 @@ it when a kit is found and prints a status line when not, `ON` stops the configu
 it. A machine with no Qt still builds and tests `libs/core`. Set `ICL_QT_ROOT` once per machine (see above). The
 program answers `--version` and, for tests, `--smoke-test` (it exits after the first frame).
 
+The build information (version, build number, short commit, branch or tag, date, Qt version) is written at configure
+time by `cmake/HbmBuildInfo.cmake`. The build number is `ICL_BUILD_NUMBER`, then `GITHUB_RUN_NUMBER`, and 0 when
+neither is a whole number. A commit made after the configure shows at the next configure. The notices text About
+shows is built at the same time by `cmake/HbmNotices.cmake`: Qt, each runtime dependency of `vcpkg.json` (the configure
+stops when one has no licence file, so list a test-only package in `EXCLUDE`) and the two font licences.
+
 ### WebAssembly
 
 `wasm-release` builds `apps/game` for a browser with the Emscripten version pinned in
