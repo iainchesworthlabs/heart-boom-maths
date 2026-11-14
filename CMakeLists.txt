@@ -57,6 +57,26 @@ if(HEART_BOOM_MATHS_BUILD_TESTS)
     include(CTest)
     find_package(Catch2 3 CONFIG REQUIRED)
     include(Catch)
+
+    # The configure refuses Tracy for a WebAssembly, Android or iOS build (cmake/HbmProfiling.cmake) and accepts it for a
+    # desktop one. The script is run in each configuration, so that those builds are shown to have no Tracy without
+    # building them here.
+    foreach(hbm_platform IN ITEMS EMSCRIPTEN=1 ANDROID=1 CMAKE_SYSTEM_NAME=iOS)
+        string(REGEX REPLACE "=.*" "" hbm_platform_name "${hbm_platform}")
+        add_test(NAME tracy.refused_for_${hbm_platform_name}
+            COMMAND "${CMAKE_COMMAND}" -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR} -DICL_ENABLE_TRACY=ON -D${hbm_platform}
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/tools/ci/tracy_platform_check.cmake")
+        set_tests_properties(tracy.refused_for_${hbm_platform_name} PROPERTIES
+            LABELS unit TIMEOUT 60 PASS_REGULAR_EXPRESSION "ICL_ENABLE_TRACY is on for a WebAssembly")
+    endforeach()
+    add_test(NAME tracy.accepted_for_the_desktop
+        COMMAND "${CMAKE_COMMAND}" -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR} -DICL_ENABLE_TRACY=ON
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/tools/ci/tracy_platform_check.cmake")
+    add_test(NAME tracy.accepted_when_off_for_a_phone
+        COMMAND "${CMAKE_COMMAND}" -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR} -DICL_ENABLE_TRACY=OFF -DANDROID=1
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/tools/ci/tracy_platform_check.cmake")
+    set_tests_properties(tracy.accepted_for_the_desktop tracy.accepted_when_off_for_a_phone PROPERTIES
+        LABELS unit TIMEOUT 60 PASS_REGULAR_EXPRESSION "accepted")
 endif()
 
 add_subdirectory(libs/core)

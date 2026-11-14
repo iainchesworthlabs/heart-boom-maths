@@ -59,6 +59,7 @@ suite checks the same, for the program as built:
   check the same by what the program prints, including that the command line beats the environment;
 - `game.tracy_binary` and `game.tracy_in_core` check that the program and the rules library carry Tracy exactly when the
   build has it (`tools/ci/check_binary_tracy.py`), and a build without it has none;
+- `tracy.refused_for_EMSCRIPTEN`, `tracy.refused_for_ANDROID` and `tracy.refused_for_CMAKE_SYSTEM_NAME` run the configure check (`tools/ci/tracy_platform_check.cmake`) as a WebAssembly, an Android and an iOS build would meet it: Tracy is refused, and accepted only for a desktop or when off;
 - `tools/ci/check_presets_tracy.py` (a project rule in CI) checks that no web, Android, iOS, sanitizer, coverage or fuzz
   preset has Tracy on, and the configure of such a build stops if `ICL_ENABLE_TRACY` is on (`cmake/HbmProfiling.cmake`).
 
