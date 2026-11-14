@@ -1,0 +1,2 @@
+libs/core/variants/**  # the profiling marks are macros: a zone names its call site (function, file, line), and the empty variant must not evaluate its arguments
+apps/game/src/profiling/**  # the same marks over Tracy: its zone macros capture the call site

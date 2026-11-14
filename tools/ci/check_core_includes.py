@@ -9,8 +9,9 @@ The core is the game's rules and must run with no Qt, file access, clock or thre
 broken"). Four rules, each reported with file:line:
 
   qt          no Qt header (<Q...> or <Qt...>) in any file under libs/core, tests included
-  not-std     an angle-bracket include must name a C++ standard library header; a quoted include must name a header of
-              the core itself (heart_boom_maths/..., a generated header, or a file next to the includer)
+  not-std     an angle-bracket include must name a C++ standard library header (or, in heart_boom_maths/profile.hpp
+              alone, a Tracy header); a quoted include must name a header of the core itself (heart_boom_maths/..., a
+              generated header, or a file next to the includer)
   forbidden   no standard header that gives access to files, a clock, threads or the standard random distributions
   cmake       no Qt target or package in a CMake file under libs/core
 
@@ -34,6 +35,11 @@ CMAKE_NAMES = {"CMakeLists.txt"}
 CMAKE_SUFFIXES = {".cmake"}
 
 # Names the core's own headers are reached by when they are generated at configure time.
+# The one file of the core that may include Tracy (docs/game-architecture.md, "Profiling"). Every mark of the core and of the
+# app layer goes through its macros, so the dependency stays in this one place; CMake picks one of two directories that hold
+# a file of this name, one with the marks over Tracy and one with them empty.
+TRACY_HEADER = "heart_boom_maths/profile.hpp"
+
 GENERATED_HEADERS = {"tuning_data.hpp", "prd_tables.hpp", "version.hpp", "save_fixtures.hpp", "golden_replays.hpp"}
 
 STANDARD_HEADERS = frozenset("""
@@ -88,6 +94,8 @@ def check_source(path: Path, root: Path) -> list[str]:
             continue
         if match.group("open") == "<":
             if name.startswith("catch2/") and in_tests:
+                continue
+            if name.startswith("tracy/") and rel.endswith(TRACY_HEADER):
                 continue
             if name not in STANDARD_HEADERS:
                 problems.append(f"{where}: not-std: <{name}> is not a C++ standard library header")
@@ -150,6 +158,7 @@ def self_test() -> int:
         print(f"{'ok  ' if ok else 'FAIL'} {name}" + ("" if ok else f"  expected {list(kinds)}, got {problems}"))
         return ok
 
+    TRACY_INCLUDES = "#include <tracy/Tracy.hpp>\n#include <tracy/TracyC.h>\n"
     inc = "libs/core/include/heart_boom_maths/a.hpp"
     src = "libs/core/src/a.cpp"
     results = [
@@ -161,6 +170,13 @@ def self_test() -> int:
         expect("Qt header in quotes", {src: '#include "QString"\n'}, "qt"),
         expect("Qt header in a test", {"libs/core/tests/t.cpp": "#include <QTest>\n"}, "qt"),
         expect("Qt in a comment", {src: "// #include <QString> is not allowed here\n/* #include <QString> */\n"}),
+        expect("Tracy in the profiling header",
+               {"libs/core/variants/profile-on/heart_boom_maths/profile.hpp": TRACY_INCLUDES}),
+        expect("Tracy in another header", {inc: TRACY_INCLUDES}, "not-std"),
+        expect("Tracy in a source file", {src: TRACY_INCLUDES}, "not-std"),
+        expect("Tracy in a test", {"libs/core/tests/t.cpp": TRACY_INCLUDES}, "not-std"),
+        expect("a file only named like the profiling header", {"libs/core/src/my_profile.hpp": TRACY_INCLUDES},
+               "not-std"),
         expect("third-party header", {src: "#include <fmt/format.h>\n"}, "not-std"),
         expect("header outside the core", {src: '#include "../../../apps/game/x.hpp"\n'}, "not-std"),
         expect("missing local header", {src: '#include "nowhere.hpp"\n'}, "not-std"),

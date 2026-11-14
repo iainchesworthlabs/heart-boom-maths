@@ -54,6 +54,7 @@ add_executable(heart_boom_maths_core_tests
     test_core_property.cpp
     test_endless.cpp
     test_json.cpp
+    test_profile.cpp
     test_question_generator.cpp
     test_replay.cpp
     test_rng.cpp
@@ -65,6 +66,8 @@ add_executable(heart_boom_maths_core_tests
     test_tuning.cpp
     test_version.cpp)
 target_include_directories(heart_boom_maths_core_tests PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
+# What the test of the profiling marks expects of this build; the build's own choice is made by ICL_ENABLE_TRACY.
+target_compile_definitions(heart_boom_maths_core_tests PRIVATE HBM_TEST_EXPECT_TRACY=$<BOOL:${ICL_ENABLE_TRACY}>)
 target_link_libraries(heart_boom_maths_core_tests
     PRIVATE heart_boom_maths::core Catch2::Catch2WithMain icl::warnings icl::coverage)
 

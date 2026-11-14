@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "services/file_save_store.hpp"
 
+#include "heart_boom_maths/profile.hpp"
+
 #include <QDir>
 #include <QFile>
 #include <QSaveFile>
@@ -37,6 +39,7 @@ QString FileSaveStore::damaged_file_path() const
 
 std::optional<std::string> FileSaveStore::load()
 {
+    HBM_ZONE("save_store.load");
     QFile file(file_path());
     if (!file.exists())
     {
@@ -54,6 +57,7 @@ std::optional<std::string> FileSaveStore::load()
 
 bool FileSaveStore::store(std::string_view text)
 {
+    HBM_ZONE("save_store.store");
     if (!QDir().mkpath(m_Directory))
     {
         return false;
@@ -75,6 +79,7 @@ bool FileSaveStore::store(std::string_view text)
 
 bool FileSaveStore::set_damaged_aside()
 {
+    HBM_ZONE("save_store.set_damaged_aside");
     const QString damaged = damaged_file_path();
     // Only the latest damaged file is kept: an older .bad is replaced.
     QFile::remove(damaged);

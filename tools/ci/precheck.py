@@ -37,6 +37,7 @@ PROJECT_CHECKS = [
     ("core includes", "check_core_includes.py"),
     ("single link-open call", "check_link_open.py"),
     ("web page is closed", "check_web_site.py"),
+    ("no Tracy in mobile, web and instrumented presets", "check_presets_tracy.py"),
 ]
 
 

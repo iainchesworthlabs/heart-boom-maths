@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "answer_feedback.hpp"
 
+#include "heart_boom_maths/profile.hpp"
+
 #include <QVariant>
 #include <QVariantList>
 #include <QVariantMap>
@@ -165,6 +167,7 @@ void AnswerFeedback::set_boom_hold_ms(int ms)
 
 void AnswerFeedback::clear()
 {
+    HBM_ZONE("feedback.clear");
     m_Timer.stop();
     if (m_Kind == Kind::None)
     {
@@ -177,6 +180,7 @@ void AnswerFeedback::clear()
 void AnswerFeedback::on_correct(int tile, int points, int /*coins*/, int /*streak_bonus_coins*/, int /*run*/,
                                 int multiplier, bool multiplier_rose, int seconds_added)
 {
+    HBM_ZONE("feedback.on_correct");
     read_answered();
     m_Chosen = tile;
     m_Correct = tile;
@@ -192,6 +196,7 @@ void AnswerFeedback::on_correct(int tile, int points, int /*coins*/, int /*strea
 
 void AnswerFeedback::on_wrong(int tile, int correct_tile, int seconds_lost, int multiplier)
 {
+    HBM_ZONE("feedback.on_wrong");
     read_answered();
     m_Chosen = tile;
     m_Correct = correct_tile;
@@ -207,6 +212,7 @@ void AnswerFeedback::on_wrong(int tile, int correct_tile, int seconds_lost, int 
 
 void AnswerFeedback::on_game_over(GameController::EndReason reason)
 {
+    HBM_ZONE("feedback.on_game_over");
     // Only the bomb gets its pop; QUIT and FINISH go straight to the game-over card, so the look of an answer given
     // just before the pause must not keep the play screen up.
     if (reason == GameController::EndReason::Bomb)
@@ -229,6 +235,7 @@ void AnswerFeedback::on_baseline_event()
 
 void AnswerFeedback::hold(Kind kind, int ms)
 {
+    HBM_ZONE("feedback.hold");
     const bool changed = kind != m_Kind;
     m_Kind = kind;
     m_Timer.start(ms);
@@ -240,6 +247,7 @@ void AnswerFeedback::hold(Kind kind, int ms)
 
 void AnswerFeedback::read_answered()
 {
+    HBM_ZONE("feedback.read_answered");
     const QVariantMap held = m_Game->answered();
     m_QuestionNumber = held.value(QStringLiteral("questionNumber")).toInt();
     m_Parts = held.value(QStringLiteral("parts")).toStringList();

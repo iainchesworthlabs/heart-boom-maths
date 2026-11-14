@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "heart_boom_maths/question_generator.hpp"
 
+#include "heart_boom_maths/profile.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -557,6 +559,7 @@ int QuestionGenerator::possible_question_count(int level, int cap) const
 
 void QuestionGenerator::begin_level(int level, Rng& rng)
 {
+    HBM_ZONE("generator.begin_level");
     m_Level = std::max(level, 1);
     m_Keys.clear();
     m_DeckPos = 0;
@@ -579,6 +582,7 @@ void QuestionGenerator::begin_level(int level, Rng& rng)
 
 Question QuestionGenerator::next(Rng& rng)
 {
+    HBM_ZONE("generator.next");
     if (m_Mode == Mode::NOT_STARTED)
     {
         begin_level(m_Level, rng);
@@ -615,6 +619,7 @@ Question QuestionGenerator::next(Rng& rng)
 
 std::vector<std::int64_t> QuestionGenerator::snapshot() const
 {
+    HBM_ZONE("generator.snapshot");
     // The dealt questions (redraw) or the questions still to deal (deck) are everything that decides the next question
     // besides the random generator, whose state the session saves.
     const auto first = m_Mode == Mode::DECK ? m_Keys.begin() + static_cast<std::ptrdiff_t>(m_DeckPos) : m_Keys.begin();

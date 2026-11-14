@@ -36,6 +36,7 @@ include(IclSanitizers)
 include(IclWarnings)
 include(IclHardening)
 include(IclTracy)
+include(HbmProfiling)
 include(IclCoverage)
 include(IclPlatform)
 

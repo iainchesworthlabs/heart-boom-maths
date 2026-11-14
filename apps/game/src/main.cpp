@@ -6,6 +6,9 @@
 #include "platform/haptics_platform.hpp"
 #include "platform/platform.hpp"
 #include "platform/score_platform.hpp"
+#include "profile_build.hpp"
+#include "profiling.hpp"
+#include "profiling/profile_switch.hpp"
 #include "services/app_save_store.hpp"
 #include "services/audio_factory.hpp"
 #include "services/backed_haptics_service.hpp"
@@ -17,6 +20,7 @@
 #include "services/score_service.hpp"
 #include "services/system_link_opener.hpp"
 
+#include <QByteArray>
 #include <QCoreApplication>
 #include <QGuiApplication>
 #include <QObject>
@@ -27,10 +31,15 @@
 #include <QTimer>
 #include <QVariant>
 #include <QtLogging>
+#include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <memory>
 #include <string>
 #include <string_view>
+#include <vector>
+
+namespace profiling = heart_boom_maths::game::profiling;
 
 namespace
 {
@@ -50,10 +59,38 @@ bool has_argument(int argc, char* argv[], std::string_view wanted)
     return false;
 }
 
+/// The whole number after `name`, or 0.
+int argument_value(int argc, char* argv[], std::string_view name)
+{
+    for (int i = 1; i + 1 < argc; ++i)
+    {
+        if (std::string_view(argv[i]) == name)
+        {
+            return std::max(0, QString::fromUtf8(argv[i + 1]).toInt());
+        }
+    }
+    return 0;
+}
+
+void wait_for_the_profiler(const profiling::Session& profiler, const profiling::StartupDecision& decision)
+{
+    std::fputs("Tracy profiler started: connect a Tracy 0.14 profiler to 127.0.0.1:8086\n", stderr);
+    if (!decision.wait)
+    {
+        return;
+    }
+    // A person is never left with a window that does not open: the wait ends on its own.
+    constexpr std::chrono::seconds WAIT_LIMIT(30);
+    std::fputs("Waiting up to 30 s for a profiler to connect (--profile-wait)\n", stderr);
+    const bool connected = profiler.wait_for_profiler(WAIT_LIMIT);
+    std::fputs(connected ? "A profiler connected\n" : "No profiler connected: starting anyway\n", stderr);
+}
+
 } // namespace
 
 int main(int argc, char* argv[])
 {
+    profiling::note_main_started();
     // Answered before Qt starts, so it works with no window system.
     if (has_argument(argc, argv, "--version"))
     {
@@ -62,7 +99,23 @@ int main(int argc, char* argv[])
         return 0;
     }
     const bool smoke_test = has_argument(argc, argv, "--smoke-test");
+    // A scripted profiling run (profiling builds only) plays games that are nobody's: they must not reach the player's
+    // save.
+    const bool scripted_run = profiling::ENABLED && has_argument(argc, argv, "--profile-run");
 
+    // The profiler, if one is asked for, is the first thing started and the last stopped, so that it outlives every
+    // thread that can be inside a zone. A build without Tracy has nothing to start, and this does nothing.
+    const std::vector<std::string_view> arguments(argv + 1, argv + argc);
+    const QByteArray profile_environment = qgetenv(std::string(profiling::ENVIRONMENT_VARIABLE).c_str());
+    const profiling::StartupDecision profile_decision = profiling::decide_startup(
+        profiling::AUTOSTART, profile_environment.isNull() ? nullptr : profile_environment.constData(), arguments);
+    const profiling::Session profiler(profile_decision);
+    if (profiler.running())
+    {
+        wait_for_the_profiler(profiler, profile_decision);
+    }
+    profiling::prepare_scene_graph_log(arguments);
+    HBM_ZONE_FN();
     QGuiApplication app(argc, argv);
     QGuiApplication::setApplicationName(QStringLiteral("heart-boom-maths"));
     QGuiApplication::setApplicationVersion(QString::fromUtf8(
@@ -96,11 +149,12 @@ int main(int argc, char* argv[])
     const game::platform::SaveStorage save_storage = game::platform::save_storage();
     std::unique_ptr<game::AppSaveStore> app_store;
     MemorySaveStore memory_store;
-    if (!smoke_test)
+    if (!smoke_test && !scripted_run)
     {
         app_store = game::make_save_store(save_storage, game::FileSaveStore::default_directory());
     }
-    SaveStore& store = smoke_test ? static_cast<SaveStore&>(memory_store) : static_cast<SaveStore&>(*app_store);
+    SaveStore& store =
+        smoke_test || scripted_run ? static_cast<SaveStore&>(memory_store) : static_cast<SaveStore&>(*app_store);
     game::GameServices services;
     services.store = &store;
     services.quarantine = app_store.get();
@@ -124,17 +178,43 @@ int main(int argc, char* argv[])
     QObject::connect(
         &engine, &QQmlApplicationEngine::objectCreationFailed, &app, [] { QCoreApplication::exit(1); },
         Qt::QueuedConnection);
-    engine.loadFromModule("HeartBoomMaths", "Main");
+    {
+        HBM_ZONE("startup.load_qml");
+        engine.loadFromModule("HeartBoomMaths", "Main");
+    }
+
+    const auto roots = engine.rootObjects();
+    auto* window = roots.isEmpty() ? nullptr : qobject_cast<QQuickWindow*>(roots.first());
+    if ((profiler.running() || scripted_run) && window != nullptr)
+    {
+        profiling::profile_window(*window);
+    }
+    if (scripted_run)
+    {
+        if (window == nullptr || !profiling::start_profile_run(controller, *window, arguments))
+        {
+            std::fputs("--profile-run needs a profiling build and a window\n", stderr);
+            return 2;
+        }
+    }
+    else if (std::ranges::find(arguments, profiling::RUN_FLAG) != arguments.end())
+    {
+        std::fputs("--profile-run needs a profiling build: configure a profile preset (docs/profiling.md)\n", stderr);
+        return 2;
+    }
 
     if (smoke_test)
     {
-        const auto roots = engine.rootObjects();
-        auto* window = roots.isEmpty() ? nullptr : qobject_cast<QQuickWindow*>(roots.first());
         if (window == nullptr)
         {
             return 1;
         }
-        QObject::connect(window, &QQuickWindow::frameSwapped, &app, [] { QCoreApplication::quit(); });
+        // The test that looks for an open socket asks the program to stay a while after its first frame
+        // (--smoke-hold-ms).
+        const int hold_ms = argument_value(argc, argv, "--smoke-hold-ms");
+        QObject::connect(
+            window, &QQuickWindow::frameSwapped, &app,
+            [&app, hold_ms] { QTimer::singleShot(hold_ms, &app, &QCoreApplication::quit); }, Qt::SingleShotConnection);
         QTimer::singleShot(SMOKE_TEST_LIMIT_MS, &app, [] { QCoreApplication::exit(1); });
     }
 

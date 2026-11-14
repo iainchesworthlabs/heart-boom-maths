@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "heart_boom_maths/json.hpp"
 
+#include "heart_boom_maths/profile.hpp"
+
 #include <algorithm>
 #include <array>
 #include <charconv>
@@ -755,11 +757,13 @@ bool Value::erase(std::string_view key)
 
 std::expected<Value, Error> parse(std::string_view text, const Limits& limits)
 {
+    HBM_ZONE("json.parse");
     return Parser(text, limits).run();
 }
 
 std::string write(const Value& value)
 {
+    HBM_ZONE("json.write");
     std::string out;
     write_value(out, value);
     return out;

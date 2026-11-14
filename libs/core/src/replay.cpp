@@ -2,6 +2,7 @@
 #include "heart_boom_maths/replay.hpp"
 
 #include "heart_boom_maths/json.hpp"
+#include "heart_boom_maths/profile.hpp"
 #include "heart_boom_maths/state_hash.hpp"
 
 #include <array>
@@ -116,6 +117,7 @@ std::string hash_to_hex(std::uint64_t hash)
 
 std::expected<Replay, std::string> parse_replay(std::string_view text)
 {
+    HBM_ZONE("replay.parse");
     json::Limits limits;
     limits.max_bytes = MAX_REPLAY_BYTES;
     const auto parsed = json::parse(text, limits);
@@ -283,6 +285,7 @@ std::expected<Replay, std::string> parse_replay(std::string_view text)
 
 std::string write_replay(const Replay& replay)
 {
+    HBM_ZONE("replay.write");
     const auto quoted = [](const std::string& text) { return json::write(json::Value::string(text)); };
 
     std::string out = "{\n";
@@ -407,6 +410,7 @@ ReplayResult ReplayRunner::result() const
 
 std::expected<ReplayResult, std::string> run_replay(const Replay& replay, const ReplayObserver& observer)
 {
+    HBM_ZONE("replay.run");
     const Tuning* tuning = replay_tuning(replay.tuning);
     if (tuning == nullptr)
     {

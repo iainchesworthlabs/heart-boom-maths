@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "heart_boom_maths/save_manager.hpp"
 
+#include "heart_boom_maths/profile.hpp"
+
 namespace heart_boom_maths
 {
 
@@ -11,6 +13,7 @@ SaveManager::SaveManager(SaveStore& store, const Tuning& tuning, const SaveSchem
 
 LoadResult SaveManager::load()
 {
+    HBM_ZONE("save_manager.load");
     LoadResult result;
     m_Loaded = true;
     m_NewerFile = false;
@@ -35,6 +38,7 @@ LoadResult SaveManager::load()
 
 SaveOutcome SaveManager::save(const SaveData& data)
 {
+    HBM_ZONE("save_manager.save");
     if (!m_Loaded)
     {
         return SaveOutcome::NOT_LOADED;

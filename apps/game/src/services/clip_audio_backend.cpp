@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "services/clip_audio_backend.hpp"
 
+#include "heart_boom_maths/profile.hpp"
+
 #include <algorithm>
 #include <string>
 #include <utility>
@@ -57,6 +59,7 @@ std::unique_ptr<ClipPlayer> ClipAudioBackend::load_player(const AudioClip& clip)
 
 void ClipAudioBackend::load_players()
 {
+    HBM_ZONE("audio.load_players");
     m_Effects.clear();
     m_Music.clear();
     for (const SoundId id : all_sounds())
@@ -99,6 +102,7 @@ bool ClipAudioBackend::ensure_session()
 
 void ClipAudioBackend::play_effect(SoundId id, const AudioClip&)
 {
+    HBM_ZONE("audio.backend_play_effect");
     if (ClipPlayer* player = find(m_Effects, static_cast<int>(id)); player != nullptr && ensure_session())
     {
         player->play_from_start();

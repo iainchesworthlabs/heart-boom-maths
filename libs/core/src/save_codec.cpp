@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "heart_boom_maths/save_codec.hpp"
 
+#include "heart_boom_maths/profile.hpp"
+
 namespace heart_boom_maths
 {
 
@@ -192,6 +194,7 @@ ParseResult damaged(SaveError reason, std::optional<std::int64_t> file_version =
 
 std::expected<std::string, SaveError> serialise(const SaveData& data, const Tuning& tuning, const SaveSchema& schema)
 {
+    HBM_ZONE("save.serialise");
     if (auto valid = validate(data, tuning, schema.current_version); !valid)
     {
         return std::unexpected(valid.error());
@@ -232,6 +235,7 @@ std::expected<std::string, SaveError> serialise(const SaveData& data, const Tuni
 
 ParseResult parse_save(std::string_view text, const Tuning& tuning, const SaveSchema& schema)
 {
+    HBM_ZONE("save.parse");
     const json::Limits limits;
     auto parsed = json::parse(text, limits);
     if (!parsed)

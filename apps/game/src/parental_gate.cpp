@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "parental_gate.hpp"
 
+#include "heart_boom_maths/profile.hpp"
+
 #include <array>
 
 namespace heart_boom_maths::game
@@ -64,6 +66,7 @@ std::string number_in_words(int number)
 
 GateChallenge make_gate_challenge(std::uint64_t seed)
 {
+    HBM_ZONE("gate.make_challenge");
     std::uint64_t state = seed;
     // The modulo bias over a 64-bit value and a range of 900 is far too small to matter for a gate.
     constexpr std::uint64_t SPAN = GATE_NUMBER_MAX - GATE_NUMBER_MIN + 1;
@@ -73,6 +76,7 @@ GateChallenge make_gate_challenge(std::uint64_t seed)
 
 bool gate_answer_matches(const GateChallenge& challenge, std::string_view typed) noexcept
 {
+    HBM_ZONE("gate.answer_matches");
     while (!typed.empty() && typed.front() == ' ')
     {
         typed.remove_prefix(1);

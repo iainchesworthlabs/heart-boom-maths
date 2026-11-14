@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "heart_boom_maths/session.hpp"
 
+#include "heart_boom_maths/profile.hpp"
 #include "heart_boom_maths/state_hash.hpp"
 
 #include <algorithm>
@@ -166,6 +167,7 @@ void GameSession::refresh_view()
 
 void GameSession::start_game()
 {
+    HBM_ZONE("session.start_game");
     if (m_View.state != SessionState::IDLE && m_View.state != SessionState::GAME_OVER)
     {
         return;
@@ -179,6 +181,7 @@ void GameSession::start_game()
 
 void GameSession::begin_level(int level)
 {
+    HBM_ZONE("session.begin_level");
     const Tuning& t = *m_Tuning;
     m_View.level = level;
     m_View.questions_answered = 0;
@@ -195,6 +198,7 @@ void GameSession::begin_level(int level)
 
 void GameSession::deal_question()
 {
+    HBM_ZONE("session.deal_question");
     m_View.question = m_Generator.next(m_Rng);
     m_View.hint_used = false;
     m_View.removed_tiles = 0;
@@ -207,6 +211,7 @@ void GameSession::deal_question()
 
 void GameSession::tick()
 {
+    HBM_ZONE("session.tick");
     if (m_View.state != SessionState::PLAYING)
     {
         return;
@@ -222,8 +227,10 @@ void GameSession::tick()
         return;
     }
     refresh_view();
+    HBM_PLOT("session.ticks_left", m_View.ticks_left);
     if (!was_alert && m_View.alert)
     {
+        HBM_MESSAGE("session.alert_entered");
         Event alert = make_event(EventKind::ALERT_ENTERED);
         alert.ticks_left = m_View.ticks_left;
         push(alert);
@@ -232,6 +239,7 @@ void GameSession::tick()
 
 void GameSession::answer(int tile_index)
 {
+    HBM_ZONE("session.answer");
     if (m_View.state != SessionState::PLAYING)
     {
         return;
@@ -386,6 +394,7 @@ void GameSession::end_game(GameOverReason reason)
 
 void GameSession::use_hint()
 {
+    HBM_ZONE("session.use_hint");
     if (m_View.state != SessionState::PLAYING || m_View.hint_used)
     {
         return;
@@ -454,6 +463,7 @@ void GameSession::quit()
 
 void GameSession::next_level()
 {
+    HBM_ZONE("session.next_level");
     if (m_View.state == SessionState::LEVEL_CLEAR)
     {
         begin_level(m_View.level + 1);
@@ -495,6 +505,7 @@ void GameSession::set_won_once(bool won_once)
 
 std::vector<std::int64_t> GameSession::snapshot() const
 {
+    HBM_ZONE("session.snapshot");
     const SessionView& v = m_View;
     const Question& q = v.question;
     std::vector<std::int64_t> out;
@@ -521,6 +532,7 @@ std::vector<std::int64_t> GameSession::snapshot() const
 
 bool GameSession::restore(std::span<const std::int64_t> values)
 {
+    HBM_ZONE("session.restore");
     const Tuning& t = *m_Tuning;
     if (values.size() < SNAPSHOT_FIXED_VALUES || values[0] != SNAPSHOT_FORMAT)
     {
@@ -693,6 +705,7 @@ bool GameSession::restore(std::span<const std::int64_t> values)
 
 std::uint64_t GameSession::state_hash() const
 {
+    HBM_ZONE("session.state_hash");
     const std::vector<std::int64_t> values = snapshot();
     return fnv1a_64(values);
 }
