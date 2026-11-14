@@ -57,6 +57,7 @@ UiRig::UiRig(std::uint64_t seed, bool scores_available, std::string saved_text)
                  {
                      GameOptions options;
                      options.session_seed = seed;
+                     options.tile_guard_ns = 0; // taps straight after a level starts; the guard has its own test
                      options.gate_seed_source = [this]
                      { return FIRST_GATE_SEED + static_cast<std::uint64_t>(gate_seeds_used++); };
                      return options;

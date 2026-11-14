@@ -27,8 +27,8 @@ constexpr std::uint64_t SECOND_GATE_SEED = 12;
 /// one wrote, as a restart does.
 struct Rig
 {
-    explicit Rig(MemorySaveStore& memory, bool score_service_available = false)
-        : scores(score_service_available), controller(make_services(memory), make_options())
+    explicit Rig(MemorySaveStore& memory, bool score_service_available = false, std::int64_t guard_ns = 0)
+        : scores(score_service_available), controller(make_services(memory), make_options(guard_ns))
     {
     }
 
@@ -43,10 +43,11 @@ struct Rig
         return services;
     }
 
-    GameOptions make_options()
+    GameOptions make_options(std::int64_t guard_ns)
     {
         GameOptions options;
         options.session_seed = 20261114;
+        options.tile_guard_ns = guard_ns; // most tests tap straight after a level starts; the guard has its own tests
         options.gate_seed_source = [this] { return gate_seeds_used++ == 0 ? FIRST_GATE_SEED : SECOND_GATE_SEED; };
         return options;
     }
@@ -1345,4 +1346,65 @@ TEST_CASE("Leaving the foreground in every state keeps what the save promises", 
     CHECK(saved(memory).coins == c.wallet());
     CHECK(c.saveName(QStringLiteral("zoe")) == 1);
     CHECK(saved(memory).top10.size() == 1);
+}
+
+TEST_CASE("Taps on the tiles are ignored for a moment after a level starts and after RESUME",
+          "[integration][controller][guard]")
+{
+    MemorySaveStore memory;
+    Rig rig(memory, false, TILE_GUARD_NS);
+    GameController& c = rig.controller;
+
+    c.startGame();
+    REQUIRE(c.session_view().state == SessionState::PLAYING);
+    // The tap that started the level may arrive twice: the second one lands on a tile and must not count.
+    rig.answer_right();
+    CHECK(c.session_view().questions_answered == 0);
+    CHECK(c.session_view().points == 0);
+
+    rig.play_for_ms(300);
+    rig.answer_right();
+    CHECK(c.session_view().questions_answered == 1);
+
+    // RESUME sits over the tiles of the play screen, so it arms the guard again. The clock does not run while paused.
+    c.pause();
+    REQUIRE(c.session_view().state == SessionState::PAUSED);
+    c.resume();
+    rig.answer_right();
+    CHECK(c.session_view().questions_answered == 1);
+    rig.play_for_ms(300);
+    rig.answer_right();
+    CHECK(c.session_view().questions_answered == 2);
+}
+
+TEST_CASE("Taps on the tiles are ignored for a moment after NEXT LEVEL and KEEP GOING",
+          "[integration][controller][guard]")
+{
+    MemorySaveStore memory;
+    Rig rig(memory, false, TILE_GUARD_NS);
+    GameController& c = rig.controller;
+    c.startGame();
+    rig.play_for_ms(300);
+    for (int i = 0; i < Tuning::defaults().questions_per_level; ++i)
+    {
+        rig.answer_right();
+    }
+    REQUIRE(c.session_view().state == SessionState::LEVEL_CLEAR);
+
+    c.nextLevel();
+    REQUIRE(c.session_view().state == SessionState::PLAYING);
+    rig.answer_right();
+    CHECK(c.session_view().questions_answered == 0);
+    rig.play_for_ms(300);
+    rig.answer_right();
+    CHECK(c.session_view().questions_answered == 1);
+}
+
+TEST_CASE("A guard of zero lets a tap through at once", "[integration][controller][guard]")
+{
+    MemorySaveStore memory;
+    Rig rig(memory);
+    rig.controller.startGame();
+    rig.answer_right();
+    CHECK(rig.controller.session_view().questions_answered == 1);
 }

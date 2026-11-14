@@ -87,7 +87,8 @@ GameOptions GameOptions::with_random_seed()
 GameController::GameController(GameServices services, GameOptions options, QObject* parent)
     : QObject(parent), m_Services(services), m_Tuning(options.tuning), m_Session(*options.tuning, options.session_seed),
       m_SaveManager(*services.store, *options.tuning), m_Driver(options.tuning->ticks_per_second),
-      m_GateSeedSource(std::move(options.gate_seed_source)), m_BuildInfo(std::move(options.build_info))
+      m_TileGuardNs(options.tile_guard_ns), m_GateSeedSource(std::move(options.gate_seed_source)),
+      m_BuildInfo(std::move(options.build_info))
 {
     if (!m_GateSeedSource)
     {
@@ -136,6 +137,7 @@ void GameController::startGame()
         return;
     }
     m_Session.start_game();
+    arm_tile_guard();
     m_ScoreSubmitted = false;
     m_NameRank = 0;
     m_NewBest = false;
@@ -193,8 +195,17 @@ bool GameController::continueGame()
     return true;
 }
 
+void GameController::arm_tile_guard()
+{
+    m_TileGuardUntilNs = m_Services.clock->now_ns() + m_TileGuardNs;
+}
+
 void GameController::answer(int tile)
 {
+    if (m_Services.clock->now_ns() < m_TileGuardUntilNs)
+    {
+        return;
+    }
     m_Session.answer(tile);
     process();
 }
@@ -223,6 +234,7 @@ void GameController::resume()
         return;
     }
     m_Session.resume();
+    arm_tile_guard();
     m_Save.run.reset();
     emit savedRunChanged();
     process();
@@ -238,12 +250,14 @@ void GameController::quit()
 void GameController::nextLevel()
 {
     m_Session.next_level();
+    arm_tile_guard();
     process();
 }
 
 void GameController::keepGoing()
 {
     m_Session.keep_going();
+    arm_tile_guard();
     process();
 }
 

@@ -34,6 +34,12 @@ namespace heart_boom_maths::game
 /// this interval, decides how many ticks that is.
 inline constexpr int TICK_POLL_INTERVAL_MS = 25;
 
+/// A tap on an answer tile is ignored for this long after a level starts or the pause screen closes. The buttons that
+/// start a level (PLAY AGAIN, NEXT LEVEL, RESUME) sit over the tile grid of the next screen, so a second tap meant for
+/// the button would otherwise answer the first question wrong. An app-layer comfort value, not a game rule: the core
+/// never sees it, and the clock keeps running. To be judged on a device and adjusted there.
+inline constexpr std::int64_t TILE_GUARD_NS = 300'000'000;
+
 /// What the controller is handed. It uses them and owns none of them; they must outlive it.
 struct GameServices
 {
@@ -53,6 +59,10 @@ struct GameOptions
     /// Where the parental gate gets the seed of each challenge. Empty means the system random generator. Tests set it
     /// to a fixed list so the number to type back is known.
     std::function<std::uint64_t()> gate_seed_source;
+
+    /// How long answer taps are ignored after a level starts or the pause screen closes. Tests that tap straight away
+    /// set it to 0.
+    std::int64_t tile_guard_ns = TILE_GUARD_NS;
     BuildInfo build_info = BuildInfo::current();
 
     /// Options with a random session seed, for the real app.
@@ -384,6 +394,7 @@ signals:
 
 private:
     void process();
+    void arm_tile_guard();
     void refresh_view();
     void handle_event(const Event& event);
     void remember_answer(const Event& event, bool correct);
@@ -406,6 +417,8 @@ private:
     bool m_SaveBlocked = false;
 
     TickDriver m_Driver;
+    std::int64_t m_TileGuardNs = TILE_GUARD_NS;
+    std::int64_t m_TileGuardUntilNs = 0; // answers are ignored until the clock reaches this
     QTimer m_Timer;
     bool m_Active = true;
 

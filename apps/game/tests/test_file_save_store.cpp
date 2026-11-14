@@ -48,6 +48,12 @@ struct FileRig
                                     services.links = &links;
                                     services.clock = &clock;
                                     return services;
+                                }(),
+                                []
+                                {
+                                    GameOptions options;
+                                    options.tile_guard_ns = 0; // taps straight after a level starts
+                                    return options;
                                 }())
     {
     }

@@ -1,0 +1,1 @@
+**A second tap right after a level starts no longer answers a question.** Answer taps are ignored for 0.3 seconds after PLAY AGAIN, NEXT LEVEL, KEEP GOING or RESUME, because those buttons sit over the tiles of the next screen. The time is a named constant to adjust after trying it on a device.
