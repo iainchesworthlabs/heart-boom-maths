@@ -8,8 +8,8 @@ the written result of the iOS part of the M2 spike and the iOS half of M5 ([Mile
 
 | Preset | What it builds | Where |
 |---|---|---|
-| `ios-release` | `apps/ios`, a one-screen stub that shows the name and version. It exists to prove signing and TestFlight | `ios-build.yml`, and the `ios` job of `release.yml` |
-| `ios-game-release` | The whole game (`apps/game`), linked statically against Qt for iOS. Unsigned | `ios-game-build.yml` |
+| `ios-release` | `apps/ios`, a one-screen stub that shows the name and version. It is the template of the signing and TestFlight path, and is no longer released | `ios-build.yml` |
+| `ios-game-release` | The whole game (`apps/game`), linked statically against Qt for iOS. Unsigned, unless given the signing variables | `ios-game-build.yml` (unsigned), and the `ios` job of `release.yml` (signed) |
 
 `ios-game-release` is a cross-build, so it needs two Qt kits of the pinned version (the `qt` key of
 `.github/toolchain-versions.json`):
@@ -37,8 +37,54 @@ preset turns code signing off, so no Apple account is needed.
 summary, and keeps the configure and build logs for a week when it fails. It is not a required check ([CI](ci.md)).
 Run it by hand with `gh workflow run ios-game-build.yml --ref <branch>`.
 
-The release workflow still builds and signs the stub (`apps/ios`), on purpose: signing and uploading the game is the
-owner's step, after the licence position below is settled.
+### Signed, for TestFlight
+
+The `ios` job of `release.yml` builds, signs and sends the **game** (the stub of `apps/ios` stays in the repository as a
+template and is no longer released). It runs only when the repository variable `SIGN_IOS_UPLOAD` is `true`. In order:
+
+1. `import-ios-signing` puts the Apple Distribution certificate in a keychain made for the job and the App Store
+   provisioning profile where Xcode looks for it (it checks the identifier and that the profile lists no device).
+2. **Read the provisioning profile.** The job decodes the profile (`security cms -D`) and prints its name, application
+   identifier, team, expiry, the number of devices and the names of its entitlements, never a secret. It stops with a
+   sentence if the application identifier is not `TEAMID.com.iainchesworthlabs.heartboommaths`, or if the profile expires
+   within 14 days.
+3. The two Qt kits are installed exactly as in `ios-game-build.yml` (no Qt Multimedia, no vcpkg).
+4. `cmake --preset ios-game-release` is given the signing variables on the command line (the team, the profile name, the
+   build number, which is the run number, and the Game Center switch). `apps/game/ios/ios.cmake` then signs the
+   application target alone, manually, with `Apple Distribution`; the preset's unsigned defaults stay for every other
+   target.
+5. `export-ios-ipa` archives the scheme `heart_boom_maths_game` and exports an App Store IPA.
+6. `apps/game/ios/verify_game_app.sh --signed --store` opens the IPA as a device would, then Apple validates it
+   (`altool --validate-app`), and a tag, or a manual run with `upload_testflight`, uploads it. Any other run stops after
+   the validation. The IPA is the workflow artifact `ios-appstore` for 7 days and is never put on the release.
+
+#### The Game Center rule
+
+Xcode refuses to sign a bundle that asks for an entitlement its provisioning profile does not carry. So the Game Center
+entitlement (`com.apple.developer.game-center`, in `heart-boom-maths.entitlements`) follows the profile: step 2 passes
+`-DHEART_BOOM_MATHS_IOS_GAME_CENTER=ON` to CMake only when the profile's entitlements contain it, and `OFF` otherwise, and
+prints which in the log and the job summary. `OFF` leaves out the entitlement and nothing else: the GameKit code is still
+there, `Info.plist` still lists `gamekit`, and signing in to Game Center fails, which `GameCenterScoreService` treats as a
+player who is not signed in (no score is sent). `verify_game_app.sh --game-center on|off` checks the state the job chose
+against the signature (on: the signature carries the entitlement; off: it does not) and reports which. When the owner
+turns the capability on for the App ID and makes the profile again, the next run builds with Game Center on, with no
+change to the workflow. Locally the option is `-DHEART_BOOM_MATHS_IOS_GAME_CENTER=OFF` (default ON).
+
+#### Running it
+
+The release workflow runs from any branch by hand. It needs the secrets and the variable of [Releasing](releasing.md):
+
+```bash
+# Build, sign, check, and have Apple validate the IPA. Nothing is uploaded.
+gh workflow run release.yml --ref <branch>
+
+# The same, and upload the build to TestFlight.
+gh workflow run release.yml --ref <branch> -f upload_testflight=true
+```
+
+A tag does the second without the flag. Apple processes an uploaded build for a few minutes before it shows in the
+TestFlight app. The workflow also runs the other release jobs (the desktop packages, and Android when its variable is
+set); open the `Package (iOS)` job.
 
 ### The bundle
 
@@ -68,7 +114,8 @@ are then removed.
   there are a commercial Qt licence for the iOS build, or iOS after v1. What an App Store build needs from the owner is
   written advice on the licence position (to be taken before any upload), and, if the answer is a commercial Qt licence,
   the licence itself and the way it is applied to the iOS build alone. The CI compile of this page proves the game builds;
-  it says nothing about whether it may be distributed through the store. Nothing in the repository uploads the game.
+  it says nothing about whether it may be distributed through the store. The release workflow can upload a build to
+  **TestFlight** (internal testers, not the store) before the question is settled; releasing to the App Store waits for it.
 
 ## Sound
 
@@ -121,7 +168,8 @@ What `GameCenterScoreService` does:
 
 `GAME_CENTER_LEADERBOARD_ID` in `game_center_score_service.hpp` is the one place the identifier is written. It is a
 **placeholder** (`...highscore.placeholder`): no such leaderboard exists, so until the owner replaces it a submission
-fails at Apple's end and is logged and swallowed.
+fails at Apple's end and is logged and swallowed. A TestFlight build made with Game Center off (see above) never gets as
+far as a submission.
 
 ## What is checked, and where
 
@@ -135,6 +183,7 @@ fails at Apple's end and is logged and swallowed.
 | The sound rules: the clips loaded at start-up, volumes, looping, the session activated by the first sound, interruption and reset, a clip that fails to load | Every desktop, in CI | `game.*` tests in `tests/test_clip_audio.cpp`, over a fake host and fake players |
 | The sound files are in the executable, and AVFoundation is linked | A `macos-26` runner | `verify_game_app.sh` |
 | The Objective-C++ shims (GameKit, AVFoundation) | A `macos-26` runner (compile only) | `ios-game-build.yml`. Not run by any test |
+| The signed IPA: the signature, an App Store profile for the identifier, the Game Center entitlement in the state the profile allowed, Apple's own validation | A `macos-26` runner, with the signing secrets | The `ios` job of `release.yml`. Only the runner can show it: nothing of Xcode runs on a Windows or Linux machine |
 | The game makes sound on a device, goes quiet with the silent switch, and recovers after a phone call, Siri and a Screen Time lock | **Not done**: needs a device | Owner |
 | The game starts on a device, plays, and pauses and saves when it leaves the foreground | **Not done**: needs a device | Owner |
 | Game Center sign-in, a real submission, a child account, Screen Time | **Not done**: needs a device and the leaderboard | Owner (below) |
@@ -142,13 +191,15 @@ fails at Apple's end and is logged and swallowed.
 ## What remains for the owner
 
 1. **Decide the licence position** for the App Store ([Decisions](DECISIONS.md)), on written advice.
-2. An **Apple Developer account**, and the **App ID** `com.iainchesworthlabs.heartboommaths` with the **Game Center**
-   capability turned on. The provisioning profile is made after that, so that it carries the entitlement. The signing
-   secrets and the variable `SIGN_IOS_UPLOAD` are in [Releasing](releasing.md).
-3. The **App Store Connect record**, and the **leaderboard** (Game Center, Leaderboards: a single score, highest first,
-   the best score). Put its identifier into `GAME_CENTER_LEADERBOARD_ID`.
-4. Point the `ios` job of `release.yml` at the game (`ios-game-release`, `apps/game/ios/verify_game_app.sh`) instead of
-   the stub, and send a build to **TestFlight**.
+2. The **Game Center capability** turned on for the App ID `com.iainchesworthlabs.heartboommaths` (Apple Developer
+   account, Identifiers), then the **App Store provisioning profile made again** from that App ID, and its base64 put
+   into the secret `IOS_PROVISIONING_PROFILE_BASE64`. Until then TestFlight builds are signed without the Game Center
+   entitlement (above) and Game Center sign-in does not work in them. The signing secrets and the variable
+   `SIGN_IOS_UPLOAD` are in [Releasing](releasing.md).
+3. The **leaderboard** (App Store Connect, the app, Game Center, Leaderboards: a single score, highest first, the best
+   score). Put its identifier into `GAME_CENTER_LEADERBOARD_ID`.
+4. The real **app icon** (a 1024 x 1024 picture, no transparency, replacing `AppIcon-1024.png`) and a **privacy policy
+   URL** for App Store Connect (the game collects nothing, and the page says so: [Compliance](COMPLIANCE.md)).
 5. **Device tests** from [Compliance](COMPLIANCE.md), with the results recorded there:
    - the app limit and Downtime on an iPhone with a child Apple Account: the game pauses, saves and resumes;
    - Game Center multiplayer and adding friends set to Don't Allow: a score is still sent, or not, as intended (the game
@@ -157,11 +208,14 @@ fails at Apple's end and is logged and swallowed.
      and with the switch on only Game Center's own traffic appears;
    - how a child's account appears on a global leaderboard, before score submission is turned on;
    - what the sign-in sheet looks like when the switch is turned on while signed out.
-6. The real **app icon**, and **age rating**, privacy and Game Center answers in App Store Connect.
+6. The **age rating**, privacy and Game Center answers in App Store Connect.
 
 ## Things the first macOS run may show
 
-The Mac side has not been run by the author of this page, so these are where a first red run would most likely be:
+The Mac side has not been run by the author of this page, so these are where a first red run would most likely be (for the
+signed release job: the archive of a CMake project that holds many static-library targets, the scheme name, Apple's
+validation of the property list and the privacy declarations, and a profile that is not as the job expects; each prints
+what it found before it stops):
 Qt's own handling of the launch screen when the target has its own `Info.plist.in` (the property list gives
 `UILaunchScreen` itself); the static plugin import of `qmlimportscanner`; the Objective-C++ of the two shims, which no compiler has seen against the
 real SDK yet (`avf_audio_backend.mm` was only checked against hand-written stubs of the AVFoundation types); and the

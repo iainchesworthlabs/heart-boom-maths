@@ -48,21 +48,29 @@ public one. So the template ships the TestFlight way only.
 
 ### iOS and TestFlight
 
-`apps/ios` is a one-screen UIKit stub that shows the game's name and version. It exists so that the whole
-path (compile, sign, check, validate with Apple, upload) works from the first day and can be copied from; a project
-replaces the application and keeps the packaging around it: `apps/ios/CMakeLists.txt`, `apps/ios/packaging/`, the `ios`
-job of `release.yml` and `ios-build.yml`.
+The `ios` job of `release.yml` builds the **game** (`apps/game`, the `ios-game-release` preset) and sends it to
+TestFlight. `apps/ios`, a one-screen UIKit stub, and `ios-build.yml` stay as the template of the path (compile, sign,
+check, validate with Apple, upload) that a new project copies; they are not released. `docs/ios.md` has the detail of the
+job, of what it checks and of the Game Center rule below.
 
-- **`ios-build.yml`** compiles the application unsigned on every change that the iOS build reads, and looks inside the
-  bundle with `apps/ios/packaging/verify_app.sh`. It needs no secret. It is not a required check (see `docs/ci.md`).
+- **`ios-game-build.yml`** compiles the game unsigned on every change that the iOS build reads, and looks inside the
+  bundle with `apps/game/ios/verify_game_app.sh`. It needs no secret. It is not a required check (see `docs/ci.md`).
+  `ios-build.yml` does the same for the stub.
 - **The `ios` job of `release.yml`** runs only when the repository variable `SIGN_IOS_UPLOAD` is `true`; with it unset the
-  release is made without iOS. It imports the certificate and profile (`import-ios-signing`), configures with the build
-  number of the run, archives and exports an App Store IPA (`export-ios-ipa`), checks the IPA with `verify_app.sh
-  --signed --store`, and hands it to `upload-testflight`. A tag, or a manual run with `upload_testflight`, uploads; any
-  other run (`gh workflow run release.yml --ref <branch>`) has Apple validate the IPA and stops. The IPA is a workflow
-  artifact for 7 days under the name `ios-appstore`, and is never put on the release.
+  release is made without iOS. It imports the certificate and profile (`import-ios-signing`), reads the profile (it stops
+  if the profile is for another identifier or expires within 14 days), installs the two Qt kits, configures
+  `ios-game-release` signed, with the build number of the run, archives and exports an App Store IPA (`export-ios-ipa`),
+  checks the IPA with `verify_game_app.sh --signed --store`, and hands it to `upload-testflight`. A tag, or a manual run
+  with `upload_testflight`, uploads; any other run has Apple validate the IPA and stops. The IPA is a workflow artifact
+  for 7 days under the name `ios-appstore`, and is never put on the release.
+- **Game Center follows the profile.** The entitlement is requested only when the provisioning profile carries it
+  (`HEART_BOOM_MATHS_IOS_GAME_CENTER`, set by the job from the profile). Without it the build is signed and goes to
+  TestFlight, and signing in to Game Center fails quietly in the game. The job prints which it chose.
+- **Running it by hand.** `gh workflow run release.yml --ref <branch>` builds and signs the game and has Apple validate
+  it; add `-f upload_testflight=true` to upload the build to TestFlight from a branch with no tag. The other release jobs
+  run too; the iOS one is `Package (iOS)`.
 - **One identifier.** `HEART_BOOM_MATHS_APPLICATION_ID` in `CMakeLists.txt` is the bundle identifier
-  (`com.iainchesworthlabs.<app>`, the same string as the Android application id). The two workflows repeat it as
+  (`com.iainchesworthlabs.<app>`, the same string as the Android application id). The iOS workflows repeat it as
   `BUNDLE_ID`, and `verify_app.sh` fails when the bundle says otherwise. `tools/instantiate.py` sets all three.
 - **Build number.** `CFBundleVersion` is `HEART_BOOM_MATHS_IOS_BUILD_NUMBER` (the run number in the release job), or the
   project version when empty. TestFlight refuses a number that is not higher than every earlier one for the same version.
@@ -84,6 +92,10 @@ What the owner does in Apple's developer portal and App Store Connect, once per 
    under the icon comes from `CFBundleDisplayName`, which is `HEART_BOOM_MATHS_DISPLAY_NAME`), any SKU.
 4. TestFlight tab: an Internal Testing group with the testers.
 5. Add the repository to the selected repositories of the organisation secrets above, and set `SIGN_IOS_UPLOAD` to `true`.
+6. For the game's Game Center score (not needed for a first TestFlight build): turn the **Game Center** capability on for the
+   App ID, make the App Store profile again and set the secret again, create the leaderboard in App Store Connect and put
+   its identifier into `GAME_CENTER_LEADERBOARD_ID`. Also still to come before the store, not TestFlight: the real app
+   icon and a privacy policy URL.
 
 The agent that works in the repository does none of these: secrets, variables and the Apple account are the owner's.
 

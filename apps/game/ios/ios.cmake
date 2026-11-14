@@ -13,6 +13,13 @@ set(HEART_BOOM_MATHS_IOS_BUILD_NUMBER "" CACHE STRING "Build number of the iOS a
 set(HEART_BOOM_MATHS_IOS_SIGNING_TEAM "" CACHE STRING "Apple team ID the iOS application is signed for (empty: an unsigned build)")
 set(HEART_BOOM_MATHS_IOS_SIGNING_PROFILE "" CACHE STRING "Name of the provisioning profile the iOS application is signed with (empty: an unsigned build)")
 
+# Whether the bundle asks for the Game Center capability. The capability must be on the App ID and in the provisioning profile
+# the build is signed with, or Xcode refuses to sign ("not in the provisioning profile"). The release workflow reads the
+# profile and turns this ON only when the profile carries it, so a build can go to TestFlight before the owner has turned
+# the capability on. OFF leaves out the entitlement and nothing else: the GameKit code stays, Info.plist still lists
+# gamekit, and the sign-in simply never succeeds, which GameCenterScoreService treats as a player who is not signed in.
+option(HEART_BOOM_MATHS_IOS_GAME_CENTER "Request the Game Center entitlement in the iOS bundle (the signing profile must carry it)" ON)
+
 if(HEART_BOOM_MATHS_IOS_BUILD_NUMBER)
     set(hbm_ios_build_number "${HEART_BOOM_MATHS_IOS_BUILD_NUMBER}")
 else()
@@ -36,9 +43,15 @@ set_target_properties(heart_boom_maths_game PROPERTIES
     # iPhone and iPad.
     XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2"
     # The icon set Info.plist.in's CFBundleIconName names.
-    XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_APPICON_NAME "AppIcon"
-    # The Game Center capability. Xcode embeds the file only into a signed build.
-    XCODE_ATTRIBUTE_CODE_SIGN_ENTITLEMENTS "${hbm_ios_entitlements}")
+    XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_APPICON_NAME "AppIcon")
+
+# The Game Center capability. Xcode embeds the file only into a signed build.
+if(HEART_BOOM_MATHS_IOS_GAME_CENTER)
+    set_target_properties(heart_boom_maths_game PROPERTIES XCODE_ATTRIBUTE_CODE_SIGN_ENTITLEMENTS "${hbm_ios_entitlements}")
+    message(STATUS "iOS Game Center entitlement: ON (${hbm_ios_entitlements})")
+else()
+    message(STATUS "iOS Game Center entitlement: OFF (the bundle is signed without it; sign-in to Game Center will fail)")
+endif()
 
 # Objective-C++ with reference counting, like the platform sources of apps/ios. GameKit and AVFoundation are the Apple
 # frameworks the game links itself (src/platform/ios/score_platform.mm and avf_audio_backend.mm): Qt's own frameworks come

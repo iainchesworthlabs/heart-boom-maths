@@ -3,7 +3,7 @@
 # Check that the built iOS bundle of the game (a .app, or an exported .ipa) is the game the repository describes.
 #
 #   apps/game/ios/verify_game_app.sh <name.app | package.ipa> --bundle-id <id> --executable <name>
-#       --entitlements <heart-boom-maths.entitlements> [--version <x.y.z>] [--signed [--store]]
+#       [--game-center on|off] [--entitlements <heart-boom-maths.entitlements>] [--version <x.y.z>] [--signed [--store]]
 #
 # It first runs apps/ios/packaging/verify_app.sh, which checks what every bundle of this project must be (the identifier,
 # the icon, the launch screen, arm64, no link outside the system, the encryption key, and for --signed the signature and
@@ -12,7 +12,9 @@
 #   * the orientation keys: an iPhone is held upright, an iPad turns any way, and the game takes the whole screen;
 #   * the device capabilities say arm64 and gamekit, and Info.plist holds no usage text of any kind (the game asks for no
 #     permission);
-#   * the Game Center entitlement is in the entitlements file the build was given, and with --signed in the signature;
+#   * the Game Center entitlement, in one of the two states the build can be in (--game-center, default on, the state of
+#     HEART_BOOM_MATHS_IOS_GAME_CENTER): on, it is in the entitlements file (--entitlements is then required) and with
+#     --signed in the signature; off, with --signed the signature must not carry it. The state found is printed;
 #   * the executable links GameKit (the score) and AVFoundation (the sound), and links none of the frameworks of
 #     advertising, tracking, purchases, location or notifications, which v1 must never use. Frameworks and symbols of
 #     networking are listed as notes and do not fail: Qt itself can bring some in without the game ever calling it. The
@@ -30,21 +32,26 @@ verify_common="$here/../../ios/packaging/verify_app.sh"
 
 target=""
 entitlements=""
+game_center=on
 signed=false
 common_args=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --entitlements) entitlements="${2:?}"; shift 2 ;;
+    --game-center) game_center="${2:?}"; shift 2 ;;
     --signed) signed=true; common_args+=("$1"); shift ;;
     --bundle-id|--executable|--version) common_args+=("$1" "${2:?}"); shift 2 ;;
     --store) common_args+=("$1"); shift ;;
-    -h|--help) sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*) echo "verify_game_app.sh: unknown argument '$1'" >&2; exit 2 ;;
     *) target="$1"; shift ;;
   esac
 done
-[ -e "$target" ] || { echo "usage: verify_game_app.sh <app|ipa> --bundle-id <id> --executable <name> --entitlements <file> [--version v] [--signed [--store]]" >&2; exit 2; }
-[ -f "$entitlements" ] || { echo "verify_game_app.sh: --entitlements <file> is required and must exist" >&2; exit 2; }
+[ -e "$target" ] || { echo "usage: verify_game_app.sh <app|ipa> --bundle-id <id> --executable <name> [--game-center on|off] [--entitlements <file>] [--version v] [--signed [--store]]" >&2; exit 2; }
+case "$game_center" in on | off) ;; *) echo "verify_game_app.sh: --game-center is on or off, not '$game_center'" >&2; exit 2 ;; esac
+if [ "$game_center" = on ]; then
+  [ -f "$entitlements" ] || { echo "verify_game_app.sh: --entitlements <file> is required and must exist when --game-center is on" >&2; exit 2; }
+fi
 fail() { echo "FAILED: $*" >&2; exit 1; }
 
 executable=""
@@ -94,16 +101,27 @@ usage="$(plutil -p "$plist" | grep -E 'Usage(Description)?"? =>' | head -n 1 || 
 [ -z "$usage" ] || fail "Info.plist has a usage text ($usage): the game asks for no permission"
 echo "    Info.plist: portrait on a phone, any way up on a tablet, full screen, arm64 and gamekit, no usage text"
 
-plutil -lint "$entitlements" >/dev/null || fail "$entitlements is not a valid property list"
-[ "$(/usr/libexec/PlistBuddy -c "Print :com.apple.developer.game-center" "$entitlements" 2>/dev/null || true)" = "true" ] \
-  || fail "$entitlements has no com.apple.developer.game-center = true"
 if $signed; then
   signed_entitlements="$(codesign -d --entitlements :- "$app" 2>/dev/null || true)"
-  grep -q "com.apple.developer.game-center" <<<"$signed_entitlements" \
-    || fail "the signature does not carry the Game Center entitlement: the App ID or the profile lacks the capability"
-  echo "    entitlements: Game Center, in the file and in the signature"
+  if grep -q "com.apple.developer.game-center" <<<"$signed_entitlements"; then found=on; else found=off; fi
+fi
+if [ "$game_center" = on ]; then
+  plutil -lint "$entitlements" >/dev/null || fail "$entitlements is not a valid property list"
+  [ "$(/usr/libexec/PlistBuddy -c "Print :com.apple.developer.game-center" "$entitlements" 2>/dev/null || true)" = "true" ] \
+    || fail "$entitlements has no com.apple.developer.game-center = true"
+  if $signed; then
+    [ "$found" = on ] || fail "the signature does not carry the Game Center entitlement: the App ID or the profile lacks the capability"
+    echo "    entitlements: Game Center ON, in the file and in the signature"
+  else
+    echo "    entitlements: Game Center ON, in the file (an unsigned build embeds none)"
+  fi
 else
-  echo "    entitlements: Game Center, in the file (an unsigned build embeds none)"
+  if $signed; then
+    [ "$found" = off ] || fail "Game Center was asked to be off, but the signature carries the entitlement"
+    echo "    entitlements: Game Center OFF, the signature carries no Game Center entitlement (sign-in to Game Center will fail)"
+  else
+    echo "    entitlements: Game Center OFF (an unsigned build embeds none)"
+  fi
 fi
 
 frameworks="$(otool -L "$exe" | tail -n +2 | awk '{print $1}')"
@@ -137,6 +155,12 @@ qt_network_symbols="$(nm -gU "$exe" 2>/dev/null | grep -c 'QNetwork' || true)"
 session_symbols="$(nm -u "$exe" 2>/dev/null | grep -c -E 'NSURLSession|NSURLConnection' || true)"
 echo "    note: network frameworks linked: ${network_frameworks:-none}; QNetwork symbols: $qt_network_symbols; NSURLSession or NSURLConnection references: $session_symbols"
 
+if [ -e "$app/PrivacyInfo.xcprivacy" ]; then
+  echo "    note: the bundle has a PrivacyInfo.xcprivacy"
+else
+  echo "    note: the bundle has no PrivacyInfo.xcprivacy (Apple may ask for the required-reason API declarations at upload)"
+fi
+
 bundle_kb="$(du -sk "$app" | awk '{print $1}')"
 exe_kb="$(( $(stat -f %z "$exe") / 1024 ))"
 echo "    size: bundle ${bundle_kb} KiB, executable ${exe_kb} KiB"
@@ -146,6 +170,7 @@ if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
     echo
     echo "| | |"
     echo "|---|---|"
+    echo "| Game Center entitlement | ${found:-$game_center} |"
     echo "| Bundle | ${bundle_kb} KiB |"
     echo "| Executable | ${exe_kb} KiB |"
     echo "| Network frameworks linked | ${network_frameworks:-none} |"
