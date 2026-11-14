@@ -1,0 +1,613 @@
+name: Nightly
+
+# What is too slow or too noisy for every pull request, run once a night against the tip of develop (docs/ci.md,
+# "Nightly"; docs/testing.md, "Nightly checks" says what each job catches and how to run it by hand).
+#
+#   sanitizers      the whole test suite (every label but perf and fuzz, ui tests on the offscreen platform) under
+#                   AddressSanitizer at -O1, UBSan alone, ThreadSanitizer, GCC's ASan and UBSan, MSVC's AddressSanitizer
+#                   and Apple Clang's ASan and UBSan. One matrix, one job per leg, so one red leg hides no other.
+#   clang-tidy      the curated check set of .clang-tidy over libs/core and apps/game
+#   cppcheck        warning, performance and portability checks
+#   gcc-analyzer    GCC -fanalyzer over libs/core
+#   msvc-analyze    MSVC /analyze (PREfast and the C++ Core Guidelines checker), build only
+#   dependencies    the vcpkg ports' licences against GPL-3.0-or-later, a vulnerability scan of the Python tooling, and a
+#                   freshness report that never fails
+#   status          one table, and the standing "nightly" issue (nightly-report) when a job is red
+#
+# CodeQL is its own workflow (codeql.yml). A static analyser counts its findings against
+# tools/static-analysis-baseline.json and fails only on one the baseline does not accept (docs/testing.md).
+#
+# Not a required check: no ruleset names anything in this file. A scheduled run checks out the default branch, develop;
+# a manual run checks out the branch it was started on.
+
+on:
+  schedule:
+    # Not on the hour, and away from codeql.yml (18:17) and zizmor.yml (Monday 19:41).
+    - cron: "37 2 * * *"
+  workflow_dispatch:
+    inputs:
+      jobs:
+        description: "Comma-separated groups to run: sanitizers, clang-tidy, cppcheck, gcc-analyzer, msvc-analyze, dependencies, or all."
+        type: string
+        default: all
+      runner_mode:
+        description: Where the jobs run. "variable" follows the CI_RUNNER_MODE repository variable (docs/ci.md, Runners).
+        type: choice
+        options: [variable, hosted, self-hosted, overflow]
+        default: variable
+
+permissions: {}
+
+# Two runs never overlap: one that is still going when the next is due finishes first, and the next waits.
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+# The sanitizers' run-time options, in one place. docs/testing.md repeats them for a run by hand. ASan's leak check is on:
+# LeakSanitizer is part of AddressSanitizer on Linux. The macOS and Windows legs drop detect_leaks, which those runtimes
+# do not have (the step "Sanitizer options for this system"). TSan ignores the accesses of Qt's prebuilt libraries, which
+# are not built with it and whose locks it cannot see: without ignore_noninstrumented_modules every Qt thread hand-over is
+# reported as a race on the allocator.
+env:
+  ASAN_OPTIONS: detect_leaks=1:strict_string_checks=1:detect_stack_use_after_return=1:check_initialization_order=1
+  UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+  TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1:ignore_noninstrumented_modules=1
+
+jobs:
+  plan:
+    name: Plan
+    # The same mapping as the "Choose runners" step below, as ci.yml's Plan job does it: the one job that cannot read it
+    # from another job.
+    runs-on: >-
+      ${{ fromJSON(
+        ((github.event_name == 'workflow_dispatch' && inputs.runner_mode != 'variable' && inputs.runner_mode) || vars.CI_RUNNER_MODE) == 'overflow' && '["self-hosted","Linux","X64"]'
+        || ((github.event_name == 'workflow_dispatch' && inputs.runner_mode != 'variable' && inputs.runner_mode) || vars.CI_RUNNER_MODE) == 'self-hosted' && '["self-hosted","Linux","X64","shared"]'
+        || '["ubuntu-24.04"]') }}
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      linux_runner: ${{ steps.runners.outputs.linux }}
+      windows_runner: ${{ steps.runners.outputs.windows }}
+      groups: ${{ steps.runners.outputs.groups }}
+    steps:
+      - name: Choose runners and groups
+        id: runners
+        env:
+          EVENT: ${{ github.event_name }}
+          DISPATCH_MODE: ${{ inputs.runner_mode }}
+          VARIABLE_MODE: ${{ vars.CI_RUNNER_MODE }}
+          REQUESTED_JOBS: ${{ inputs.jobs }}
+        run: |
+          set -euo pipefail
+          mode="$VARIABLE_MODE"
+          if [ "$EVENT" = "workflow_dispatch" ] && [ "$DISPATCH_MODE" != "variable" ]; then mode="$DISPATCH_MODE"; fi
+          # The labels of ci.yml's "Choose runners" step: "overflow" is the exact set the AWS spot dispatcher matches,
+          # and "shared" keeps a job on the on-premises fleet (docs/ci.md, Runners).
+          case "$mode" in
+            overflow)    linux='["self-hosted","Linux","X64"]';          windows='["self-hosted","Windows","X64"]' ;;
+            self-hosted) linux='["self-hosted","Linux","X64","shared"]'; windows='["self-hosted","Windows","X64","shared"]' ;;
+            hosted|"")   linux='["ubuntu-26.04"]';                       windows='["windows-2025"]' ;;
+            *)
+              echo "::warning::Unknown CI_RUNNER_MODE '$mode'; using the hosted runners."
+              linux='["ubuntu-26.04"]'; windows='["windows-2025"]' ;;
+          esac
+          # A comma on each side, so a job's `if` can ask for ",name," with contains().
+          groups="$(printf '%s' "${REQUESTED_JOBS:-all}" | tr -d '[:space:]')"
+          { echo "Runner mode: ${mode:-hosted}"; echo "Groups: ${groups:-all}"; } >> "$GITHUB_STEP_SUMMARY"
+          { echo "linux=$linux"; echo "windows=$windows"; echo "groups=,${groups:-all},"; } >> "$GITHUB_OUTPUT"
+
+  sanitizers:
+    name: Sanitizer (${{ matrix.name }})
+    needs: plan
+    if: ${{ !cancelled() && needs.plan.result == 'success' && (contains(needs.plan.outputs.groups, ',all,') || contains(needs.plan.outputs.groups, ',sanitizers,')) }}
+    runs-on: ${{ fromJSON(matrix.runner) }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # AddressSanitizer alone, with LeakSanitizer, at -O1 with assertions on (preset linux-asan-o1).
+          - name: Clang ASan -O1
+            runner: ${{ needs.plan.outputs.linux_runner }}
+            compiler: clang
+            preset: linux-asan-o1
+          # UndefinedBehaviorSanitizer alone, -fno-sanitize-recover=all (preset linux-ubsan).
+          - name: Clang UBSan
+            runner: ${{ needs.plan.outputs.linux_runner }}
+            compiler: clang
+            preset: linux-ubsan
+          - name: Clang TSan
+            runner: ${{ needs.plan.outputs.linux_runner }}
+            compiler: clang
+            preset: linux-tsan
+          # GCC's runtimes are a different implementation of the same checks and find different things.
+          - name: GCC ASan and UBSan
+            runner: ${{ needs.plan.outputs.linux_runner }}
+            compiler: gcc
+            preset: linux-asan-ubsan
+          # MSVC's AddressSanitizer is /fsanitize=address with /O1 (IclSanitizers.cmake; the preset is RelWithDebInfo). It
+          # supports an optimised build as well as /Od, and the optimised one is the faster. It has no UBSan and no TSan.
+          - name: MSVC ASan /O1
+            runner: ${{ needs.plan.outputs.windows_runner }}
+            msvc: true
+            preset: windows-msvc-asan
+          # Always hosted, like every macOS leg (docs/ci.md).
+          - name: Apple Clang ASan and UBSan
+            runner: '["macos-26"]'
+            preset: macos-asan-ubsan
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install GCC
+        if: matrix.compiler == 'gcc' || matrix.compiler == 'clang'
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-gcc@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+        with:
+          # A Clang leg installs GCC for its libstdc++ and lets setup-llvm choose the compiler.
+          export-compiler: ${{ matrix.compiler == 'gcc' }}
+
+      - name: Install Clang
+        if: matrix.compiler == 'clang'
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-llvm@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+
+      - name: Load the MSVC environment
+        if: matrix.msvc == true
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-msvc-env@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+
+      - name: Set up CMake
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-cmake@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+
+      - name: Set up Qt
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-qt@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+        with:
+          modules: qtmultimedia
+
+      - name: Set up vcpkg
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-vcpkg@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+
+      - name: Set up ccache
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-ccache@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+        with:
+          key: nightly-${{ matrix.preset }}
+
+      # The sanitizer runtimes map shadow memory at a fixed place that a newer kernel's wider address randomisation can
+      # take. Harmless where it is not needed or not allowed.
+      - name: Let the sanitizer runtimes map their shadow memory
+        if: runner.os == 'Linux'
+        run: sudo sysctl -w vm.mmap_rnd_bits=28 || true
+
+      - name: Sanitizer options for this system
+        if: runner.os != 'Linux'
+        shell: bash
+        run: | # zizmor: ignore[github-env] the value is derived from this workflow's own ASAN_OPTIONS
+          set -euo pipefail
+          echo "ASAN_OPTIONS=${ASAN_OPTIONS/detect_leaks=1:/}" >> "$GITHUB_ENV"
+
+      - name: Configure
+        shell: bash
+        env:
+          PRESET: ${{ matrix.preset }}
+        run: cmake --preset "$PRESET"
+
+      - name: Build
+        shell: bash
+        env:
+          PRESET: ${{ matrix.preset }}
+        run: cmake --build --preset "$PRESET"
+
+      - name: Test
+        uses: iainchesworthlabs/icl-common-infra/actions/run-ctest@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+        with:
+          build-dir: build/${{ matrix.preset }}
+          phases-file: .github/ci/nightly-phases.json
+
+      - name: Upload test logs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sanitizer-logs-${{ matrix.preset }}
+          path: build/${{ matrix.preset }}/Testing/Temporary/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Save ccache
+        if: always() && env.CCACHE_SAVE == 'true'
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ env.CCACHE_SAVE_KEY }}
+
+      - name: Save vcpkg caches
+        if: always()
+        continue-on-error: true
+        uses: iainchesworthlabs/icl-common-infra/actions/save-vcpkg-cache@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+
+  clang-tidy:
+    name: clang-tidy
+    needs: plan
+    if: ${{ !cancelled() && needs.plan.result == 'success' && (contains(needs.plan.outputs.groups, ',all,') || contains(needs.plan.outputs.groups, ',clang-tidy,')) }}
+    runs-on: ${{ fromJSON(needs.plan.outputs.linux_runner) }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      security-events: write # upload the SARIF file to code scanning
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Clang takes its C++ library from the newest libstdc++ installed.
+      - name: Install GCC
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-gcc@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+        with:
+          export-compiler: false
+
+      - name: Install Clang and clang-tidy
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-llvm@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+
+      - name: Set up CMake
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-cmake@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+
+      - name: Set up Qt
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-qt@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+        with:
+          modules: qtmultimedia
+
+      - name: Set up vcpkg
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-vcpkg@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+
+      - name: Set up ccache
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-ccache@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+        with:
+          key: nightly-clang-tidy
+
+      # The build makes the moc and resource sources and the headers the compile commands name.
+      - name: Configure and build
+        run: |
+          cmake --preset linux-static-analysis
+          cmake --build --preset linux-static-analysis
+
+      - name: Run clang-tidy
+        run: |
+          set -uo pipefail
+          tidy="clang-tidy-${CC#clang-}"
+          python3 tools/ci/static_analysis.py files --compile-commands build/linux-static-analysis/compile_commands.json > files.txt
+          echo "$(wc -l < files.txt) files"
+          # A finding is not an error here (WarningsAsErrors is empty): the baseline decides.
+          xargs -a files.txt -P "$(nproc)" -n 4 "$tidy" -p build/linux-static-analysis --quiet > clang-tidy.log 2>&1 || true
+          echo "clang-tidy log: $(wc -l < clang-tidy.log) lines"
+
+      - name: Count against the baseline
+        run: python3 tools/ci/static_analysis.py check --tool clang-tidy --log clang-tidy.log --sarif clang-tidy.sarif --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the log
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nightly-clang-tidy
+          path: |
+            clang-tidy.log
+            clang-tidy.sarif
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload to code scanning
+        if: always() && hashFiles('clang-tidy.sarif') != ''
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: clang-tidy.sarif
+          category: clang-tidy
+
+      - name: Save ccache
+        if: always() && env.CCACHE_SAVE == 'true'
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ env.CCACHE_SAVE_KEY }}
+
+      - name: Save vcpkg caches
+        if: always()
+        continue-on-error: true
+        uses: iainchesworthlabs/icl-common-infra/actions/save-vcpkg-cache@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+
+  cppcheck:
+    name: cppcheck
+    needs: plan
+    if: ${{ !cancelled() && needs.plan.result == 'success' && (contains(needs.plan.outputs.groups, ',all,') || contains(needs.plan.outputs.groups, ',cppcheck,')) }}
+    runs-on: ${{ fromJSON(needs.plan.outputs.linux_runner) }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      security-events: write # upload the SARIF file to code scanning
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: The counting tool's own tests
+        run: python3 tools/ci/static_analysis.py --self-test
+
+      # From the distribution: nothing in the build needs it, so no compiler and no Qt.
+      - name: Install cppcheck
+        run: |
+          sudo apt-get update -qq || echo "::warning title=apt-get::apt-get update failed for a source; installing from the lists apt has"
+          sudo apt-get install -y -qq cppcheck
+          cppcheck --version
+
+      - name: Run cppcheck
+        run: |
+          set -uo pipefail
+          mkdir -p "$RUNNER_TEMP/cppcheck-build"
+          cppcheck --std=c++23 --language=c++ --enable=warning,performance,portability --inline-suppr \
+            --suppressions-list=tools/static-analysis/cppcheck-suppressions.txt --suppress=unmatchedSuppression \
+            --library=qt --library=std --check-level=exhaustive --cppcheck-build-dir="$RUNNER_TEMP/cppcheck-build" \
+            --template='{file}:{line}:{column}: warning: {message} [{id}]' --quiet -j "$(nproc)" \
+            -I libs/core/include -I apps/game/src -I apps/game/tests -I libs/core/tests \
+            libs/core/src libs/core/include libs/core/tests apps/game/src apps/game/tests 2> cppcheck.log || true
+          echo "cppcheck log: $(wc -l < cppcheck.log) lines"
+
+      - name: Count against the baseline
+        run: python3 tools/ci/static_analysis.py check --tool cppcheck --log cppcheck.log --sarif cppcheck.sarif --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the log
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nightly-cppcheck
+          path: |
+            cppcheck.log
+            cppcheck.sarif
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload to code scanning
+        if: always() && hashFiles('cppcheck.sarif') != ''
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: cppcheck.sarif
+          category: cppcheck
+
+  gcc-analyzer:
+    name: GCC analyzer
+    needs: plan
+    if: ${{ !cancelled() && needs.plan.result == 'success' && (contains(needs.plan.outputs.groups, ',all,') || contains(needs.plan.outputs.groups, ',gcc-analyzer,')) }}
+    runs-on: ${{ fromJSON(needs.plan.outputs.linux_runner) }}
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      security-events: write # upload the SARIF file to code scanning
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install GCC
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-gcc@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+
+      - name: Set up CMake
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-cmake@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+
+      - name: Set up vcpkg
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-vcpkg@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+
+      # -k 0 builds every file, so the log has every finding and not the first. The preset's -Werror turns each analyzer
+      # warning into an error, which static_analysis.py reads the same.
+      - name: Build libs/core with -fanalyzer
+        run: |
+          set -uo pipefail
+          cmake --preset linux-gcc-analyzer
+          cmake --build --preset linux-gcc-analyzer -- -k 0 2>&1 | tee gcc-analyzer.log
+          echo "BUILD_STATUS=${PIPESTATUS[0]}" >> "$GITHUB_ENV"
+
+      - name: Count against the baseline
+        run: python3 tools/ci/static_analysis.py check --tool gcc-analyzer --log gcc-analyzer.log --build-status "$BUILD_STATUS" --sarif gcc-analyzer.sarif --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the log
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nightly-gcc-analyzer
+          path: |
+            gcc-analyzer.log
+            gcc-analyzer.sarif
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload to code scanning
+        if: always() && hashFiles('gcc-analyzer.sarif') != ''
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: gcc-analyzer.sarif
+          category: gcc-analyzer
+
+      - name: Save vcpkg caches
+        if: always()
+        continue-on-error: true
+        uses: iainchesworthlabs/icl-common-infra/actions/save-vcpkg-cache@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+
+  msvc-analyze:
+    name: MSVC analyze
+    needs: plan
+    if: ${{ !cancelled() && needs.plan.result == 'success' && (contains(needs.plan.outputs.groups, ',all,') || contains(needs.plan.outputs.groups, ',msvc-analyze,')) }}
+    runs-on: ${{ fromJSON(needs.plan.outputs.windows_runner) }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      security-events: write # upload the SARIF file to code scanning
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Load the MSVC environment
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-msvc-env@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+
+      - name: Set up CMake
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-cmake@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+
+      - name: Set up Qt
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-qt@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+        with:
+          modules: qtmultimedia
+
+      - name: Set up vcpkg
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-vcpkg@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+
+      # No compiler cache: /analyze output is not cacheable. -k 0 reports every file.
+      - name: Build with /analyze
+        shell: bash
+        run: |
+          set -uo pipefail
+          cmake --preset windows-msvc-analyze
+          cmake --build --preset windows-msvc-analyze -- -k 0 2>&1 | tee msvc-analyze.log
+          echo "BUILD_STATUS=${PIPESTATUS[0]}" >> "$GITHUB_ENV"
+
+      - name: Count against the baseline
+        shell: bash
+        run: python3 tools/ci/static_analysis.py check --tool msvc-analyze --log msvc-analyze.log --build-status "$BUILD_STATUS" --sarif msvc-analyze.sarif --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the log
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nightly-msvc-analyze
+          path: |
+            msvc-analyze.log
+            msvc-analyze.sarif
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload to code scanning
+        if: always() && hashFiles('msvc-analyze.sarif') != ''
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: msvc-analyze.sarif
+          category: msvc-analyze
+
+      - name: Save vcpkg caches
+        if: always()
+        continue-on-error: true
+        uses: iainchesworthlabs/icl-common-infra/actions/save-vcpkg-cache@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+
+  dependencies:
+    name: Dependencies
+    needs: plan
+    if: ${{ !cancelled() && needs.plan.result == 'success' && (contains(needs.plan.outputs.groups, ',all,') || contains(needs.plan.outputs.groups, ',dependencies,')) }}
+    runs-on: ${{ fromJSON(needs.plan.outputs.linux_runner) }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The checkout of the vcpkg fork at the baseline of vcpkg.json: its ports directory is what the licence check reads.
+      - name: Set up vcpkg
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-vcpkg@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: The tools' own tests
+        run: python3 tools/ci/dependency_audit.py --self-test
+
+      - name: Licences of the vcpkg ports
+        run: python3 tools/ci/dependency_audit.py licences --vcpkg-root "$VCPKG_ROOT" --summary "$GITHUB_STEP_SUMMARY"
+
+      # pip-audit installs the requirements to find what pip would choose and asks the PyPI advisory database about
+      # each. osv-scanner reads requirements/docs.txt as a lock file and flags the oldest version its constraints allow,
+      # which is not what the docs job installs.
+      - name: Vulnerabilities in the Python tooling
+        run: |
+          set -uo pipefail
+          python3 -m pip install --quiet -r requirements/audit.txt
+          status=0
+          report="$(pip-audit -r requirements/docs.txt 2>&1)" || status=$?
+          printf '%s\n' "$report"
+          { echo "### Python requirements (pip-audit)"; echo; echo '```'; printf '%s\n' "$report"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
+      - name: Freshness of the pinned versions
+        if: always()
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 tools/ci/dependency_audit.py freshness --vcpkg-root "$VCPKG_ROOT" --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Save vcpkg caches
+        if: always()
+        continue-on-error: true
+        uses: iainchesworthlabs/icl-common-infra/actions/save-vcpkg-cache@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+
+  status:
+    name: Nightly status
+    if: always()
+    needs: [plan, sanitizers, clang-tidy, cppcheck, gcc-analyzer, msvc-analyze, dependencies]
+    # Always hosted, like CI Status: it must report when a self-hosted fleet is down.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read # the jobs of this run
+      contents: read
+      issues: write # the standing issue
+    steps:
+      # A table of the run's jobs, legs included, with how long each took and a link to its log.
+      - name: Summarise the jobs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### Nightly jobs"
+            echo
+            echo "| Job | Result | Minutes | Log |"
+            echo "|---|---|---|---|"
+            gh api --paginate "repos/${REPO}/actions/runs/${RUN_ID}/jobs?per_page=100" --jq '.jobs[]' | jq -r -s '
+              .[] | select(.name != "Nightly status")
+              | [.name, (.conclusion // "running"),
+                 (if .started_at and .completed_at then ((.completed_at | fromdate) - (.started_at | fromdate)) / 60 | floor | tostring else "" end),
+                 "[log](" + .html_url + ")"]
+              | "| " + join(" | ") + " |"'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Says how the night went and keeps one issue (label "nightly") open while a job is red. The infra's own convention;
+      # it writes an issue and nothing else, so it cannot fail a merge. A run from another branch only prints.
+      - name: Report
+        uses: iainchesworthlabs/icl-common-infra/actions/nightly-report@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+        with:
+          needs-json: ${{ toJSON(needs) }}
+          gating-jobs: plan sanitizers clang-tidy cppcheck gcc-analyzer msvc-analyze dependencies
+          branch: ${{ github.ref_name }}
+          dry-run: ${{ github.ref_name != github.event.repository.default_branch }}
+
+      # The run is red when any job is. A job skipped by the group input is not a failure.
+      - name: Fail when a job failed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          bad="$(jq -r 'to_entries[] | select(.value.result != "success" and .value.result != "skipped") | "\(.key) (\(.value.result))"' <<<"$RESULTS")"
+          if [ -n "$bad" ]; then
+            echo "::error::Nightly jobs that did not pass: $(echo "$bad" | tr '\n' ' ')"
+            exit 1
+          fi
