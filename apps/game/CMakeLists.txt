@@ -94,6 +94,16 @@ target_sources(heart_boom_maths_app PRIVATE
     src/services/qsettings_backend.cpp
     src/services/web_save_store.cpp)
 
+# Touch feedback. The rules of when a haptic is felt are plain C++ over a small backend and a timer; what each platform is
+# asked for is a table (haptic_maps.cpp), and src/platform/<os>/haptics_platform.* only hands a beat to the system (UIKit on
+# iOS, performHapticFeedback on Android, navigator.vibrate in a browser, nothing on the desktop).
+target_sources(heart_boom_maths_app PRIVATE
+    src/event_haptics.cpp
+    src/services/backed_haptics_service.cpp
+    src/services/haptic_maps.cpp
+    src/services/haptic_patterns.cpp
+    src/services/qt_haptic_timer.cpp)
+
 # The files are made by tools/assets/make_placeholder_sounds.py and are replaced by a sound designer's work.
 set(HEART_BOOM_MATHS_AUDIO_FILES
     audio/coin_chime.wav
@@ -301,6 +311,9 @@ if(HEART_BOOM_MATHS_BUILD_TESTS)
     # The browser's save over a fake key-value store (blocked storage, a full quota, a damaged save kept under a second
     # key), the same store over QSettings on the desktop, the factory that picks the store, and the hidden-tab path.
     target_sources(heart_boom_maths_game_tests PRIVATE tests/test_web_save_store.cpp)
+
+    # The haptic rules over a fake backend, timer and clock, the event table and the platform tables.
+    target_sources(heart_boom_maths_game_tests PRIVATE tests/test_haptics.cpp)
 
     # The sound rules over a recording backend, the factory, the first-gesture filter and the placeholder sound files.
     target_sources(heart_boom_maths_game_tests PRIVATE tests/test_audio.cpp tests/test_clip_audio.cpp)
