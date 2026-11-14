@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
-#include "heart_boom_maths/save_store.hpp"
-#include "services/save_quarantine.hpp"
+#include "services/app_save_store.hpp"
 
 #include <QString>
 #include <optional>
@@ -14,7 +13,7 @@ namespace heart_boom_maths::game
 
 /// The save file of iOS, Android and the desktop: one JSON text in `save.json` in a folder the app owns. A write goes
 /// to a temporary file that is renamed over the old one, so a crash or a full disk leaves the old text in place.
-class FileSaveStore final : public SaveStore, public SaveQuarantine
+class FileSaveStore final : public AppSaveStore
 {
 public:
     /// `directory` is created when the first write needs it.
