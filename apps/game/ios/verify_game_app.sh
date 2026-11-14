@@ -13,10 +13,13 @@
 #   * the device capabilities say arm64 and gamekit, and Info.plist holds no usage text of any kind (the game asks for no
 #     permission);
 #   * the Game Center entitlement is in the entitlements file the build was given, and with --signed in the signature;
-#   * the executable links GameKit, and links none of the frameworks of advertising, tracking, purchases, location or
-#     notifications, which v1 must never use. Frameworks and symbols of networking are listed as notes and do not fail:
-#     Qt Multimedia is built on Qt Network, so some of it can be present without the game ever calling it. The proof that
-#     the game makes no request of its own is the traffic capture of docs/COMPLIANCE.md, on a device;
+#   * the executable links GameKit (the score) and AVFoundation (the sound), and links none of the frameworks of
+#     advertising, tracking, purchases, location or notifications, which v1 must never use. Frameworks and symbols of
+#     networking are listed as notes and do not fail: Qt itself can bring some in without the game ever calling it. The
+#     proof that the game makes no request of its own is the traffic capture of docs/COMPLIANCE.md, on a device;
+#   * every sound file of apps/game/audio is in the executable, as a Qt resource: its name is found in the resource name
+#     table of the executable (Qt writes names as UTF-16, big-endian). The files themselves may be compressed there, so the
+#     size says nothing; a missing name means the game would start silent;
 #   * the sizes of the bundle and of the executable are printed, and written to the job summary on CI.
 #
 # macOS only (plutil, otool, nm, codesign).
@@ -35,7 +38,7 @@ while [ $# -gt 0 ]; do
     --signed) signed=true; common_args+=("$1"); shift ;;
     --bundle-id|--executable|--version) common_args+=("$1" "${2:?}"); shift 2 ;;
     --store) common_args+=("$1"); shift ;;
-    -h|--help) sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*) echo "verify_game_app.sh: unknown argument '$1'" >&2; exit 2 ;;
     *) target="$1"; shift ;;
   esac
@@ -105,10 +108,28 @@ fi
 
 frameworks="$(otool -L "$exe" | tail -n +2 | awk '{print $1}')"
 grep -q "/GameKit.framework/" <<<"$frameworks" || fail "the executable does not link GameKit (the Game Center score)"
+grep -q "/AVFoundation.framework/" <<<"$frameworks" \
+  || fail "the executable does not link AVFoundation (the sound of the game: Qt Multimedia cannot link on iOS)"
 forbidden='AdSupport|AdServices|AppTrackingTransparency|StoreKit|CoreLocation|UserNotifications|PushKit|iAd|GoogleMobileAds|Firebase|Crashlytics'
 bad="$(grep -E "/($forbidden)\.framework/" <<<"$frameworks" || true)"
 [ -z "$bad" ] || fail "the executable links a framework v1 must never use (ads, tracking, purchases, location, notifications): $bad"
-echo "    executable: links GameKit; no advertising, tracking, purchase, location or notification framework"
+echo "    executable: links GameKit and AVFoundation; no advertising, tracking, purchase, location or notification framework"
+
+# The sound files are compiled into the executable as Qt resources. Looking for each file's name in the UTF-16 name table
+# is the cheap proof that they were linked in (a static library's resources are dropped by the linker when nothing
+# refers to them), without a device to play them on.
+audio_dir="$here/../audio"
+audio_count=0
+for wav in "$audio_dir"/*.wav; do
+  [ -e "$wav" ] || fail "no sound file in $audio_dir"
+  name="$(basename "$wav")"
+  # A name is stored as 16-bit characters, big-endian: "ab" is the bytes 00 61 00 62.
+  perl -0777 -e 'my $n = shift @ARGV; my $p = join("", map { "\\x00" . quotemeta($_) } split(//, $n)); exit(<> =~ /$p/ ? 0 : 1)' \
+    "$name" "$exe" \
+    || fail "the sound file $name is not in the executable: the game would start silent"
+  audio_count=$((audio_count + 1))
+done
+echo "    audio: $audio_count sound files found in the executable as resources"
 
 # Notes only: what could reach the network, as the linker sees it.
 network_frameworks="$(grep -E '/(CFNetwork|Network|NetworkExtension|WebKit|SafariServices)\.framework/' <<<"$frameworks" | sed 's|.*/||' | tr '\n' ' ' || true)"
