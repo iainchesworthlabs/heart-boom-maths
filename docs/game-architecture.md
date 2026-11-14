@@ -293,6 +293,13 @@ Deviations from the sketches above, all small:
 - The controller gains `ticksPerSecond`, `alertTicks` (the alert zone, a different share of the fuse in endless levels) and `answered`: the question as it stood when the child tapped. The core deals the next question at once, so the play screen draws `answered` for the second that `AnswerFeedback` holds a right or wrong look. The core is never paused or delayed by it, and taps are ignored while a look is held.
 - Navigation is in `AppShell.qml`. The play screen stays up after the last answer of a level or after the bomb until the hold ends.
 
+### As built (title, settings, about and the gate)
+
+- The controller gains `savedRun` (the level and whole seconds left of the saved run, read by restoring the snapshot into a scratch `GameSession`, so the layout of a snapshot is known only to the core), `firstLevelQuestions` and `firstLevelSeconds` (the tagline's numbers, from the tuning), `gateUrl`, `gateDigits` and the command `gateMatches(typed)`, so the gate screen enables OPEN without the number ever reaching QML.
+- The two addresses About can open are written once in `apps/game/src/external_links.hpp` and reach QML as `privacyPolicyUrl` and `repositoryUrl`. Both go to `requestLink`; nothing but `LinkOpener::open` opens one, and it runs only after the gate is passed.
+- The gate takes digits from the on-screen keypad or a keyboard. A number of three digits that is not the one asked for is a wrong answer at once, as is Return on a wrong three digits: the screen says so in words with a mark and the controller deals a new number. Return on fewer digits does nothing.
+- Settings, About and Top 10 are pages stacked over the screen the game state calls for (see `docs/ui-components.md`). Any change of state clears the stack.
+
 ## Tests
 
 Nearly all behaviour lives in `libs/core`, so nearly all tests run there, without Qt, a window or a clock.

@@ -39,8 +39,33 @@ radii, the hard offset shadow and the two fonts come from the `Theme` singleton 
 | `PlayHint` | `cost`, `used`, `removedCount` | A `ComicButton` that reads `HINT - 2 COINS`, goes grey, and after use says `HINT USED - TWO TILES GONE` |
 | `PlayMetrics` | `mode` (`compact`, `portrait`, `landscape`) | Every measurement of the three arrangements |
 | `PlayScreen` | `game`, `feedback`; read-only `mode` | The play screen. Draws held feedback from `AnswerFeedback` and everything else from the controller |
-| `PauseOverlay` | `game`, `showSettings` (false); signal `settingsRequested` | The pause screen over the play screen. The gear is hidden until a Settings screen exists |
+| `PauseOverlay` | `game`, `showSettings` (false); signal `settingsRequested` | The pause screen over the play screen. The shell turns the gear on and opens Settings from it |
 | `Placeholder` | `title`, `subtitle`; children are the buttons | Marked in its own comment as a stand-in; each real screen replaces its use in `AppShell.qml` |
+
+## Title, Settings, About and the parental gate
+
+These four are the screens a child (or a grown-up) uses around the game. Each reads the controller and says nothing it did not
+get from it: the saved run's caption, the build line and the number the gate asks for all come from `GameController`.
+
+| Component | Properties | Notes |
+|---|---|---|
+| `TitleScreen` | `game`; signals `top10Requested`, `settingsRequested` | Best score, coins, the heart bomb in its burst, the name card, the tagline, PLAY (or CONTINUE and NEW GAME when `hasSavedRun`), TOP 10 and the gear. The line under the buttons is the saved run (`Saved game: level 5, 0:31 left`, from `savedRun`), the calm line shown after a failed CONTINUE, or the plain promise. The tagline's numbers are `firstLevelQuestions` and `firstLevelSeconds` |
+| `ScreenFrame` | `title`, `titleSize`, `titleSpacing`, `backName`, `designHeight`, `columnSpacing`, `escapeEnabled`; read-only `unit`, `contentWidth`; children go in the body; signal `backClicked` | The page that opens over another: dotted background, back button with the title, body column. The back button, the Escape key and the Android back key all say `backClicked`. `unit` scales the boards' 342 wide column to the window (up to 480 wide) and shrinks it when the window is short |
+| `SettingsScreen` | `game`; signal `aboutRequested` | `SettingRow` for Sound effects and Music; Game Center only when `gameCenterAvailable`; ABOUT; the build line (`versionText`) |
+| `SettingRow` | `title`, `hint`, `checked`, `switchObjectName`, `unit`; the icon is the child; signal `toggleRequested` | A white card with an icon, a title, a line under it and a `ComicSwitch` |
+| `ComicSwitch` | `checked`, `accessibleName`; signal `clicked` | Shows the state three ways: the word ON or OFF, the side the knob is on, and the track colour. It does not flip itself: the screen decides, because Game Center waits for the gate. Accessible check box with its state. Space, Return and Enter work |
+| `RowButton` | `label`, `hint`, `arrow`, `hintPixelSize`, `unit` (and the `ComicButton` properties) | A button with its label at the left and a small line or an arrow at the right |
+| `AboutScreen` | `game`; signal `backClicked` | Version, revision, branch, build date, the font licences, and four rows: Licence and Third-party notices open a `TextViewer` over About; Privacy policy and Source code call `requestLink` with `privacyPolicyUrl` and `repositoryUrl`, so the gate comes first |
+| `TextViewer` | `text` (a `ScreenFrame`) | A white card with a scrolling text: finger, wheel, arrow keys, Page Up and Down, Home and End. The bar shows where the reading is |
+| `ParentalGateScreen` | `game`; (a `ScreenFrame`) | The number in words, a display, a keypad (1 to 9, 0, DEL), CANCEL and OPEN (TURN ON for Game Center). OPEN is grey until `gateMatches(typed)`. Three digits that are not the number are a wrong answer at once (the keypad cannot be used to find the number a digit at a time), and so is Return on a wrong three digits: a mark and the words `Not that number. Here is a new one.` show and the controller deals a new number. Return on fewer digits does nothing. A hardware keyboard types, deletes (Backspace) and submits (Return) |
+
+Navigation for these is in `AppShell.qml`: `pages` is a stack (`settings`, `about`, `top10`), `showSettings()`, `showAbout()`,
+`showTop10()` and `back()` change it, and any change of the game's state empties it, so a page never outlives the game it was
+opened in. The pause screen's gear opens Settings and returns to the pause screen. The gate sits over everything while
+`gateActive`. `top10Page` in the shell is a stand-in for the leaderboard screen.
+
+`HeartBomb` has two more properties for these screens: `showSeconds` (false on the title and About, where it is a picture)
+and `face` (the eyes and smile of the title). `CoinWallet.displayNumerals` sets the count in the heading font.
 
 ## AnswerFeedback
 
