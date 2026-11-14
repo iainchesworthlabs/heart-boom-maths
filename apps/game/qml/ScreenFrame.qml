@@ -84,18 +84,12 @@ Item {
             Text {
                 objectName: "screenTitle"
                 Layout.fillWidth: true
-                // The board's title has a line height of 1, so the header row is as tall as the back button.
-                Layout.preferredHeight: Math.min(root.titleSize * root.unit, 48 * root.unit)
-                Layout.maximumHeight: Layout.preferredHeight
                 text: root.title
                 elide: Text.ElideRight
                 color: Theme.ink
                 font.family: Theme.displayFont
                 font.pixelSize: root.titleSize * root.unit
                 font.letterSpacing: root.titleSpacing * root.unit
-                lineHeight: root.titleSize * root.unit
-                lineHeightMode: Text.FixedHeight
-                verticalAlignment: Text.AlignVCenter
             }
         }
 

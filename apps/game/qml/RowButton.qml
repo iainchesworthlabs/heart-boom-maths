@@ -20,7 +20,7 @@ ComicButton {
     Text {
         objectName: "rowLabel"
         anchors.left: parent.left
-        anchors.leftMargin: root.horizontalPadding * root.unit
+        anchors.leftMargin: root.horizontalPadding * root.unit + root.borderWidth
         anchors.verticalCenter: parent.verticalCenter
         text: root.label
         color: root.textColor
@@ -32,7 +32,7 @@ ComicButton {
     Text {
         objectName: "rowHint"
         anchors.right: parent.right
-        anchors.rightMargin: root.horizontalPadding * root.unit
+        anchors.rightMargin: root.horizontalPadding * root.unit + root.borderWidth
         anchors.verticalCenter: parent.verticalCenter
         visible: root.hint !== ""
         text: root.hint
@@ -41,14 +41,15 @@ ComicButton {
         font.pixelSize: root.hintPixelSize
     }
 
-    WedgeIcon {
+    BackIcon {
         objectName: "rowArrow"
         anchors.right: parent.right
-        anchors.rightMargin: root.horizontalPadding * root.unit
+        anchors.rightMargin: root.horizontalPadding * root.unit + root.borderWidth
         anchors.verticalCenter: parent.verticalCenter
         visible: root.arrow
-        width: 12.8 * root.unit
-        height: 27.7 * root.unit
+        width: 22 * root.unit
+        height: 22 * root.unit
+        rotation: 180
         color: root.textColor
     }
 }

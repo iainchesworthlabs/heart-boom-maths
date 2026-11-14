@@ -139,7 +139,6 @@ set(HEART_BOOM_MATHS_QML_FILES
     qml/TitleScreen.qml
     qml/Top10Screen.qml
     qml/TrophyIcon.qml
-    qml/WedgeIcon.qml
     qml/WinScreen.qml)
 foreach(qml_file IN LISTS HEART_BOOM_MATHS_QML_FILES)
     get_filename_component(qml_name "${qml_file}" NAME)

@@ -13,8 +13,6 @@ ComicCard {
     // The name of the object the tests and the switch's reader find it by.
     property string switchObjectName: ""
     property real unit: 1
-    // The icon box is square; the trophy is a little smaller than the other two icons.
-    property real iconSize: 34
 
     // The icon goes in this box.
     default property alias icon: iconBox.data
@@ -28,15 +26,15 @@ ComicCard {
 
     Item {
         anchors.fill: parent
-        anchors.margins: 14 * root.unit
+        anchors.margins: 14 * root.unit + root.borderWidth
 
         Item {
             id: iconBox
 
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
-            width: root.iconSize * root.unit
-            height: root.iconSize * root.unit
+            width: 34 * root.unit
+            height: 34 * root.unit
         }
 
         Column {
