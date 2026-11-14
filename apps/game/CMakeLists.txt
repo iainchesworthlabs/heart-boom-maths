@@ -89,16 +89,22 @@ set(HEART_BOOM_MATHS_QML_FILES
     qml/AppShell.qml
     qml/ArrowIcon.qml
     qml/Badge.qml
+    qml/ChevronIcon.qml
+    qml/CoinCard.qml
     qml/CoinWallet.qml
     qml/ComicButton.qml
     qml/ComicCard.qml
     qml/DashedBox.qml
     qml/FeedbackTag.qml
     qml/FuseBar.qml
+    qml/GameOverScreen.qml
     qml/GearIcon.qml
     qml/HalftoneBackground.qml
     qml/HeartBomb.qml
+    qml/LevelClearScreen.qml
     qml/Main.qml
+    qml/NameEntryScreen.qml
+    qml/NameKeyboard.qml
     qml/PauseIcon.qml
     qml/PauseOverlay.qml
     qml/Placeholder.qml
@@ -110,9 +116,14 @@ set(HEART_BOOM_MATHS_QML_FILES
     qml/PlayStats.qml
     qml/PlayTopBar.qml
     qml/QuestionCard.qml
+    qml/ScorePage.qml
+    qml/ScoreRow.qml
     qml/SparkStar.qml
     qml/StarBurst.qml
-    qml/Theme.qml)
+    qml/StatRow.qml
+    qml/Theme.qml
+    qml/Top10Screen.qml
+    qml/WinScreen.qml)
 foreach(qml_file IN LISTS HEART_BOOM_MATHS_QML_FILES)
     get_filename_component(qml_name "${qml_file}" NAME)
     set_source_files_properties("${qml_file}" PROPERTIES QT_RESOURCE_ALIAS "${qml_name}")

@@ -21,6 +21,9 @@ Item {
     property real textSize: 58
     property real subTextSize: 24
     property real letterSpacing: 3
+    // The title leans (degrees; negative leans left). The fit is worked out for the unrotated text, and a lean of a few
+    // degrees stays inside the padding.
+    property real textRotation: 0
     property real padding: 4 // free space between the text and the inner polygon
     property real outerOutline: 4
     property real innerOutline: 3
@@ -100,6 +103,7 @@ Item {
         anchors.centerIn: parent
         spacing: 4
         scale: root.fitScale
+        rotation: root.textRotation
 
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
@@ -114,6 +118,7 @@ Item {
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
             text: root.text
+            horizontalAlignment: Text.AlignHCenter
             color: root.textColor
             font.family: Theme.displayFont
             font.pixelSize: root.textSize

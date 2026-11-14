@@ -9,9 +9,13 @@ import QtQuick.Layouts
 //   Idle         Title            (placeholder)
 //   Playing      Play
 //   Paused       Play with the Pause overlay on top
-//   LevelClear   Level clear      (placeholder)
-//   Won          Win              (placeholder)
-//   GameOver     Game over        (placeholder)
+//   LevelClear   Level clear
+//   Won          Win
+//   GameOver     Name entry when the score earned a place, then Game over
+//
+// Two screens are not a state of the core: the Top 10 (from Title, from Game over, and after SAVE) and Title again after HOME
+// on the game-over card. `overlay` says which one is on top. It is cleared whenever the core's state changes, so a new game,
+// CONTINUE or anything else the core does ends it.
 //
 // The play screen stays up for a moment after the last answer of a level, or after the bomb, while AnswerFeedback holds the
 // look of that answer, and the next screen follows when the hold ends.
@@ -21,10 +25,36 @@ Item {
     required property GameController game
 
     readonly property string sizeClass: Theme.sizeClassFor(width)
-    // The screen on show: "title", "play", "levelClear", "won" or "gameOver".
-    readonly property string screen: screenFor(game.state, answerFeedback.active)
+    // A screen laid over the core's state: "" for none, "top10" or "title".
+    property string overlay: ""
+    // Where the back arrow of the Top 10 goes: the overlay that was showing when it opened.
+    property string overlayBack: ""
+    // The screen on show: "title", "play", "levelClear", "won", "nameEntry", "gameOver" or "top10".
+    readonly property string screen: screenFor(game.state, answerFeedback.active, overlay, game.nameEntryPending)
 
-    function screenFor(state, holding) {
+    // Opens the Top 10 over whatever is showing. The Title screen calls this from its TOP 10 button; the game-over card does
+    // too.
+    function showTop10() {
+        overlayBack = overlay;
+        overlay = "top10";
+    }
+
+    // The back arrow of the Top 10.
+    function closeTop10() {
+        overlay = overlayBack;
+        overlayBack = "";
+    }
+
+    // HOME on the game-over card: the title screen, while the core still rests in its game-over state.
+    function showTitle() {
+        overlayBack = "";
+        overlay = "title";
+    }
+
+    function screenFor(state, holding, overlay, naming) {
+        if (overlay === "top10" && (state === GameController.Idle || state === GameController.GameOver)) {
+            return "top10";
+        }
         switch (state) {
         case GameController.Playing:
         case GameController.Paused:
@@ -34,7 +64,13 @@ Item {
         case GameController.Won:
             return holding ? "play" : "won";
         case GameController.GameOver:
-            return holding ? "play" : "gameOver";
+            if (holding) {
+                return "play";
+            }
+            if (naming) {
+                return "nameEntry";
+            }
+            return overlay === "title" ? "title" : "gameOver";
         default:
             return "title";
         }
@@ -45,6 +81,15 @@ Item {
 
         objectName: "answerFeedback"
         game: root.game
+    }
+
+    Connections {
+        target: root.game
+
+        function onStateChanged() {
+            root.overlay = "";
+            root.overlayBack = "";
+        }
     }
 
     Loader {
@@ -60,8 +105,12 @@ Item {
                 return levelClearScreen;
             case "won":
                 return winScreen;
+            case "nameEntry":
+                return nameEntryScreen;
             case "gameOver":
                 return gameOverScreen;
+            case "top10":
+                return top10Screen;
             default:
                 return titleScreen;
             }
@@ -130,87 +179,59 @@ Item {
         }
     }
 
+    // ---- The result and score screens ----------------------------------------------------------------------------------
+
     Component {
         id: levelClearScreen
 
-        Placeholder {
+        LevelClearScreen {
             objectName: "levelClearScreen"
-            title: qsTr("LEVEL %1 CLEAR!").arg(root.game.levelClear.level)
-            subtitle: qsTr("%1 points so far").arg(Theme.formatNumber(root.game.points))
-
-            ComicButton {
-                objectName: "nextLevelButton"
-                Layout.fillWidth: true
-                Layout.preferredHeight: 72
-                text: qsTr("NEXT LEVEL")
-                pixelSize: 40
-                letterSpacing: 3
-                borderWidth: Theme.outlineLarge
-                radius: Theme.radiusLarge
-                shadowOffset: Theme.shadowLarge
-                onClicked: root.game.nextLevel()
-            }
+            game: root.game
         }
     }
 
     Component {
         id: winScreen
 
-        Placeholder {
+        WinScreen {
             objectName: "winScreen"
-            title: qsTr("YOU WIN!")
-            subtitle: qsTr("%1 points").arg(Theme.formatNumber(root.game.points))
+            game: root.game
+        }
+    }
 
-            ComicButton {
-                objectName: "keepGoingButton"
-                Layout.fillWidth: true
-                Layout.preferredHeight: 72
-                text: qsTr("KEEP GOING")
-                pixelSize: 40
-                letterSpacing: 3
-                borderWidth: Theme.outlineLarge
-                radius: Theme.radiusLarge
-                shadowOffset: Theme.shadowLarge
-                onClicked: root.game.keepGoing()
-            }
+    Component {
+        id: nameEntryScreen
 
-            ComicButton {
-                objectName: "finishButton"
-                Layout.fillWidth: true
-                Layout.preferredHeight: 64
-                variant: "secondary"
-                text: qsTr("FINISH")
-                pixelSize: 34
-                letterSpacing: 2
-                borderWidth: Theme.outlineLarge
-                radius: 18
-                shadowOffset: Theme.shadowSmall
-                onClicked: root.game.finish()
-            }
+        NameEntryScreen {
+            objectName: "nameEntryScreen"
+            game: root.game
+            // SAVE goes on to the Top 10 with the new entry marked; SKIP lands on the game-over card by itself.
+            onSaveStarted: root.showTop10()
         }
     }
 
     Component {
         id: gameOverScreen
 
-        Placeholder {
+        GameOverScreen {
             objectName: "gameOverScreen"
-            title: root.game.endReason === GameController.Bomb ? qsTr("BOOM!") : qsTr("GAME OVER")
-            subtitle: qsTr("Level %1, %2 points").arg(root.game.finalLevel).arg(Theme.formatNumber(root.game.finalScore))
+            game: root.game
+            onTop10Requested: root.showTop10()
+            onHomeRequested: root.showTitle()
+        }
+    }
 
-            ComicButton {
-                objectName: "playAgainButton"
-                Layout.fillWidth: true
-                Layout.preferredHeight: 72
-                variant: "danger"
-                text: qsTr("PLAY AGAIN")
-                pixelSize: 40
-                letterSpacing: 3
-                borderWidth: Theme.outlineLarge
-                radius: Theme.radiusLarge
-                shadowOffset: Theme.shadowLarge
-                onClicked: root.game.startGame()
-            }
+    Component {
+        id: top10Screen
+
+        Top10Screen {
+            objectName: "top10Screen"
+            game: root.game
+            // The new entry is marked only while the list follows the game that earned it.
+            highlightRank: root.game.state === GameController.GameOver && root.overlayBack !== "title" ? root.game.highlightRank : 0
+            playText: root.game.state === GameController.GameOver ? qsTr("PLAY AGAIN") : qsTr("PLAY")
+            onBackRequested: root.closeTop10()
+            onPlayRequested: root.game.startGame()
         }
     }
 }
