@@ -5,6 +5,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
 
 #include <QByteArray>
 #include <QQuickItem>
@@ -774,9 +775,26 @@ TEST_CASE("The on-screen keyboard types into the field and matches the phone boa
     QQuickItem* keyboard = s.h.find_item("nameKeyboard");
     REQUIRE(keyboard != nullptr);
     CHECK(keyboard->isVisible());
-    // The board reserves about 336 pixels at the foot of the window for it.
-    CHECK(keyboard->height() == 336);
+    // The board reserves 338 pixels at the foot of the window for it (a border of 4 and 334 of grey), from y 506.
+    CHECK(keyboard->height() == 338);
     CHECK(keyboard->mapToScene(QPointF(0, keyboard->height())).y() == PHONE.height());
+    CHECK(keyboard->mapToScene(QPointF(0, 0)).y() == 506);
+
+    // Everything above it is where the board has it: the card at 186, the field at 338 and the buttons at 418, with SAVE
+    // 188 wide from x 24 and SKIP 140 wide up to 366.
+    CHECK(s.rect_of("entryCard").top() == 186);
+    CHECK(s.rect_of("nameField").top() == 338);
+    CHECK(s.rect_of("saveButton").top() == 418);
+    CHECK(s.rect_of("saveButton").left() == 24);
+    CHECK_THAT(s.rect_of("saveButton").width(), Catch::Matchers::WithinAbs(188.0, 1.0));
+    CHECK_THAT(s.rect_of("skipButton").left(), Catch::Matchers::WithinAbs(226.0, 1.0));
+    CHECK_THAT(s.rect_of("skipButton").width(), Catch::Matchers::WithinAbs(140.0, 1.0));
+    // The name starts 47 in: the field's border of 5 and its padding of 18, from x 24.
+    {
+        QQuickItem* name_text = s.h.find_item("nameText");
+        REQUIRE(name_text != nullptr);
+        CHECK_THAT(name_text->mapToScene(QPointF(0, 0)).x(), Catch::Matchers::WithinAbs(47.0, 1.0));
+    }
 
     // The content sits above it with SAVE and SKIP clear of the keys.
     CHECK(s.rect_of("saveButton").bottom() <= keyboard->y());

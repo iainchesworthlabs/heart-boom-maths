@@ -20,6 +20,8 @@ Item {
     property real topMax: 64
     // Room at the bottom the column must not use, such as an on-screen keyboard.
     property real reservedBottom: 0
+    // True: the column starts `topMax` from the top whenever it fits, instead of being centred in the room that is left.
+    property bool pinTop: false
     property real columnSpacing: 20
 
     readonly property real sideMargin: 24
@@ -43,6 +45,9 @@ Item {
         x: (root.width - width) / 2
         y: {
             const free = root.availableHeight - implicitHeight;
+            if (root.pinTop) {
+                return Math.max(root.verticalMargin / 2, Math.min(root.topMax * root.unit, free));
+            }
             return Math.max(root.verticalMargin / 2, root.compact ? Math.min(root.topMax * root.unit, free / 2) : free / 2);
         }
         width: root.columnWidth
