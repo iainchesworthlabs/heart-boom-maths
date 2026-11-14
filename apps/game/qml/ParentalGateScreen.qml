@@ -91,10 +91,10 @@ ScreenFrame {
             id: promptColumn
 
             anchors.fill: parent
-            anchors.topMargin: 16 * root.unit
-            anchors.bottomMargin: 16 * root.unit
-            anchors.leftMargin: 18 * root.unit
-            anchors.rightMargin: 18 * root.unit
+            anchors.topMargin: 16 * root.unit + 5
+            anchors.bottomMargin: 16 * root.unit + 5
+            anchors.leftMargin: 18 * root.unit + 5
+            anchors.rightMargin: 18 * root.unit + 5
             spacing: 10 * root.unit
 
             Text {
