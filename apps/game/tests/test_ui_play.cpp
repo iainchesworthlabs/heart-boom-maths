@@ -415,6 +415,20 @@ TEST_CASE("In the alert nothing of the play column overlaps another part, at eve
     CHECK(card->height() > property_of(card, "contentHeight").toDouble());
     CHECK(bottom_of("tile2") <= size.height() + 0.5);
     CHECK(bottom_of("tile3") <= size.height() + 0.5);
+
+    // A held answer in the alert: the caption that replaces the hint button lies between the card and the tiles.
+    s.feedback->setProperty("wrongHoldMs", 60000);
+    s.rig.answer_wrong();
+    s.h.settle();
+    QTest::qWait(300);
+    if (s.visible("wrongTag") && !wide)
+    {
+        CHECK(top_of("wrongTag") >= bottom_of("questionCard") - 0.5);
+        CHECK(bottom_of("wrongTag") <= top_of("tile0") + 0.5);
+        CHECK(bottom_of("alertBanner") <= top_of("questionCard") + 0.5);
+    }
+    CHECK(s.visible("wrongTag"));
+    CHECK(bottom_of("tile3") <= size.height() + 0.5);
 }
 
 TEST_CASE("The pause button opens the pause overlay and RESUME and QUIT leave it", "[ui][play][pause]")
@@ -642,6 +656,16 @@ TEST_CASE("Screenshots of the play screen for the hand check against the boards"
         s.rig.play_for_ms(49000);
         QTest::qWait(300);
         CHECK(s.h.grab(prefix + "alert.png"));
+
+        // The alert with a wrong answer held, and then with a right one.
+        s.rig.answer_wrong();
+        QTest::qWait(400);
+        CHECK(s.h.grab(prefix + "alert-wrong.png"));
+        QMetaObject::invokeMethod(s.feedback, "clear");
+        s.rig.controller.answer(s.rig.controller.session_view().question.correct_tile);
+        QTest::qWait(400);
+        CHECK(s.h.grab(prefix + "alert-right.png"));
+        QMetaObject::invokeMethod(s.feedback, "clear");
 
         // CP16: the pause overlay.
         s.rig.controller.pause();
