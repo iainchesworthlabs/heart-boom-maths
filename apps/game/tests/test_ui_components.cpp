@@ -396,14 +396,14 @@ Item {
 }
 )",
                                      QSize{400, 320});
-    QObject* shortCard = h.find("short");
-    QObject* longCard = h.find("long");
-    REQUIRE(shortCard != nullptr);
-    REQUIRE(longCard != nullptr);
-    CHECK_FALSE(property_of(shortCard, "multiLine").toBool());
-    CHECK(property_of(longCard, "multiLine").toBool());
-    CHECK(property_of(shortCard, "spoken").toString() == "8 plus what equals 13");
-    CHECK(property_of(longCard, "spoken").toString() == "250 plus 480 minus 130 equals what");
+    QObject* short_card = h.find("short");
+    QObject* long_card = h.find("long");
+    REQUIRE(short_card != nullptr);
+    REQUIRE(long_card != nullptr);
+    CHECK_FALSE(property_of(short_card, "multiLine").toBool());
+    CHECK(property_of(long_card, "multiLine").toBool());
+    CHECK(property_of(short_card, "spoken").toString() == "8 plus what equals 13");
+    CHECK(property_of(long_card, "spoken").toString() == "250 plus 480 minus 130 equals what");
     // The second line, "= ?", is centred under the terms, and so is the first: both lines share the card's middle.
     std::vector<QQuickItem*> lines;
     std::vector<QQuickItem*> pending{h.find_item("long")};
@@ -428,8 +428,8 @@ Item {
     }
     CHECK(std::max(lines[0]->width(), lines[1]->width()) > 2.0 * std::min(lines[0]->width(), lines[1]->width()));
     // Every line fits the card: nothing is wider than the card allows.
-    CHECK(property_of(shortCard, "contentHeight").toDouble() > 0);
-    CHECK(property_of(longCard, "contentHeight").toDouble() > property_of(shortCard, "contentHeight").toDouble());
+    CHECK(property_of(short_card, "contentHeight").toDouble() > 0);
+    CHECK(property_of(long_card, "contentHeight").toDouble() > property_of(short_card, "contentHeight").toDouble());
 }
 
 TEST_CASE("The safe-area frame keeps the content off the unsafe edges and lets the page run under them",

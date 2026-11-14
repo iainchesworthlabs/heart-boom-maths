@@ -27,7 +27,7 @@ constexpr std::array<std::pair<ReplayAction, std::string_view>, 9> ACTION_NAMES{
 }};
 
 // A replay of a long endless run is a few tens of kilobytes. The limit only has to stop hostile input.
-constexpr std::size_t MAX_REPLAY_BYTES = 4 * 1024 * 1024;
+constexpr std::size_t MAX_REPLAY_BYTES = std::size_t{4} * 1024 * 1024;
 constexpr std::int64_t MAX_TICK = 1'000'000'000;
 
 std::unexpected<std::string> fail(std::string message)

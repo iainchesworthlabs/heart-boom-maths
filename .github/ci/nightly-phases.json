@@ -1,0 +1,5 @@
+[
+  { "name": "parallel", "label": "unit|integration|system", "jobs": 0, "optional": false },
+  { "name": "ui", "label": "ui", "jobs": 2, "optional": true },
+  { "name": "other", "label": "", "exclude": "unit|integration|system|ui|perf|fuzz", "jobs": 0, "optional": true }
+]

@@ -64,6 +64,135 @@ pull request so coverage only moves up.
 A line that cannot be reached by a test, such as a failing system call, is excluded with a
 `GCOVR_EXCL_BR_LINE` comment and a reason.
 
+## Nightly checks
+
+`.github/workflows/nightly.yml` runs what is too slow or too noisy for every pull request, once a night against `develop`
+(02:37 UTC, or `gh workflow run nightly.yml --ref <branch>`; `-f jobs=cppcheck,clang-tidy` runs only those groups, which are
+`sanitizers`, `clang-tidy`, `cppcheck`, `gcc-analyzer`, `msvc-analyze` and `dependencies`). It is not a required check and
+cannot block a merge. The per-pull-request sanitizer and coverage jobs stay as they are. `docs/ci.md`, "Nightly", lists the
+jobs with their runners; CodeQL is `codeql.yml`.
+
+### Sanitizers
+
+Each leg builds the preset, then runs every test label but `perf` and `fuzz` (`.github/ci/nightly-phases.json`: `unit`,
+`integration` and `system` in parallel, `ui` at two jobs on the offscreen platform, anything else last, and a failed test
+run once more by name so that a flaky pass is a warning). The core's replay and property tests are the heavy ones.
+
+| Leg | Preset | Catches |
+|---|---|---|
+| Clang ASan -O1 | `linux-asan-o1` | Out-of-bounds access, use after free, return or scope, double free, and leaks (LeakSanitizer is part of ASan on Linux) |
+| Clang UBSan | `linux-ubsan` | Signed overflow, bad shifts, null and misaligned access, invalid enum or bool values, a float cast out of range; the first report fails the run |
+| Clang TSan | `linux-tsan` | Data races and lock-order inversions |
+| GCC ASan and UBSan | `linux-asan-ubsan` with GCC | The same as Clang's, from GCC's runtimes |
+| MSVC ASan /O1 | `windows-msvc-asan` | The ASan checks above on Windows (MSVC has no UBSan, no TSan and no leak check) |
+| Apple Clang ASan and UBSan | `macos-asan-ubsan` | The same on macOS, with Apple's runtimes |
+
+Every sanitizer build is optimised at `-O1` (`/O1` on MSVC) with frame pointers kept: `cmake/icl/IclSanitizers.cmake` adds
+the flags to every sanitizer preset, which keeps the stacks readable and the run short. `linux-asan-o1` and `linux-ubsan`
+also drop `-DNDEBUG`, so every `assert` runs. The existing `linux-asan-ubsan` preset is therefore -O1 as well, not -O0.
+MSVC's AddressSanitizer works at any optimisation level, `/Od` included; the optimised build is the faster and is the one used.
+
+The run-time options are the `env` block at the top of `nightly.yml`. Set the same three for a run by hand:
+
+```bash
+export ASAN_OPTIONS=detect_leaks=1:strict_string_checks=1:detect_stack_use_after_return=1:check_initialization_order=1
+export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+export TSAN_OPTIONS=halt_on_error=1:second_deadlock_stack=1:ignore_noninstrumented_modules=1
+```
+
+On Windows and macOS leave `detect_leaks=1` out: those runtimes have no leak check. `ignore_noninstrumented_modules=1` makes
+TSan ignore what Qt's prebuilt libraries do. They are not built with TSan, it cannot see their locks, and every hand-over of
+an object to a Qt thread would be reported as a race on the allocator. A race between this project's own threads is still
+found, because the project's code is instrumented. There is no suppressions file; if a report ever has to be hidden, add
+`tools/sanitizers/tsan.supp` with the reason on every entry and name it in `TSAN_OPTIONS`.
+
+Run a leg by hand on Linux or in WSL (Clang 23 and a Qt kit; set `CC` and `CXX`, and `ICL_QT_ROOT` or `CMAKE_PREFIX_PATH`):
+
+```bash
+cmake --preset linux-asan-o1 && cmake --build --preset linux-asan-o1
+ctest --test-dir build/linux-asan-o1 -LE 'perf|fuzz' -j8 --output-on-failure
+```
+
+and the same with `linux-ubsan`, `linux-tsan` and `linux-asan-ubsan`. Without a Qt kit add `-DHEART_BOOM_MATHS_BUILD_GAME=OFF`
+to test the core alone. On Windows:
+
+```powershell
+pwsh -NoProfile -File tools/dev/test.ps1 -Preset windows-msvc-asan
+```
+
+which also runs the `perf` label. To leave it out, build the preset and run
+`ctest --test-dir build/windows-msvc-asan -LE "perf|fuzz"` from a Visual Studio developer prompt with the Qt `bin` directory on
+`PATH`. A kernel with wide address randomisation can stop a sanitizer at start ("unexpected memory mapping"):
+`sudo sysctl -w vm.mmap_rnd_bits=28`.
+
+### Static analysis and the baseline
+
+| Job | Tool and configuration | Catches |
+|---|---|---|
+| clang-tidy | `.clang-tidy`: `bugprone`, `clang-analyzer`, `performance`, `portability`, and chosen `cert`, `concurrency`, `cppcoreguidelines`, `misc`, `modernize` and `readability` checks, plus the naming rules. The file says which noisy checks are left out and why | Bugs, ownership slips, wasted copies, names that break the conventions |
+| cppcheck | `--enable=warning,performance,portability --std=c++23 --inline-suppr`; suppressions in `tools/static-analysis/cppcheck-suppressions.txt` | A second opinion from a different engine: bad conditions, uninitialised members, arguments passed the wrong way |
+| GCC analyzer | `-fanalyzer` over `libs/core` (preset `linux-gcc-analyzer`) | Null dereference, use after free, leaks and uninitialised values on the paths the compiler follows |
+| MSVC analyze | `/analyze` with the C++ Core Guidelines checker (preset `windows-msvc-analyze`) | Buffer and arithmetic overflow, uninitialised use, Core Guidelines violations. Five rules that ask for the Guidelines Support Library (`gsl::at`, `gsl::span` and the like) are off, as the preset's description says |
+
+A tool's output is read by `tools/ci/static_analysis.py`. It counts findings per check and file (a count does not move
+when a line does) and compares them with `tools/static-analysis-baseline.json`, the findings that are accepted for now.
+The job fails only when a count is higher than the baseline allows, or a check and file are not in it, and says which. It
+writes SARIF, which the job uploads to code scanning (one category per tool) and keeps as an artifact with the log. A finding
+in the baseline is a to-do item, not an approval: code scanning shows it too.
+
+```bash
+python3 tools/ci/static_analysis.py check  --tool clang-tidy --log clang-tidy.log   # what the job does
+python3 tools/ci/static_analysis.py lower  --tool clang-tidy --log clang-tidy.log   # after fixing some: lower the baseline
+python3 tools/ci/static_analysis.py accept --tool clang-tidy --log clang-tidy.log   # take today's counts, whatever they are
+```
+
+`--tool` is `clang-tidy`, `cppcheck`, `gcc-analyzer` or `msvc-analyze`. To lower the baseline, fix findings, run `lower` on
+the log of a run that has the fix and commit the smaller file in the same change; the job's summary prints the command when
+the baseline is higher than the findings. `lower` never raises a count. `accept` does, which is how a finding that cannot
+be fixed is taken in: the diff of the file is what a reviewer reads, and the reason belongs in the pull request. Prefer a
+narrow `// NOLINT(check)` or `// cppcheck-suppress id ; reason` at the line, with the reason, to an entry in the baseline.
+
+To run a tool by hand, configure and build its preset (the build makes the generated sources), then:
+
+```bash
+# clang-tidy: every file of ours in the compile database, four at a time
+cmake --preset linux-static-analysis && cmake --build --preset linux-static-analysis
+python3 tools/ci/static_analysis.py files --compile-commands build/linux-static-analysis/compile_commands.json \
+  | xargs -P "$(nproc)" -n 4 clang-tidy -p build/linux-static-analysis --quiet > clang-tidy.log 2>&1
+# cppcheck: the command of the "Run cppcheck" step in nightly.yml
+# GCC analyzer: CXX=g++. Use GCC 16, the CI's: GCC 14 reports false uses of uninitialised values in the standard library
+cmake --preset linux-gcc-analyzer && cmake --build --preset linux-gcc-analyzer -- -k 0 2>&1 | tee gcc-analyzer.log
+```
+
+```powershell
+# MSVC analyze, from a Visual Studio developer prompt
+cmake --preset windows-msvc-analyze
+cmake --build --preset windows-msvc-analyze -- -k 0 2>&1 | Tee-Object msvc-analyze.log
+python tools/ci/static_analysis.py check --tool msvc-analyze --log msvc-analyze.log
+```
+
+The baseline was counted with Clang 19 (clang-tidy), cppcheck 2.17, GCC 16.2 and MSVC 14.51; the CI uses Clang 23 and the
+distribution's cppcheck, so the first night can differ. When the CI and a machine disagree, the CI is right: read its log artifact.
+
+### Dependencies
+
+The `dependencies` job reads every vcpkg port that `vcpkg.json` asks for, down through the ports' own dependencies, in the
+checkout of the vcpkg fork at the baseline. It fails when a port has no licence or one that cannot be combined with
+GPL-3.0-or-later (`tools/ci/dependency_audit.py licences`; the accepted SPDX identifiers are listed in that file). It runs
+`pip-audit` (pinned in `requirements/audit.txt`) on `requirements/docs.txt` and fails on a known vulnerability. It prints how
+far the vcpkg baseline, the ports, Qt, CMake and the Android NDK are behind the newest release, and that report never fails.
+No vulnerability database covers vcpkg ports (OSV has no vcpkg ecosystem), so Dependabot's vcpkg updates and security alerts
+are what flag one. By hand: `python3 tools/ci/dependency_audit.py licences --vcpkg-root <checkout at the baseline>` and
+`pip-audit -r requirements/docs.txt`.
+
+### Reading a failure
+
+Open the run. **Nightly status** has a table of every job and leg with its time and a link, and opens (or comments on) one
+issue labelled `nightly`, which it closes when a night is green. A red sanitizer leg has the report in its log, with the
+stack; a failed test keeps `Testing/Temporary` as the `sanitizer-logs-<preset>` artifact for two weeks. A red analyser job has
+the new findings in its summary and the whole log and SARIF as an artifact. A report that appears on one sanitizer leg only
+is usually that runtime's: look for a frame in this project's code before suspecting Qt.
+
 ## Running one kind
 
 ```bash

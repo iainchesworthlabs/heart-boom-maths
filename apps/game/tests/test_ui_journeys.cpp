@@ -291,6 +291,10 @@ TEST_CASE("Journey: a new player plays a first game, uses a hint, loses, and is 
     const int wrong = j.wrong_tile();
     const int right = j.right_tile();
     const int answered_before = j.c().question_number();
+    // A long hold, so the test looks at the held screen before the hold ends: a frame under a sanitizer can take longer
+    // than the short holds of this file (the nightly's MSVC AddressSanitizer leg saw the hold end first).
+    QObject* feedback = j.h.find("answerFeedback");
+    feedback->setProperty("wrongHoldMs", 60000);
     click(j.tile(wrong));
     j.h.settle();
     CHECK(j.look(wrong) == "wrong");
@@ -299,6 +303,9 @@ TEST_CASE("Journey: a new player plays a first game, uses a hint, loses, and is 
     click(j.tile(right));
     j.h.settle();
     CHECK(j.c().question_number() == answered_before + 1);
+    QMetaObject::invokeMethod(feedback, "clear");
+    j.h.settle();
+    feedback->setProperty("wrongHoldMs", SHORT_HOLD_MS * 2);
     j.wait_out_holds();
     CHECK(j.c().multiplier() == 1);
 
@@ -757,44 +764,44 @@ namespace
 /// Everything the app can be showing when it is switched away from.
 enum class Where
 {
-    Title,
-    Playing,
-    Paused,
-    LevelClear,
-    Won,
-    NameEntry,
-    GameOver,
-    Settings,
-    About,
-    GateOpen,
-    Top10,
+    TITLE,
+    PLAYING,
+    PAUSED,
+    LEVEL_CLEAR,
+    WON,
+    NAME_ENTRY,
+    GAME_OVER,
+    SETTINGS,
+    ABOUT,
+    GATE_OPEN,
+    TOP10,
 };
 
 const char* where_name(Where where)
 {
     switch (where)
     {
-    case Where::Title:
+    case Where::TITLE:
         return "title";
-    case Where::Playing:
+    case Where::PLAYING:
         return "playing";
-    case Where::Paused:
+    case Where::PAUSED:
         return "paused";
-    case Where::LevelClear:
+    case Where::LEVEL_CLEAR:
         return "level clear";
-    case Where::Won:
+    case Where::WON:
         return "won";
-    case Where::NameEntry:
+    case Where::NAME_ENTRY:
         return "name entry";
-    case Where::GameOver:
+    case Where::GAME_OVER:
         return "game over";
-    case Where::Settings:
+    case Where::SETTINGS:
         return "settings";
-    case Where::About:
+    case Where::ABOUT:
         return "about";
-    case Where::GateOpen:
+    case Where::GATE_OPEN:
         return "gate open";
-    case Where::Top10:
+    case Where::TOP10:
         return "top 10";
     }
     return "";
@@ -804,43 +811,43 @@ void arrive(Journey& j, Where where)
 {
     switch (where)
     {
-    case Where::Title:
+    case Where::TITLE:
         break;
-    case Where::Playing:
+    case Where::PLAYING:
         j.c().startGame();
         j.rig.answer_right();
         break;
-    case Where::Paused:
+    case Where::PAUSED:
         j.c().startGame();
         j.rig.answer_right();
         j.c().pause();
         break;
-    case Where::LevelClear:
+    case Where::LEVEL_CLEAR:
         j.c().startGame();
         j.rig.play_level_right();
         break;
-    case Where::Won:
+    case Where::WON:
         j.win_the_game();
         break;
-    case Where::NameEntry:
+    case Where::NAME_ENTRY:
         j.blow_up_after(3);
         break;
-    case Where::GameOver:
+    case Where::GAME_OVER:
         j.blow_up_after(0);
         break;
-    case Where::Settings:
+    case Where::SETTINGS:
         j.tap("settingsButton");
         break;
-    case Where::About:
+    case Where::ABOUT:
         j.tap("settingsButton");
         j.tap("aboutButton");
         break;
-    case Where::GateOpen:
+    case Where::GATE_OPEN:
         j.tap("settingsButton");
         j.tap("aboutButton");
         j.tap("sourceButton");
         break;
-    case Where::Top10:
+    case Where::TOP10:
         j.tap("top10Button");
         break;
     }
@@ -861,17 +868,17 @@ TEST_CASE("Lifecycle: leaving the app and coming back in every state shows the s
         const char* shown; // an item that must be visible afterwards
     };
     const std::vector<Case> cases = {
-        {Where::Title, "title", "", State::Idle, "playButton"},
-        {Where::Playing, "play", "", State::Paused, "pauseOverlay"},
-        {Where::Paused, "play", "", State::Paused, "pauseOverlay"},
-        {Where::LevelClear, "levelClear", "", State::LevelClear, "nextLevelButton"},
-        {Where::Won, "won", "", State::Won, "keepGoingButton"},
-        {Where::NameEntry, "nameEntry", "", State::GameOver, "saveButton"},
-        {Where::GameOver, "gameOver", "", State::GameOver, "playAgainButton"},
-        {Where::Settings, "title", "settings", State::Idle, "settingsScreen"},
-        {Where::About, "title", "about", State::Idle, "aboutScreen"},
-        {Where::GateOpen, "title", "about", State::Idle, "aboutScreen"},
-        {Where::Top10, "top10", "top10", State::Idle, "top10Screen"},
+        {Where::TITLE, "title", "", State::Idle, "playButton"},
+        {Where::PLAYING, "play", "", State::Paused, "pauseOverlay"},
+        {Where::PAUSED, "play", "", State::Paused, "pauseOverlay"},
+        {Where::LEVEL_CLEAR, "levelClear", "", State::LevelClear, "nextLevelButton"},
+        {Where::WON, "won", "", State::Won, "keepGoingButton"},
+        {Where::NAME_ENTRY, "nameEntry", "", State::GameOver, "saveButton"},
+        {Where::GAME_OVER, "gameOver", "", State::GameOver, "playAgainButton"},
+        {Where::SETTINGS, "title", "settings", State::Idle, "settingsScreen"},
+        {Where::ABOUT, "title", "about", State::Idle, "aboutScreen"},
+        {Where::GATE_OPEN, "title", "about", State::Idle, "aboutScreen"},
+        {Where::TOP10, "top10", "top10", State::Idle, "top10Screen"},
     };
     for (const Case& test : cases)
     {
@@ -892,7 +899,7 @@ TEST_CASE("Lifecycle: leaving the app and coming back in every state shows the s
             CHECK_FALSE(j.c().gate_active());
             CHECK(j.c().wallet() == wallet);
             CHECK(j.on_disk().coins == wallet);
-            if (test.where == Where::Playing || test.where == Where::Paused)
+            if (test.where == Where::PLAYING || test.where == Where::PAUSED)
             {
                 CHECK(j.on_disk().run.has_value());
             }
@@ -900,7 +907,7 @@ TEST_CASE("Lifecycle: leaving the app and coming back in every state shows the s
             {
                 CHECK_FALSE(j.on_disk().run.has_value());
             }
-            if (test.where == Where::Won)
+            if (test.where == Where::WON)
             {
                 CHECK(j.on_disk().won_once);
             }

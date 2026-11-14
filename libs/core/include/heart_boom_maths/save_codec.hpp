@@ -23,7 +23,7 @@ using MigrationStep = bool (*)(json::Value& document);
 struct SaveSchema
 {
     int current_version = SAVE_VERSION;
-    std::span<const MigrationStep> steps = {};
+    std::span<const MigrationStep> steps;
 
     [[nodiscard]] static SaveSchema release() noexcept
     {

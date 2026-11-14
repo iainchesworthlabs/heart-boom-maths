@@ -105,17 +105,17 @@ public:
     }
 
 private:
-    std::unexpected<Error> fail(ErrorCode code) const
+    [[nodiscard]] std::unexpected<Error> fail(ErrorCode code) const
     {
         return std::unexpected(Error{code, m_Pos});
     }
 
-    bool at_end() const noexcept
+    [[nodiscard]] bool at_end() const noexcept
     {
         return m_Pos >= m_Text.size();
     }
 
-    char peek() const noexcept
+    [[nodiscard]] char peek() const noexcept
     {
         return m_Text[m_Pos];
     }

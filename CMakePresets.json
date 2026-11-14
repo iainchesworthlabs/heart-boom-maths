@@ -43,6 +43,49 @@
       "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo", "ICL_SANITIZERS": "thread" }
     },
     {
+      "name": "linux-asan-o1",
+      "displayName": "Linux, AddressSanitizer alone, -O1, assertions on",
+      "description": "The nightly's AddressSanitizer leg (docs/testing.md, Nightly checks): address only, so its runtime options and its slowdown are its own, at -O1 with frame pointers kept and without -DNDEBUG, so every assert runs. cmake/icl/IclSanitizers.cmake adds -O1 -fno-omit-frame-pointer to every sanitizer build; the flags are repeated here so the optimisation level is written where it is read.",
+      "inherits": "linux-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_CXX_FLAGS": "-fno-omit-frame-pointer",
+        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O1 -g",
+        "ICL_SANITIZERS": "address"
+      }
+    },
+    {
+      "name": "linux-ubsan",
+      "displayName": "Linux, UBSan alone, -O1, assertions on",
+      "description": "The nightly's UndefinedBehaviorSanitizer leg: undefined alone, -fno-sanitize-recover=all (from IclSanitizers.cmake, so the first report fails the run), -O1 and no -DNDEBUG.",
+      "inherits": "linux-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_CXX_FLAGS": "-fno-omit-frame-pointer",
+        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O1 -g",
+        "ICL_SANITIZERS": "undefined"
+      }
+    },
+    {
+      "name": "linux-static-analysis",
+      "displayName": "Linux, Debug, for clang-tidy and cppcheck",
+      "description": "Debug (assertions on, so their code is analysed), no Tracy, the game on. Its compile_commands.json is what run-clang-tidy and cppcheck read (tools/ci/static_analysis.py). Nothing here is run.",
+      "inherits": "linux-base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    {
+      "name": "linux-gcc-analyzer",
+      "displayName": "Linux, GCC -fanalyzer, the rules only",
+      "description": "The library libs/core built with GCC's static analyzer (-fanalyzer): no Qt (the analyzer is slow and noisy on Qt headers) and no tests. Build only. CXX must be g++, GCC 14 or newer; GCC 14 reports false positives for C++ standard library code that later releases do not, so the baseline is the CI's compiler's.",
+      "inherits": "linux-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_FLAGS": "-fanalyzer",
+        "HEART_BOOM_MATHS_BUILD_GAME": "OFF",
+        "HEART_BOOM_MATHS_BUILD_TESTS": "OFF"
+      }
+    },
+    {
       "name": "linux-coverage",
       "displayName": "Linux, coverage",
       "inherits": "linux-base",
@@ -86,6 +129,28 @@
       "displayName": "Windows, MSVC, AddressSanitizer, /O1",
       "inherits": "windows-msvc-release",
       "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo", "ICL_SANITIZERS": "address" }
+    },
+    {
+      "name": "windows-msvc-analyze",
+      "displayName": "Windows, MSVC, /analyze with the C++ Core Check rules",
+      "description": "Build only. PREfast (/analyze) with the EspX engine, which brings the C++ Core Guidelines checker and its default rules; /analyze:WX- keeps the warnings from failing the build (the baseline decides, tools/ci/static_analysis.py). CMAKE_CXX_FLAGS replaces CMake's own default flags, so those are repeated first. /wd4702 (unreachable code) is off because the analysis pass reports it for test code that the ordinary build does not, and the project builds with /WX. C26446, C26472, C26481, C26482 and C26821 are off: each asks for the Guidelines Support Library (gsl::at, gsl::narrow_cast, gsl::span), which the project does not use, and they were 670 of the first 987 findings. The warnings are read from the build log by tools/ci/static_analysis.py. Headers in angle brackets (Qt, vcpkg, the standard library) are external and not analysed.",
+      "inherits": "windows-msvc-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_FLAGS": "/DWIN32 /D_WINDOWS /EHsc /GR /wd4702 /wd26446 /wd26472 /wd26481 /wd26482 /wd26821 /analyze /analyze:WX- /analyze:plugin EspXEngine.dll /analyze:external- /external:anglebrackets /external:W0"
+      }
+    },
+    {
+      "name": "macos-asan-ubsan",
+      "displayName": "macOS, Apple Clang, AddressSanitizer and UBSan, -O1",
+      "inherits": "base",
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O1 -g",
+        "ICL_SANITIZERS": "address,undefined",
+        "VCPKG_TARGET_TRIPLET": "arm64-osx"
+      }
     },
     {
       "name": "ios-release",
@@ -203,11 +268,17 @@
     { "name": "linux-release-perf", "configurePreset": "linux-release-perf" },
     { "name": "linux-asan-ubsan", "configurePreset": "linux-asan-ubsan" },
     { "name": "linux-tsan", "configurePreset": "linux-tsan" },
+    { "name": "linux-asan-o1", "configurePreset": "linux-asan-o1" },
+    { "name": "linux-ubsan", "configurePreset": "linux-ubsan" },
+    { "name": "linux-static-analysis", "configurePreset": "linux-static-analysis" },
+    { "name": "linux-gcc-analyzer", "configurePreset": "linux-gcc-analyzer" },
     { "name": "linux-coverage", "configurePreset": "linux-coverage" },
     { "name": "macos-release", "configurePreset": "macos-release" },
     { "name": "windows-msvc-release", "configurePreset": "windows-msvc-release", "configuration": "Release" },
     { "name": "windows-msvc-release-perf", "configurePreset": "windows-msvc-release-perf", "configuration": "Release" },
     { "name": "windows-msvc-asan", "configurePreset": "windows-msvc-asan" },
+    { "name": "windows-msvc-analyze", "configurePreset": "windows-msvc-analyze", "configuration": "Debug" },
+    { "name": "macos-asan-ubsan", "configurePreset": "macos-asan-ubsan" },
     { "name": "ios-release", "configurePreset": "ios-release", "configuration": "Release" },
     { "name": "ios-game-release", "configurePreset": "ios-game-release", "configuration": "Release" },
     { "name": "wasm-core", "configurePreset": "wasm-core" },
@@ -234,7 +305,11 @@
       "execution": { "jobs": 1, "noTestsAction": "error" }
     },
     { "name": "linux-asan-ubsan", "configurePreset": "linux-asan-ubsan", "output": { "outputOnFailure": true } },
-    { "name": "linux-tsan", "configurePreset": "linux-tsan", "output": { "outputOnFailure": true } },
-    { "name": "linux-coverage", "configurePreset": "linux-coverage", "output": { "outputOnFailure": true } }
+    { "name": "linux-tsan", "configurePreset": "linux-tsan", "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "perf|fuzz" } } },
+    { "name": "linux-coverage", "configurePreset": "linux-coverage", "output": { "outputOnFailure": true } },
+    { "name": "linux-asan-o1", "configurePreset": "linux-asan-o1", "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "perf|fuzz" } } },
+    { "name": "linux-ubsan", "configurePreset": "linux-ubsan", "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "perf|fuzz" } } },
+    { "name": "windows-msvc-asan", "configurePreset": "windows-msvc-asan", "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "perf|fuzz" } } },
+    { "name": "macos-asan-ubsan", "configurePreset": "macos-asan-ubsan", "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "perf|fuzz" } } }
   ]
 }

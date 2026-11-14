@@ -22,7 +22,7 @@ namespace heart_boom_maths::json
 /// exhaust memory or the stack.
 struct Limits
 {
-    std::size_t max_bytes = 256 * 1024;
+    std::size_t max_bytes = std::size_t{256} * 1024;
     int max_depth = 32;
     std::size_t max_string_bytes = 1024;
 };

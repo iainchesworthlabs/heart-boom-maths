@@ -1,8 +1,13 @@
 version: 2
+# Only the ecosystems this repository has files for: Actions workflows, a vcpkg manifest and Python requirements. There is
+# no Gradle, Docker, dev container, npm or submodule file to watch (Qt writes the Android project at build time). Security
+# updates are on in the repository settings; they open pull requests whatever the schedule says. The nightly workflow
+# (nightly.yml) scans the Python requirements and reports licences and freshness of the vcpkg ports.
 updates:
   - package-ecosystem: github-actions
     directory: /
     target-branch: develop
+    labels: [dependencies, github-actions]
     schedule:
       interval: weekly
     cooldown:
@@ -14,6 +19,7 @@ updates:
   - package-ecosystem: vcpkg
     directory: /
     target-branch: develop
+    labels: [dependencies]
     schedule:
       interval: weekly
     cooldown:
@@ -22,8 +28,12 @@ updates:
   - package-ecosystem: pip
     directory: /requirements
     target-branch: develop
+    labels: [dependencies]
     schedule:
       interval: weekly
     cooldown:
       default-days: 7
     rebase-strategy: disabled
+    groups:
+      ci-tooling:
+        update-types: [minor, patch]

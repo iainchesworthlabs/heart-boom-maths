@@ -274,6 +274,9 @@ TEST_CASE("A right answer turns the tile green with a tick and shows the points 
     const int correct = s.rig.controller.session_view().question.correct_tile;
     const QString shown = s.value(correct);
 
+    // A long hold, so the test looks at the held screen before the hold ends: a frame under a sanitizer can take longer
+    // than the short holds the other tests use (the nightly's MSVC AddressSanitizer leg saw it end first).
+    s.feedback->setProperty("rightHoldMs", 60000);
     click(s.tile(correct));
     s.h.settle();
 
@@ -297,6 +300,9 @@ TEST_CASE("A right answer turns the tile green with a tick and shows the points 
     click(s.tile(correct));
     CHECK(s.rig.controller.points() == points);
 
+    QMetaObject::invokeMethod(s.feedback, "clear");
+    s.h.settle();
+    s.feedback->setProperty("rightHoldMs", SHORT_HOLD_MS);
     s.wait_out_holds();
     CHECK(s.look(correct) == "normal");
     CHECK_FALSE(s.visible("rightTag"));
@@ -316,6 +322,8 @@ TEST_CASE("A wrong answer turns the tile red with a cross, shows the right one a
     const int wrong = correct == 0 ? 1 : 0;
     const QString right_text = s.value(correct);
 
+    // A long hold, for the reason given in the test of a right answer.
+    s.feedback->setProperty("wrongHoldMs", 60000);
     click(s.tile(wrong));
     s.h.settle();
 
@@ -339,6 +347,9 @@ TEST_CASE("A wrong answer turns the tile red with a cross, shows the right one a
     CHECK(string_list(property_of(s.h.find("questionCard"), "parts")) != s.rig.controller.question_parts());
     CHECK(property_of(s.h.find("questionCard"), "slotValue").toString().isEmpty());
 
+    QMetaObject::invokeMethod(s.feedback, "clear");
+    s.h.settle();
+    s.feedback->setProperty("wrongHoldMs", SHORT_HOLD_MS * 2);
     s.wait_out_holds();
     CHECK(s.look(wrong) == "normal");
     CHECK_FALSE(s.visible("wrongTag"));

@@ -27,7 +27,8 @@ const GoldenReplay& golden(std::string_view name)
             return g;
         }
     }
-    FAIL("no golden replay named " << name);
+    // FAIL_CHECK, not FAIL, for the reason given in apps/game/tests/test_ui_scores.cpp (C4702 under MSVC /O1).
+    FAIL_CHECK("no golden replay named " << name);
     return GOLDEN_REPLAYS[0];
 }
 
