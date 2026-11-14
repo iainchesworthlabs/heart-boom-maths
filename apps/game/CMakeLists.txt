@@ -268,6 +268,7 @@ if(HEART_BOOM_MATHS_BUILD_TESTS)
         tests/ui_support.cpp
         tests/test_answer_feedback.cpp
         tests/test_ui_components.cpp
+        tests/test_ui_journeys.cpp
         tests/test_ui_play.cpp
         tests/test_ui_scores.cpp
         tests/test_ui_screens.cpp)

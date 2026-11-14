@@ -92,6 +92,39 @@ Item {
         }
     }
 
+    // What the Android back key does on the screens that have no back button of their own. Settings, About and the gate say
+    // `backClicked` themselves (ScreenFrame), and the Title is left to the system, which closes the app. The play screen
+    // pauses, the pause screen resumes, the Top 10 goes back and the game-over card goes home. On the level-clear, win and
+    // name screens the key does nothing: each has its buttons, and a stray press must not close the app on a score that
+    // was not saved yet. The Escape key of a desktop keeps its own shortcuts on the same screens.
+    function backKeyPressed() {
+        if (root.page === "top10") {
+            root.back();
+            return;
+        }
+        switch (root.game.state) {
+        case GameController.Playing:
+            root.game.pause();
+            break;
+        case GameController.Paused:
+            root.game.resume();
+            break;
+        case GameController.GameOver:
+            if (root.screen === "gameOver") {
+                root.showTitle();
+            }
+            break;
+        default:
+            break;
+        }
+    }
+
+    Shortcut {
+        sequence: "Back"
+        enabled: !root.game.gateActive && (root.page === "top10" || (root.page === "" && root.screen !== "title"))
+        onActivated: root.backKeyPressed()
+    }
+
     AnswerFeedback {
         id: answerFeedback
 
@@ -299,7 +332,8 @@ Item {
             game: root.game
             // The new entry is marked only while the list follows the game that earned it.
             highlightRank: root.game.state === GameController.GameOver && root.overlay !== "title" ? root.game.highlightRank : 0
-            playText: root.game.state === GameController.GameOver ? qsTr("PLAY AGAIN") : qsTr("PLAY")
+            // PLAY AGAIN follows a game that has just ended; after HOME the title is on show and its button says PLAY.
+            playText: root.game.state === GameController.GameOver && root.overlay !== "title" ? qsTr("PLAY AGAIN") : qsTr("PLAY")
             onBackRequested: root.back()
             onPlayRequested: root.game.startGame()
         }
