@@ -100,7 +100,7 @@
     {
       "name": "ios-game-release",
       "displayName": "iOS game (device, Release, unsigned, Qt static)",
-      "description": "The whole game on an iPhone or iPad (arm64), built by Xcode on a Mac against Qt's static iOS kit. Unsigned: it needs no Apple account (a signed build is the owner's, docs/ios.md). Needs HEART_BOOM_MATHS_QT_IOS_ROOT (the ios kit of the pinned Qt version, with qtmultimedia) and ICL_QT_ROOT (the macOS desktop kit of the same version, which Qt uses as its host tools). No tests are built: vcpkg is not used and nothing runs on a device here. apps/ios, the one-screen stub, is not built.",
+      "description": "The whole game on an iPhone or iPad (arm64), built by Xcode on a Mac against Qt's static iOS kit. Unsigned: it needs no Apple account (a signed build is the owner's, docs/ios.md). Needs HEART_BOOM_MATHS_QT_IOS_ROOT (the ios kit of the pinned Qt version) and ICL_QT_ROOT (the macOS desktop kit of the same version, which Qt uses as its host tools). No tests are built: vcpkg is not used and nothing runs on a device here. apps/ios, the one-screen stub, is not built.",
       "inherits": "base",
       "generator": "Xcode",
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" },
