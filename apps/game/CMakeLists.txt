@@ -63,10 +63,15 @@ target_sources(heart_boom_maths_app PRIVATE
 # HEART_BOOM_MATHS_USE_QT_MULTIMEDIA=OFF builds the silent fallback even when the kit has the module. The iOS preset sets it:
 # the module's FFmpeg backend cannot link there, and iOS sound is meant to be a native AVFoundation backend (docs/audio.md).
 option(HEART_BOOM_MATHS_USE_QT_MULTIMEDIA "Link Qt Multimedia for sound when the kit has it" ON)
+# A variable of our own decides, because a Qt kit can set Qt6Multimedia_FOUND itself while the other packages load.
+set(hbm_use_qt_audio OFF)
 if(HEART_BOOM_MATHS_USE_QT_MULTIMEDIA)
     find_package(Qt6Multimedia "${Qt6_VERSION}" QUIET CONFIG HINTS "${Qt6_DIR}/..")
+    if(Qt6Multimedia_FOUND)
+        set(hbm_use_qt_audio ON)
+    endif()
 endif()
-if(Qt6Multimedia_FOUND)
+if(hbm_use_qt_audio)
     target_sources(heart_boom_maths_app PRIVATE src/services/qt_audio_backend.cpp)
     target_link_libraries(heart_boom_maths_app PRIVATE Qt6::Multimedia)
 else()
