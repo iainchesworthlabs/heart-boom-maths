@@ -15,8 +15,13 @@ hbm_generate_tuning_header(
     "${CMAKE_CURRENT_BINARY_DIR}/generated/heart_boom_maths/tuning_data.hpp")
 
 add_library(heart_boom_maths_core
+    src/json.cpp
     src/question_generator.cpp
     src/rng.cpp
+    src/save_codec.cpp
+    src/save_data.cpp
+    src/save_manager.cpp
+    src/save_store.cpp
     src/session.cpp
     src/tuning.cpp)
 add_library(heart_boom_maths::core ALIAS heart_boom_maths_core)
