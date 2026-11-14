@@ -40,7 +40,40 @@ ctest --preset linux-debug
 | `linux-tsan` | ThreadSanitizer |
 | `linux-coverage` | Instrumented build for gcovr |
 | `macos-release`, `windows-msvc-release`, `windows-msvc-asan` | Platform builds |
-| `ios-release` | The iPhone and iPad application (`apps/ios`), unsigned, on a Mac with Xcode; no tests and no command-line program |
+| `ios-release` | The iPhone and iPad application (`apps/ios`), unsigned, on a Mac with Xcode; no tests and no Qt application |
+| `wasm-release` | The game in a browser (`apps/game`), single-threaded. See WebAssembly below |
+
+On Windows, run `pwsh -NoProfile -File tools/dev/test.ps1` to load the Visual Studio environment, build
+`windows-msvc-release` and run the tests (`-Filter <regex>` runs some of them).
+
+### The game
+
+`apps/game` is a Qt 6 Quick application, built when a Qt 6.8 or newer kit is found (CI uses the version pinned in the
+`qt` key of the toolchain file). The option `HEART_BOOM_MATHS_BUILD_GAME` has three values: `AUTO` (the default) builds
+it when a kit is found and prints a status line when not, `ON` stops the configure if there is no kit, and `OFF` skips
+it. A machine with no Qt still builds and tests `libs/core`. Set `ICL_QT_ROOT` once per machine (see above). The
+program answers `--version` and, for tests, `--smoke-test` (it exits after the first frame).
+
+### WebAssembly
+
+`wasm-release` builds `apps/game` for a browser with the Emscripten version pinned in
+`.github/toolchain-versions.json` and Qt's single-threaded kit, so the page needs no cross-origin isolation headers.
+The preset is listed only when `EMSDK` is set. It needs three things in the environment:
+
+| Variable | Meaning |
+|---|---|
+| `EMSDK` | An activated emsdk of the pinned version (`emsdk install` then `emsdk activate`, then its environment script) |
+| `HEART_BOOM_MATHS_QT_WASM_ROOT` | Qt's `wasm_singlethread` kit of the pinned Qt version (installed with aqtinstall or the Qt installer) |
+| `ICL_QT_ROOT` | The desktop kit of the same Qt version, which Qt uses for its host tools |
+
+```bash
+cmake --preset wasm-release
+cmake --build --preset wasm-release
+```
+
+The result is `build/wasm-release/apps/game/heart-boom-maths.html` with its `.js` and `.wasm`; serve the folder over
+HTTP to try it. No tests are built for it and vcpkg is not used. CI has no WebAssembly job yet: the web spike (M2)
+decides that.
 
 Sanitizers, Tracy, coverage and fuzzing exclude each other. The configure step stops with a
 message when two are enabled.

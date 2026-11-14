@@ -17,6 +17,16 @@ $bat = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
 $root = (git rev-parse --show-toplevel).Trim()
 Set-Location $root
 
+# The game's tests start the real program, which needs the Qt libraries on PATH on Windows.
+if ($env:ICL_QT_ROOT)
+{
+    $qtBin = Join-Path $env:ICL_QT_ROOT 'bin'
+    if (Test-Path $qtBin)
+    {
+        $env:PATH = "$qtBin;$env:PATH"
+    }
+}
+
 $ctest = "ctest --test-dir build/$Preset --output-on-failure"
 if ($Filter -ne '')
 {

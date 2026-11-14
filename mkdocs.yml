@@ -18,6 +18,8 @@ nav:
       - Decisions: DECISIONS.md
       - Milestones: MILESTONES.md
       - Compliance: COMPLIANCE.md
+  - Decision records:
+      - "0001 Test framework and JSON": adr/0001-test-framework-and-json.md
   - Testing: testing.md
   - Continuous integration: ci.md
   - Releasing: releasing.md
