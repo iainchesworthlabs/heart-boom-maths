@@ -1,0 +1,1 @@
+**The game documentation and data are in the repository.** The rules, architecture, decisions, milestones and compliance notes are published with the docs, and the release tuning values, the PRD tables and the Bangers and Lilita One fonts are added under `libs/core` and `apps/game`.
