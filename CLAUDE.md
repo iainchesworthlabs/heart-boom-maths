@@ -26,7 +26,7 @@ Numbers live in `libs/core/data/tuning.json` and `libs/core/tests/data/prd-table
 - The core never reads a clock. The app layer turns real time into whole ticks (20 per second) and calls `tick()`.
 - The app never recomputes a rule. It draws `view()` and reacts to events.
 - Only `apps/game` may hold a clock, a `QObject` or a QML type.
-- No network calls, analytics, crash reporting, ads, purchases, accounts, notifications or location. v1 must stay in the lowest age rating in each store.
+- No network calls, analytics, crash reporting, ads, purchases, accounts, notifications or location. v1 must stay in the lowest age rating in each store. The one exception is the Tracy profiler on desktop builds: dormant, loopback only, started only by `--profile` or `HBM_PROFILE` and never in the iOS, Android or web builds (`docs/profiling.md`).
 - The only way to open a URL is `LinkOpener::open`, reached through the parental gate. CI checks that there is exactly one call.
 - Names typed by children never leave the device.
 - A bad or newer save file never crashes the game or gets overwritten. Writes are atomic.
