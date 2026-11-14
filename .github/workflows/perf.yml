@@ -1,0 +1,91 @@
+name: Performance tests
+
+# The performance tests (label perf, docs/testing.md "Performance tests") on the Linux release build, once a night and by
+# hand. They time the rules, the controller, the save and the screens (on the offscreen platform with the software
+# renderer) against the budgets in tools/perf-budgets.json and fail only when a median is over its budget. The budgets were
+# set on a desk machine with generous headroom; a runner's own numbers are in the job summary and the results artifact, and
+# if the runner class makes them drift, retune the budgets from a run here (docs/testing.md).
+#
+# Not a required check, not on a pull request and not on the merge queue: a busy runner must never hold a change back, and
+# the ordinary test run does not build these tests at all. Run it by hand on any branch:
+#   gh workflow run perf.yml --ref <branch>
+#
+# It stays on the GitHub-hosted runner class whatever CI_RUNNER_MODE says, so the numbers of one night compare with the next.
+
+on:
+  schedule:
+    - cron: "29 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: perf-${{ github.ref }}
+  cancel-in-progress: true
+
+# No job gets more than it names below.
+permissions: {}
+
+env:
+  VCPKG_DISABLE_METRICS: "1"
+
+jobs:
+  perf:
+    name: Performance (Linux, release, software renderer)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install GCC
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-gcc@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+      - name: Set up Qt
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-qt@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+        with:
+          modules: qtmultimedia
+      - name: Set up CMake
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-cmake@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+      - name: Set up vcpkg
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-vcpkg@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+      - name: Set up ccache
+        uses: iainchesworthlabs/icl-common-infra/actions/setup-ccache@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
+        with:
+          key: perf
+      - name: Configure and build
+        run: |
+          cmake --preset linux-release-perf
+          cmake --build --preset linux-release-perf
+      - name: Run the performance tests
+        id: perf
+        continue-on-error: true
+        run: ctest --preset linux-release-perf
+      - name: Summarise
+        if: ${{ !cancelled() }}
+        run: |
+          {
+            echo "## Performance tests"
+            echo
+            echo "Runner: $(uname -sr), $(nproc) logical cores. Offscreen platform, software renderer. Budgets: tools/perf-budgets.json."
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+          python3 tools/ci/perf_report.py --results build/linux-release-perf/perf-results --markdown perf-summary.md || true
+          cat perf-summary.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload the results
+        if: ${{ !cancelled() && hashFiles('build/linux-release-perf/perf-results/summary.json') != '' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: perf-results-linux-release
+          path: build/linux-release-perf/perf-results
+          if-no-files-found: error
+          retention-days: 90
+      - name: Fail when a budget was missed
+        if: ${{ steps.perf.outcome == 'failure' }}
+        run: |
+          echo "A performance test failed; the table above and the artifact name which."
+          exit 1
+      - name: Save caches
+        if: always()
+        continue-on-error: true
+        uses: iainchesworthlabs/icl-common-infra/actions/save-vcpkg-cache@7298129e789aab3e34c523aace5c699dc24e0001 # v0.1.25
