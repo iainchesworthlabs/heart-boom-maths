@@ -17,11 +17,8 @@ Item {
     property real radius: Theme.radiusSmall
     // The count in the heading font, as the title screen has it.
     property bool displayNumerals: false
-    // The room on each side of the content, inside the border, and the gap between the coin and the count.
-    property real horizontalPadding: 12
-    property real spacing: 6
 
-    implicitWidth: row.implicitWidth + 2 * (horizontalPadding + borderWidth)
+    implicitWidth: row.implicitWidth + 24 + 2 * borderWidth
     implicitHeight: pixelSize + 16 + 2 * borderWidth
 
     Accessible.role: Accessible.StaticText
@@ -37,7 +34,7 @@ Item {
             id: row
 
             anchors.centerIn: parent
-            spacing: root.spacing
+            spacing: 6
 
             Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
