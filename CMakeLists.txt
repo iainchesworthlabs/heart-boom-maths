@@ -40,6 +40,10 @@ include(IclCoverage)
 include(IclPlatform)
 
 option(HEART_BOOM_MATHS_BUILD_TESTS "Build the tests" ON)
+# The performance tests (label perf) time the rules and the game against the budgets in tools/perf-budgets.json. They are
+# off in every ordinary preset, so the normal test run stays fast and cannot fail on a busy machine; the *-perf presets
+# turn them on (docs/testing.md, "Performance tests").
+option(HEART_BOOM_MATHS_BUILD_PERF_TESTS "Build and register the performance tests (label perf)" OFF)
 option(HEART_BOOM_MATHS_BUILD_HARNESS "Build the text harness without the tests (the tests build it anyway)" OFF)
 option(HEART_BOOM_MATHS_BUILD_IOS_APP "Build the iPhone and iPad application (iOS only)" ON)
 

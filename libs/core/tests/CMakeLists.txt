@@ -84,3 +84,20 @@ add_test(NAME harness.replays-current
 set_tests_properties(harness.full-game PROPERTIES PASS_REGULAR_EXPRESSION "FINAL score=[0-9]+ level=12 ")
 set_tests_properties(harness.endless PROPERTIES PASS_REGULAR_EXPRESSION "FINAL score=[0-9]+ level=20 ")
 set_tests_properties(harness.full-game harness.endless harness.replays-current PROPERTIES LABELS integration)
+
+# The performance tests of the rules (label perf), only when a perf preset asks for them. Not linked with coverage, and the
+# program replaces the global operator new to count allocations (perf/perf_alloc.cpp), so it never joins the ordinary tests.
+if(HEART_BOOM_MATHS_BUILD_PERF_TESTS)
+    add_executable(heart_boom_maths_core_perf perf/perf_core.cpp perf/perf_alloc.cpp)
+    target_include_directories(heart_boom_maths_core_perf PRIVATE perf "${CMAKE_CURRENT_BINARY_DIR}/generated")
+    target_compile_definitions(heart_boom_maths_core_perf
+        PRIVATE HBM_PERF_BUDGETS_FILE="${PROJECT_SOURCE_DIR}/tools/perf-budgets.json"
+                _CRT_SECURE_NO_WARNINGS) # MSVC calls getenv unsafe; the harness reads two switches with it
+    target_link_libraries(heart_boom_maths_core_perf
+        PRIVATE heart_boom_maths::core Catch2::Catch2WithMain icl::warnings)
+    catch_discover_tests(heart_boom_maths_core_perf
+        TEST_PREFIX "perf."
+        TEST_SPEC "[perf]"
+        PROPERTIES LABELS perf TIMEOUT 900
+            ENVIRONMENT "HBM_PERF_RESULTS_DIR=${PROJECT_BINARY_DIR}/perf-results")
+endif()
