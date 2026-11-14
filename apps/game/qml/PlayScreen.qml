@@ -312,9 +312,9 @@ Item {
                 ComicCard {
                     Layout.preferredWidth: sizes.panelWidth
                     Layout.fillHeight: true
-                    borderWidth: sizes.cardBorder
-                    radius: sizes.cardRadius
-                    shadowOffset: sizes.cardShadow
+                    borderWidth: sizes.panelBorder
+                    radius: sizes.panelRadius
+                    shadowOffset: sizes.panelShadow
 
                     ColumnLayout {
                         anchors.fill: parent

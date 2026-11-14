@@ -178,6 +178,60 @@ TEST_CASE("The play screen shows the question, four tiles and the stats in every
     }
 }
 
+TEST_CASE("The points and chips match the boards on a tablet and a desktop window", "[ui][play][stats]")
+{
+    const auto scene_top = [](QQuickItem* item) { return item->mapToScene(QPointF(0, 0)).y(); };
+    SECTION("tablet")
+    {
+        Shell s(TABLET);
+        QQuickItem* value = s.h.find_item("pointsValue");
+        QQuickItem* label = s.h.find_item("pointsLabel");
+        QQuickItem* multiplier = s.h.find_item("multiplierBadge");
+        QQuickItem* wallet = s.h.find_item("coinWallet");
+        QQuickItem* heart = s.h.find_item("heartBomb");
+        REQUIRE(value != nullptr);
+        REQUIRE(label != nullptr);
+        REQUIRE(multiplier != nullptr);
+        REQUIRE(wallet != nullptr);
+        REQUIRE(heart != nullptr);
+        // The number and POINTS stand on one baseline.
+        CHECK_THAT(scene_top(value) + property_of(value, "baselineOffset").toDouble(),
+                   Catch::Matchers::WithinAbs(scene_top(label) + property_of(label, "baselineOffset").toDouble(), 0.6));
+        // The points card is 82 high (its border, 10 above and below and a 52 line) and starts at y 179 as on the board;
+        // the chips are 64 or 65 high from y 275.
+        CHECK_THAT(scene_top(value), Catch::Matchers::WithinAbs(179.0 + 5.0 + 10.0, 2.0));
+        CHECK_THAT(multiplier->height(), Catch::Matchers::WithinAbs(64.0, 1.5));
+        CHECK_THAT(wallet->height(), Catch::Matchers::WithinAbs(multiplier->height(), 0.1));
+        CHECK_THAT(scene_top(multiplier), Catch::Matchers::WithinAbs(275.0, 1.5));
+        // The stack of points and chips is centred on the 190 heart.
+        const double stack_top = 179.0;
+        const double stack_bottom = scene_top(multiplier) + multiplier->height();
+        const double heart_middle = scene_top(heart) + heart->height() / 2;
+        CHECK_THAT((stack_top + stack_bottom) / 2, Catch::Matchers::WithinAbs(heart_middle, 2.0));
+    }
+    SECTION("desktop")
+    {
+        Shell s(DESKTOP);
+        QQuickItem* multiplier = s.h.find_item("multiplierBadge");
+        QQuickItem* hint = s.h.find_item("hintButton");
+        QQuickItem* heart = s.h.find_item("heartBomb");
+        REQUIRE(multiplier != nullptr);
+        REQUIRE(hint != nullptr);
+        REQUIRE(heart != nullptr);
+        // CP10: the chips span 485 to 534 and the hint button 679 to 730; the heart's box starts at 145.
+        CHECK_THAT(scene_top(multiplier), Catch::Matchers::WithinAbs(485.0, 2.0));
+        CHECK_THAT(multiplier->height(), Catch::Matchers::WithinAbs(50.0, 1.5));
+        CHECK_THAT(scene_top(hint), Catch::Matchers::WithinAbs(679.0, 2.0));
+        CHECK_THAT(hint->height(), Catch::Matchers::WithinAbs(52.0, 1.0));
+        CHECK_THAT(scene_top(heart), Catch::Matchers::WithinAbs(145.0, 2.0));
+        // The panel's content starts 29 in (a 5 border and 24 of padding), so the fuse is 302 wide.
+        QQuickItem* fuse = s.h.find_item("fuseBar");
+        REQUIRE(fuse != nullptr);
+        CHECK_THAT(fuse->mapToScene(QPointF(0, 0)).x(), Catch::Matchers::WithinAbs(56.0 + 29.0, 0.6));
+        CHECK_THAT(fuse->width(), Catch::Matchers::WithinAbs(302.0, 0.6));
+    }
+}
+
 TEST_CASE("The digits of the question and its slot share one centre line at every size", "[ui][play][question]")
 {
     struct Arrangement
