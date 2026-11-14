@@ -527,7 +527,9 @@ TEST_CASE("inserting a score keeps the list in order and at ten", "[unit][save][
     REQUIRE(insert_score(top10, "CY", 500) == 3); // behind the older 500
     REQUIRE(insert_score(top10, "DI", 700) == 2);
     REQUIRE(top10 == std::vector<ScoreEntry>{{"BEN", 900}, {"DI", 700}, {"ADA", 500}, {"CY", 500}});
-    REQUIRE(validate(SaveData{.top10 = top10}).has_value());
+    SaveData with_top10;
+    with_top10.top10 = top10;
+    REQUIRE(validate(with_top10).has_value());
 
     SECTION("a refused score leaves the list alone")
     {
@@ -551,6 +553,8 @@ TEST_CASE("inserting a score keeps the list in order and at ten", "[unit][save][
         REQUIRE(top10.front().name == "TOP");
         REQUIRE(top10.back().score == 101); // the first 100 fell off
         REQUIRE(insert_score(top10, "LOW", 101) == std::unexpected(ScoreError::NOT_QUALIFYING));
-        REQUIRE(validate(SaveData{.top10 = top10}).has_value());
+        SaveData full_list;
+        full_list.top10 = top10;
+        REQUIRE(validate(full_list).has_value());
     }
 }

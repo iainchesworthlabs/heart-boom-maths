@@ -378,10 +378,11 @@ void split(int total, int parts, int minimum, Rng& rng, std::span<int> out)
     for (int i = 0; i < parts - 1; ++i)
     {
         const int remaining_parts = parts - 1 - i;
-        out[i] = rng.between(minimum, left - remaining_parts * minimum);
-        left -= out[i];
+        const auto slot = static_cast<std::size_t>(i);
+        out[slot] = rng.between(minimum, left - remaining_parts * minimum);
+        left -= out[slot];
     }
-    out[parts - 1] = left;
+    out[static_cast<std::size_t>(parts - 1)] = left;
 }
 
 // Builds a question from its result backwards: pick the result in range, then split it, so every number comes out in
@@ -523,13 +524,16 @@ void deal_tiles(Question& q, const LevelInfo& info, Rng& rng)
         count = 3;
     }
     // Too few near misses in range: take the nearest unused numbers, the lower one first.
-    for (int distance = 1; count < 3; ++distance)
+    // A while loop, because `offer` changes `count` through a reference and Clang cannot see that in a for header.
+    int distance = 1;
+    while (count < 3)
     {
         offer(q.answer - distance);
         if (count < 3)
         {
             offer(q.answer + distance);
         }
+        ++distance;
     }
 
     q.tiles = {q.answer, candidates[0], candidates[1], candidates[2]};
