@@ -61,7 +61,7 @@ struct Rig
             {
                 return id_override();
             }
-            return id_draws++ == 0 ? FIRST_ID_BITS : SECOND_ID_BITS + (id_draws - 2);
+            return id_draws++ == 0 ? FIRST_ID_BITS : SECOND_ID_BITS + static_cast<std::uint64_t>(id_draws - 2);
         };
         return options;
     }
@@ -2031,11 +2031,6 @@ void play_and_quit(Rig& rig, int rights)
     rig.controller.quit();
 }
 
-QString id_of(const QVariantList& list, int index)
-{
-    return list.at(index).toMap().value(QStringLiteral("id")).toString();
-}
-
 const Player& player_on_disk(const SaveData& data, std::string_view id)
 {
     const Player* player = find_player(data.shared, id);
@@ -2109,7 +2104,7 @@ TEST_CASE("Switching players records the old wallet and gives the session the ne
     CHECK(player_wallet(player_on_disk(on_disk, PLAYER_B)) == 7);
     CHECK(player_on_disk(on_disk, "first").won_once);
 
-    const int changes = players_spy.count();
+    const auto changes = players_spy.count();
     CHECK(c.selectPlayer(QString::fromLatin1(PLAYER_B))); // already playing: true, and nothing happens
     CHECK(players_spy.count() == changes);
     CHECK_FALSE(c.selectPlayer(QStringLiteral("nobody")));

@@ -38,7 +38,7 @@ inline constexpr std::size_t ID_HEX_DIGITS = 16;
 /// What one device has earned and spent for one player. Both only ever grow.
 struct CoinEntry
 {
-    std::string device; // a device id, or empty before the app has assigned one
+    std::string device{}; // a device id, or empty before the app has assigned one
     std::int64_t earned = 0;
     std::int64_t spent = 0;
 
@@ -47,13 +47,13 @@ struct CoinEntry
 
 struct Player
 {
-    std::string id;            // `first`, or 16 lowercase hex digits
-    std::string name;          // empty until first typed, otherwise a valid name
+    std::string id{};          // `first`, or 16 lowercase hex digits
+    std::string name{};        // empty until first typed, otherwise a valid name
     std::int64_t name_rev = 0; // counts name changes; the higher wins a merge
     bool removed = false;      // kept as a mark so a merge cannot bring the player back
     bool won_once = false;
     std::int64_t best = 0; // the player's best final score
-    std::vector<CoinEntry> coins;
+    std::vector<CoinEntry> coins{};
 
     friend bool operator==(const Player&, const Player&) = default;
 };
@@ -61,9 +61,9 @@ struct Player
 /// One place in the top 10. `device` and `seq` are the entry's identity, so a merge can drop a duplicate.
 struct ScoreEntry
 {
-    std::string name;
+    std::string name{};
     std::int64_t score = 0;
-    std::string device; // the device that made the entry; empty before the app has assigned an id
+    std::string device{}; // the device that made the entry; empty before the app has assigned an id
     std::int64_t seq = 0;
 
     friend bool operator==(const ScoreEntry&, const ScoreEntry&) = default;
@@ -72,7 +72,7 @@ struct ScoreEntry
 /// What stays on this device.
 struct DeviceData
 {
-    std::string id; // 16 lowercase hex digits, or empty until the app assigns one
+    std::string id{}; // 16 lowercase hex digits, or empty until the app assigns one
     bool sound = true;
     bool music = true;
     bool game_center = false;
@@ -83,8 +83,8 @@ struct DeviceData
 
     /// The run is a list of integers made by `GameSession::snapshot()`; the save logic does not look inside it.
     /// `run_player` is the player who paused it: set when `run` is, empty when it is not.
-    std::optional<std::vector<std::int64_t>> run;
-    std::string run_player;
+    std::optional<std::vector<std::int64_t>> run{};
+    std::string run_player{};
 
     friend bool operator==(const DeviceData&, const DeviceData&) = default;
 };
@@ -93,7 +93,7 @@ struct DeviceData
 struct SharedData
 {
     std::vector<Player> players{Player{.id = std::string(FIRST_PLAYER_ID)}};
-    std::vector<ScoreEntry> top10; // best first; of equal scores the older entry comes first
+    std::vector<ScoreEntry> top10{}; // best first; of equal scores the older entry comes first
 
     friend bool operator==(const SharedData&, const SharedData&) = default;
 };
@@ -103,8 +103,8 @@ struct SharedData
 struct SaveData
 {
     int version = SAVE_VERSION;
-    DeviceData device;
-    SharedData shared;
+    DeviceData device{};
+    SharedData shared{};
 
     friend bool operator==(const SaveData&, const SaveData&) = default;
 };
