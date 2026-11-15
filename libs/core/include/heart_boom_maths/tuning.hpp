@@ -80,6 +80,7 @@ struct Tuning
     int hint_cost_coins;
     int hint_tiles_removed;
     int top10_size;
+    int max_players;
     int name_max_length;
     int operand_minimum;
     std::array<LevelSpec, 12> levels;
