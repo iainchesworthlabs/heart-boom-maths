@@ -200,6 +200,11 @@ is usually that runtime's: look for a frame in this project's code before suspec
 ctest --preset linux-debug -L unit
 ```
 
+Screenshots for a design review: the hidden test `Screenshots of the title chip, WHO'S PLAYING and the name screen of a player`
+(tag `[screenshots]`, in `test_ui_journeys.cpp`) writes PNG files of the players screens at the compact and the regular
+size when `HBM_SCREENSHOT_DIR` names a folder, and does nothing otherwise. Run it by hand:
+`HBM_SCREENSHOT_DIR=private/qa-compare/players heart_boom_maths_ui_tests "[screenshots]"`.
+
 ## Performance tests
 
 The tests labelled `perf` catch a regression in speed or memory. They are **not part of the ordinary run**: the option
