@@ -1,0 +1,1 @@
+**The save file is now version 2.** It holds a list of players (one, with no name, for now) and splits the data into a part that stays on the device and a part that can later be shared between a family's devices. An older save is read and moved across without losing coins, scores or a paused run, and the game plays exactly as before.
