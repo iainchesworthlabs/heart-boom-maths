@@ -76,6 +76,21 @@ The mechanics of the party cat, the bonus animal and diamonds are new proposals:
 
 Still to do for decision 1, with the sync work: `COMPLIANCE.md`, the privacy policy and the store forms, and a check of how Apple's privacy answers treat data kept in the user's own iCloud.
 
+### Gaps in the players rules (15 Nov 2026)
+
+Small points the twelve decisions do not state. Each has a suggested answer so work is not blocked, as G1 to G8 did. The owner confirms or changes them.
+
+| # | Gap | Suggested answer |
+|---|---|---|
+| P1 | What does a player with no name show as? | PLAYER 1, PLAYER 2 and so on, by place in the list |
+| P2 | Can a player be named without reaching the top 10? | Yes. WHO'S PLAYING opens the name screen to name or rename a player at any time |
+| P3 | What does NEW BEST! mean when players share one top 10? | The score beat the current player's own best. Every finished game counts towards it |
+| P4 | A device has one saved run. What if another player plays? | The other player's run stays until the device has to save a run for the player now playing, which replaces it. Removing a player drops that player's run |
+| P5 | When can the player be switched? | From the title only |
+| P6 | Two devices each add players while apart, and the merge has more than four | All are kept. `max_players` limits adding only |
+| P7 | A sync payload written by a later build | It is left alone and not merged, as a newer save file is |
+| P8 | WHO'S PLAYING and the player chip have no board | Built from the existing components for the designer to review. A board follows |
+
 ### The questions felt too alike (15 Nov 2026)
 
 The owner reported that the questions felt less random than they should. The generator had three causes. The owner decided to fix the dealing and the tiles, and to leave the small levels to stage 1.

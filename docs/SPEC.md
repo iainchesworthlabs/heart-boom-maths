@@ -125,6 +125,10 @@ Decided on 15 Nov 2026 (`DECISIONS.md`, "After v1"). The PRD follows.
 - The top 10 is one list shared by all players. An entry takes the player's name. A player with no name gets the name screen once: SAVE names the player and saves the entry, SKIP drops the entry and leaves the player unnamed.
 - The saved run belongs to the player who paused it. CONTINUE is offered only while that player is the current one.
 - When a run resumes, its wallet is the player's wallet as it is now, not as it was at the pause.
+- Players are switched from the title only, never during a game.
+- A player with no name shows as PLAYER 1, PLAYER 2 and so on, by place in the list. A player can be named or renamed from WHO'S PLAYING at any time, on the name screen.
+- NEW BEST! on the game-over card means the score beat the current player's own best. Every finished game counts towards a player's best, whether or not it enters the top 10.
+- A device keeps one saved run. Another player's saved run stays until the device has to save a run for the player now playing, which replaces it. Removing a player drops that player's saved run.
 
 ## Sync between a family's devices
 
