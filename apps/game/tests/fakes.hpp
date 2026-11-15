@@ -7,6 +7,7 @@
 #include "services/audio_service.hpp"
 #include "services/backed_haptics_service.hpp"
 #include "services/clock.hpp"
+#include "services/cloud_store.hpp"
 #include "services/haptic_backend.hpp"
 #include "services/haptic_timer.hpp"
 #include "services/haptics_service.hpp"
@@ -16,7 +17,10 @@
 #include <algorithm>
 #include <cstdint>
 #include <functional>
+#include <memory>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -297,6 +301,92 @@ public:
 
     bool enabled = false;
     std::vector<std::int64_t> submitted;
+
+private:
+    bool m_Available;
+};
+
+/// The iCloud key of one Apple Account. Two devices signed in to one account share one.
+struct CloudAccount
+{
+    std::optional<std::string> text;
+};
+
+/// One device's view of the cloud store, counting what the game asks of it. `calls()` is everything that reads, writes
+/// or listens; available() is counted apart, because the Settings row needs it while the switch is off and it must
+/// touch no data.
+class FakeCloudStore final : public CloudStore
+{
+public:
+    explicit FakeCloudStore(std::shared_ptr<CloudAccount> shared_account = std::make_shared<CloudAccount>(),
+                            bool is_available = true)
+        : account(std::move(shared_account)), m_Available(is_available)
+    {
+    }
+
+    [[nodiscard]] bool available() const override
+    {
+        ++available_calls;
+        return m_Available;
+    }
+
+    [[nodiscard]] std::optional<std::string> read() override
+    {
+        ++reads;
+        return account->text;
+    }
+
+    bool write(std::string_view text) override
+    {
+        ++writes;
+        if (fail_writes)
+        {
+            return false;
+        }
+        account->text = std::string(text);
+        return true;
+    }
+
+    void set_change_handler(ChangeHandler new_handler) override
+    {
+        if (new_handler)
+        {
+            ++handlers_installed;
+        }
+        else
+        {
+            ++handlers_removed;
+        }
+        handler = std::move(new_handler);
+    }
+
+    void set_available(bool is_available)
+    {
+        m_Available = is_available;
+    }
+
+    /// The system tells the game that another device changed the key.
+    void report_change() const
+    {
+        if (const ChangeHandler call = handler; call)
+        {
+            call();
+        }
+    }
+
+    [[nodiscard]] int calls() const
+    {
+        return reads + writes + handlers_installed + handlers_removed;
+    }
+
+    std::shared_ptr<CloudAccount> account;
+    ChangeHandler handler;
+    bool fail_writes = false;
+    mutable int available_calls = 0;
+    int reads = 0;
+    int writes = 0;
+    int handlers_installed = 0;
+    int handlers_removed = 0;
 
 private:
     bool m_Available;
