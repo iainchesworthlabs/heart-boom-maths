@@ -47,6 +47,33 @@ void check_result(const ParseResult& result)
     }
 }
 
+// Whatever came out of the payload reader must be shared data the game could have written itself.
+void check_shared_result(const SharedParseResult& result)
+{
+    switch (result.status)
+    {
+    case LoadStatus::OK:
+    {
+        REQUIRE_FALSE(result.damage.has_value());
+        SaveData whole;
+        whole.shared = result.data;
+        REQUIRE(validate(whole).has_value());
+        // A payload that reads is one that writes, to text that reads back as the same data.
+        const auto text = serialise_shared(result.data);
+        REQUIRE(text.has_value());
+        REQUIRE(parse_shared(*text).data == result.data);
+        break;
+    }
+    case LoadStatus::DAMAGED:
+        REQUIRE(result.damage.has_value());
+        REQUIRE(result.data == SharedData{});
+        break;
+    case LoadStatus::NEWER:
+        REQUIRE(result.data == SharedData{});
+        break;
+    }
+}
+
 std::string random_bytes(Rng& rng, std::size_t length)
 {
     std::string bytes;
@@ -160,8 +187,7 @@ std::string mutate(Rng& rng, std::string text)
     return text;
 }
 
-// The text of a save with plenty in it, for the mutations to start from.
-std::string rich_save()
+SaveData rich_data()
 {
     SaveData data;
     data.device.id = "9f1c2a7b3d4e5f60";
@@ -182,7 +208,19 @@ std::string rich_save()
     }
     data.device.run = std::vector<std::int64_t>{3, 1, 400, -9, 9223372036854775807, 0, 12, 12, 12};
     data.device.run_player = "first";
-    return serialise(data).value();
+    return data;
+}
+
+// The text of a save with plenty in it, for the mutations to start from.
+std::string rich_save()
+{
+    return serialise(rich_data()).value();
+}
+
+// The same data as a sync payload.
+std::string rich_payload()
+{
+    return serialise_shared(rich_data().shared).value();
 }
 
 } // namespace
@@ -241,6 +279,73 @@ TEST_CASE("every prefix of a save is handled", "[property][fuzz][save]")
         check_result(result);
     }
     REQUIRE(parse_save(text).status == LoadStatus::OK);
+}
+
+TEST_CASE("random garbage never crashes the payload reader", "[property][fuzz][save]")
+{
+    Rng rng(SEED + 10);
+    for (int i = 0; i < CASES; ++i)
+    {
+        CAPTURE(SEED, i);
+        check_shared_result(parse_shared(random_bytes(rng, static_cast<std::size_t>(rng.below(300)))));
+    }
+    for (int i = 0; i < CASES; ++i)
+    {
+        CAPTURE(SEED, i);
+        check_shared_result(parse_shared(random_jsonish(rng, static_cast<std::size_t>(rng.below(60)))));
+    }
+}
+
+TEST_CASE("mutated payloads never crash the reader or yield invalid data", "[property][fuzz][save]")
+{
+    Rng rng(SEED + 11);
+    // A whole save has the payload's shape too, so the reader has to take it, or refuse it, without a fault.
+    const std::string seeds[] = {rich_payload(), rich_save(), serialise_shared(SharedData{}).value(),
+                                 serialise_shared(SharedData{.players = {}}).value()};
+    int still_ok = 0;
+    for (int i = 0; i < CASES; ++i)
+    {
+        CAPTURE(SEED, i);
+        const std::string text = mutate(rng, seeds[rng.below(std::size(seeds))]);
+        const SharedParseResult result = parse_shared(text);
+        check_shared_result(result);
+        still_ok += result.status == LoadStatus::OK ? 1 : 0;
+    }
+    REQUIRE(still_ok > 0);
+    REQUIRE(still_ok < CASES);
+}
+
+TEST_CASE("every prefix of a payload is handled", "[property][fuzz][save]")
+{
+    const std::string text = rich_payload();
+    for (std::size_t length = 0; length < text.size(); ++length)
+    {
+        CAPTURE(length);
+        const SharedParseResult result = parse_shared(std::string_view(text).substr(0, length));
+        REQUIRE(result.status == LoadStatus::DAMAGED);
+        check_shared_result(result);
+    }
+    REQUIRE(parse_shared(text).status == LoadStatus::OK);
+}
+
+TEST_CASE("hostile payload shapes are refused quickly", "[unit][fuzz][save]")
+{
+    const auto damaged = [](const std::string& text)
+    {
+        const SharedParseResult result = parse_shared(text);
+        REQUIRE(result.status == LoadStatus::DAMAGED);
+        check_shared_result(result);
+    };
+    damaged(std::string(200000, '['));
+    damaged(std::string(200000, '{'));
+    damaged("{\"version\":2,\"shared\":{\"players\":[" + std::string(300000, '1') + "]}}");
+    damaged("{\"version\":2,\"shared\":{\"players\":[{\"name\":\"" + std::string(100000, 'A') + "\"}]}}");
+    std::string players = "{\"version\":2,\"shared\":{\"players\":[";
+    for (int i = 0; i < 20000; ++i)
+    {
+        players += i == 0 ? "{}" : ",{}";
+    }
+    damaged(players + "]}}");
 }
 
 TEST_CASE("hostile shapes are refused quickly", "[unit][fuzz][save]")

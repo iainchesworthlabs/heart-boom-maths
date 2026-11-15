@@ -206,7 +206,13 @@ As built (`save_data.hpp`, `save_codec.hpp`):
 - `best` rises only when `record_score` puts an entry in the top 10, which for one player is the old rule that best is the top entry. A game that does not qualify does not raise it yet. Stage work that wants best for every game calls `record_best`.
 - `record_wallet` keeps both counters growing: a rise adds to this device's `earned`, a fall to its `spent`. When a merge has left the sums below zero, a rise also clears that shortfall so the wallet reads as asked.
 
-`merge(a, b)` is a function in `libs/core` over the `shared` part. It is commutative, associative and idempotent, and property tests hold that. Of equal scores in the merged top 10, the order is by `device` and then `seq`.
+`merge(a, b)` (`save_merge.hpp`) joins two `shared` parts by the table in `SPEC.md`. It is commutative, associative and idempotent, and property tests hold that. As built:
+
+- The result is in canonical form (`canonical`): `first`, then the other players by id; each player's coin entries by device; the top 10 by descending score, then `device`, then `seq`, cut to `top10_size`. `add_player` puts a new player at its canonical place.
+- Two top 10 entries with one `device` and `seq` are one entry. Should they differ (a damaged file), the higher score is kept, then the name that sorts first. A name tie on `name_rev` goes to the name that sorts first.
+- More than `max_players` active players is kept (P6). A result over `MAX_SAVED_PLAYERS`, or over `MAX_SAVED_COIN_ENTRIES` for one player, is a `MergeError`: nothing is cut, because a cut would make the result depend on the order of merging.
+- `serialise_shared` and `parse_shared` (`save_codec.hpp`) are the sync payload: `{"version": 2, "shared": {...}}`, where `shared` is byte for byte what `serialise` writes in a save, checked by the same `validate`. A payload of a later version reads as NEWER and is left alone (P7); one below 2 is DAMAGED.
+- `adopt_shared` puts a merged part in the local save and repairs the device part: `ensure_current_player` when the current player is gone or removed, and `run` with `run_player` dropped when that player is gone or removed. No other device field changes, and a refusal leaves the save as it was. When to push, pull and adopt is the sync layer's business.
 
 ```cpp
 class SaveStore

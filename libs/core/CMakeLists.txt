@@ -31,6 +31,7 @@ add_library(heart_boom_maths_core
     src/save_codec.cpp
     src/save_data.cpp
     src/save_manager.cpp
+    src/save_merge.cpp
     src/save_store.cpp
     src/session.cpp
     src/tuning.cpp)

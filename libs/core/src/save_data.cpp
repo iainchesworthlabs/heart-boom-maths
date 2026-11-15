@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "heart_boom_maths/save_data.hpp"
 
+#include "heart_boom_maths/save_merge.hpp"
+
 #include <algorithm>
 #include <utility>
 
@@ -359,7 +361,10 @@ std::expected<void, PlayerError> add_player(SharedData& shared, std::string id, 
     {
         return std::unexpected(PlayerError::LIST_FULL);
     }
-    shared.players.push_back(Player{.id = std::move(id)});
+    // At its canonical place, so a list that a merge made stays in the order the merge gives.
+    const auto place =
+        std::ranges::find_if(shared.players, [&id](const Player& p) { return player_id_precedes(id, p.id); });
+    shared.players.insert(place, Player{.id = std::move(id)});
     return {};
 }
 

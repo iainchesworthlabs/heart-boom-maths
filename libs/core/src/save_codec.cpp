@@ -448,6 +448,14 @@ Value write_top10(const std::vector<ScoreEntry>& top10)
     return Value::array(std::move(entries));
 }
 
+Value write_shared(const SharedData& data)
+{
+    Value shared = Value::object();
+    shared.set("players", write_players(data.players));
+    shared.set("top10", write_top10(data.top10));
+    return shared;
+}
+
 Value write_device(const DeviceData& device)
 {
     Value out = Value::object();
@@ -583,14 +591,10 @@ std::expected<std::string, SaveError> serialise(const SaveData& data, const Tuni
         return std::unexpected(valid.error());
     }
 
-    Value shared = Value::object();
-    shared.set("players", write_players(data.shared.players));
-    shared.set("top10", write_top10(data.shared.top10));
-
     Value root = Value::object();
     root.set("version", Value::integer(data.version));
     root.set("device", write_device(data.device));
-    root.set("shared", std::move(shared));
+    root.set("shared", write_shared(data.shared));
     return json::write(root);
 }
 
@@ -661,6 +665,87 @@ ParseResult parse_save(std::string_view text, const Tuning& tuning, const SaveSc
     result.status = LoadStatus::OK;
     result.data = std::move(*data);
     result.file_version = file_version;
+    return result;
+}
+
+std::expected<std::string, SaveError> serialise_shared(const SharedData& data, const Tuning& tuning,
+                                                       const SaveSchema& schema)
+{
+    HBM_ZONE("save.serialise_shared");
+    // Checked as part of a save with a device that is valid by default, so the rules are the save's and not a copy.
+    const SaveData whole{schema.current_version, DeviceData{}, data};
+    if (auto valid = validate(whole, tuning, schema.current_version); !valid)
+    {
+        return std::unexpected(valid.error());
+    }
+
+    Value root = Value::object();
+    root.set("version", Value::integer(schema.current_version));
+    root.set("shared", write_shared(data));
+    return json::write(root);
+}
+
+SharedParseResult parse_shared(std::string_view text, const Tuning& tuning, const SaveSchema& schema)
+{
+    HBM_ZONE("save.parse_shared");
+    const auto fail = [](SaveError reason, std::optional<std::int64_t> file_version = std::nullopt)
+    {
+        SharedParseResult result;
+        result.status = LoadStatus::DAMAGED;
+        result.damage = reason;
+        result.file_version = file_version;
+        return result;
+    };
+
+    const json::Limits limits;
+    auto parsed = json::parse(text, limits);
+    if (!parsed)
+    {
+        return fail(SaveError::NOT_JSON);
+    }
+    const Value root = std::move(*parsed);
+    if (root.kind() != json::Kind::OBJECT)
+    {
+        return fail(SaveError::NOT_AN_OBJECT);
+    }
+    const Value* version_field = root.find("version");
+    if (version_field == nullptr)
+    {
+        return fail(SaveError::MISSING_FIELD);
+    }
+    const std::int64_t* version_value = version_field->get_integer();
+    if (version_value == nullptr)
+    {
+        return fail(SaveError::WRONG_TYPE);
+    }
+    if (*version_value > schema.current_version)
+    {
+        SharedParseResult newer;
+        newer.status = LoadStatus::NEWER;
+        newer.file_version = *version_value;
+        return newer;
+    }
+    // A payload is only ever written by `serialise_shared`, so an older one is not one this build knows how to read.
+    if (*version_value != schema.current_version)
+    {
+        return fail(SaveError::BAD_VERSION, *version_value);
+    }
+
+    auto shared = read_shared(root, tuning);
+    if (!shared)
+    {
+        return fail(shared.error(), *version_value);
+    }
+    if (auto valid = validate(SaveData{schema.current_version, DeviceData{}, *shared}, tuning, schema.current_version);
+        !valid)
+    {
+        return fail(valid.error(), *version_value);
+    }
+
+    SharedParseResult result;
+    result.status = LoadStatus::OK;
+    result.data = std::move(*shared);
+    result.file_version = *version_value;
     return result;
 }
 
