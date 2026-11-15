@@ -68,7 +68,8 @@ job, of what it checks and of the Game Center rule below.
   TestFlight, and signing in to Game Center fails quietly in the game. The job prints which it chose.
 - **iCloud sync follows the profile, the same way.** The key-value store entitlement
   (`com.apple.developer.ubiquity-kvstore-identifier`) is requested (`HEART_BOOM_MATHS_IOS_ICLOUD`) only when the profile
-  carries it with the value `TEAMID.com.iainchesworthlabs.heartboommaths`. Without it the build is signed and goes to
+  carries it with the value `TEAMID.*` (how a profile normally holds it) or `TEAMID.com.iainchesworthlabs.heartboommaths`;
+  the app itself asks for the full value. Without it the build is signed and goes to
   TestFlight with no iCloud sync switch in Settings. The job prints which it chose.
 - **Running it by hand.** `gh workflow run release.yml --ref <branch>` builds and signs the game and has Apple validate
   it; add `-f upload_testflight=true` to upload the build to TestFlight from a branch with no tag. The other release jobs
