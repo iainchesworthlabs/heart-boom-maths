@@ -4,8 +4,9 @@ import QtQuick
 import QtQuick.Layouts
 
 // Settings (board CP14): the Sound effects and Music switches, the Haptics switch where the device can buzz, the Game Center
-// switch where the device has a leaderboard, ABOUT, and the build line at the bottom. A switch writes through the
-// controller, which saves it. The Game Center switch turns off at once and turns on only after the parental gate.
+// switch where the device has a leaderboard, the iCloud sync switch where the device has an iCloud account, ABOUT, and the
+// build line at the bottom. A switch writes through the controller, which saves it. The Game Center and iCloud sync
+// switches turn off at once and turn on only after the parental gate.
 ScreenFrame {
     id: root
 
@@ -14,8 +15,9 @@ ScreenFrame {
     signal aboutRequested
 
     title: qsTr("SETTINGS")
-    // The content is taller by one row where the device can make haptics, so a short window shrinks it by that much more.
-    designHeight: root.game.hapticsAvailable ? 750 : 640
+    // The content is taller by one row where the device can make haptics, and by one more where it can sync, so a short
+    // window shrinks it by that much more.
+    designHeight: 640 + (root.game.hapticsAvailable ? 110 : 0) + (root.game.cloudSyncAvailable ? 120 : 0)
 
     SettingRow {
         objectName: "soundRow"
@@ -77,6 +79,24 @@ ScreenFrame {
         onToggleRequested: root.game.requestGameCenter(!root.game.gameCenterEnabled)
 
         TrophyIcon {
+            anchors.fill: parent
+        }
+    }
+
+    // Only on an Apple device that has an iCloud account signed in (the controller asks the cloud store, which does not
+    // read the family's copy to say so). Like Game Center it turns off at once and turns on only after the parental gate.
+    SettingRow {
+        objectName: "cloudSyncRow"
+        Layout.fillWidth: true
+        visible: root.game.cloudSyncAvailable
+        unit: root.unit
+        title: qsTr("iCloud sync")
+        hint: qsTr("Players on all devices\nNeeds a grown-up")
+        switchObjectName: "cloudSyncSwitch"
+        checked: root.game.cloudSyncEnabled
+        onToggleRequested: root.game.requestCloudSync(!root.game.cloudSyncEnabled)
+
+        CloudIcon {
             anchors.fill: parent
         }
     }

@@ -4,7 +4,7 @@ import QtQuick
 import QtQuick.Layouts
 
 // The parental gate (board CP17): a number written in words, which a grown-up types back with the keypad (or a keyboard)
-// before a web address opens, Game Center turns on or a player is removed. OPEN (TURN ON, REMOVE) stays grey until the number
+// before a web address opens, Game Center or iCloud sync turns on or a player is removed. OPEN (TURN ON, REMOVE) stays grey until the number
 // typed is the number asked for. The controller owns the number and the check; this screen only shows the words and passes
 // the digits on.
 //
@@ -21,10 +21,14 @@ ScreenFrame {
 
     readonly property bool complete: root.game.gateMatches(root.typed)
     readonly property bool forGameCenter: root.game.gatePurpose === GameController.GameCenter
+    readonly property bool forCloudSync: root.game.gatePurpose === GameController.CloudSync
     readonly property bool forRemovingPlayer: root.game.gatePurpose === GameController.RemovePlayer
     readonly property string prompt: {
         if (root.forGameCenter) {
             return qsTr("To turn on Game Center, type this number:");
+        }
+        if (root.forCloudSync) {
+            return qsTr("To turn on iCloud sync, type this number:");
         }
         if (root.forRemovingPlayer) {
             return qsTr("To remove %1, type this number:").arg(root.game.gatePlayerName);
@@ -308,7 +312,7 @@ ScreenFrame {
             fillColor: enabled ? variantFill : Theme.switchOff
             textColor: enabled ? variantText : Theme.lockedText
             variant: "primary"
-            text: root.forGameCenter ? qsTr("TURN ON") : (root.forRemovingPlayer ? qsTr("REMOVE") : qsTr("OPEN"))
+            text: root.forGameCenter || root.forCloudSync ? qsTr("TURN ON") : (root.forRemovingPlayer ? qsTr("REMOVE") : qsTr("OPEN"))
             pixelSize: 36 * root.unit
             letterSpacing: 3
             borderWidth: Theme.outlineLarge

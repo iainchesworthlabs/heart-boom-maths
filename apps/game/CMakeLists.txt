@@ -162,6 +162,7 @@ set(HEART_BOOM_MATHS_QML_FILES
     qml/BackIcon.qml
     qml/Badge.qml
     qml/ChevronIcon.qml
+    qml/CloudIcon.qml
     qml/CoinCard.qml
     qml/CoinWallet.qml
     qml/ComicButton.qml
@@ -459,6 +460,7 @@ if(HEART_BOOM_MATHS_BUILD_TESTS)
         tests/ui_main.cpp
         tests/ui_support.cpp
         tests/test_answer_feedback.cpp
+        tests/test_ui_cloud.cpp
         tests/test_ui_components.cpp
         tests/test_ui_haptics.cpp
         tests/test_ui_journeys.cpp

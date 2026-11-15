@@ -39,6 +39,7 @@ GameServices make_services(UiRig& rig)
     services.haptics = &rig.haptics;
     services.links = &rig.links;
     services.clock = &rig.clock;
+    services.cloud = &rig.cloud;
     return services;
 }
 
@@ -57,8 +58,15 @@ UiRig::UiRig(std::uint64_t seed, bool scores_available, std::string saved_text)
 }
 
 UiRig::UiRig(std::uint64_t seed, bool scores_available, std::string saved_text, bool haptics_available)
+    : UiRig(seed, scores_available, std::move(saved_text), haptics_available, false)
+{
+}
+
+UiRig::UiRig(std::uint64_t seed, bool scores_available, std::string saved_text, bool haptics_available,
+             bool cloud_available)
     : scores(scores_available), haptics(haptics_available),
       store(saved_text.empty() ? MemorySaveStore() : MemorySaveStore(std::move(saved_text))),
+      cloud(std::make_shared<CloudAccount>(), cloud_available),
       controller(make_services(*this),
                  [this, seed]
                  {
