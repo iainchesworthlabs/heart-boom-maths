@@ -7,10 +7,10 @@
   "commands": [
     { "tick": 0, "do": "start_game" },
     { "tick": 30, "do": "answer", "tile": 0 },
-    { "tick": 60, "do": "answer", "tile": 1 },
+    { "tick": 60, "do": "answer", "tile": 3 },
     { "tick": 90, "do": "answer", "tile": 3 },
-    { "tick": 120, "do": "answer", "tile": 3 }
+    { "tick": 120, "do": "answer", "tile": 1 }
   ],
   "end_tick": 1320,
-  "expect": { "events_hash": "fe1e0b90f2b3cb6d", "final_hash": "bfa65965e9c24c77", "score": 60 }
+  "expect": { "events_hash": "42144b1a75a82f6d", "final_hash": "34eb2fabde93c26f", "score": 60 }
 }

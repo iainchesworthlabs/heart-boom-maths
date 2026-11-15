@@ -127,8 +127,8 @@ A test checks every row of the PRD endless table against these.
 Dealing a question:
 
 1. Pick the shape: from the level table for levels 1 to 12, and in endless by the multi-term percentage. Endless keeps level 12's range of 1,000.
-2. Build operands from the result backwards: choose the result in range, then split it, so every intermediate value stays between 0 and the level's largest number and no retry loop is needed. Operands are at least 1.
-3. Make three wrong tiles from the answer ±1, ±2, ±10 and a digit swap, kept in range and distinct. When fewer than three qualify, top up with the nearest unused numbers.
+2. Pick the kind evenly among the level's kinds (endless keeps its own split), then one of that kind's questions with equal chance, so no question is dealt more often than another. One random index does both: the kind's questions are counted by result (the sum before the take-away for a − b, a + b − c and a + b + c − d), the index finds the result whose running count passes it, and the rest of the index picks the split of that result (for three parts, among all splits, not first part then second). It is the result chosen in proportion to its questions and then one of them chosen evenly, with no retry loop. The counts are closed forms in 64-bit integers (the four-term kind at 1,000 has about 1.25 × 10¹¹ questions). Operands are at least 1 and every running total stays between 0 and the level's largest number.
+3. Make three wrong tiles from near misses of the answer: ±1, ±2, ±10 and a digit swap, kept in range and distinct. First choose how many sit below the answer, with equal chance among the counts the range allows (0 to 3), then fill each side from its near misses at random, topping a side up with the nearest unused numbers when it has too few. So the answer is as likely to be the smallest or the largest tile as a middle one.
 4. Place the four tiles with a Fisher–Yates shuffle on the session generator.
 5. Avoid repeats within a level. When a level has 50 or fewer possible questions, list them all, shuffle and deal ten. Larger levels redraw on a repeat.
 
