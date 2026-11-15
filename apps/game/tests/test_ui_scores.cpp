@@ -42,8 +42,8 @@ struct SizeCase
 std::string save_text(const std::vector<ScoreEntry>& top10, bool won_once = false)
 {
     SaveData data;
-    data.top10 = top10;
-    data.won_once = won_once;
+    give_top10(data, top10);
+    data.shared.players[0].won_once = won_once;
     const auto text = serialise(data);
     REQUIRE(text.has_value());
     return *text;

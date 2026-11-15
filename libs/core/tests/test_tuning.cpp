@@ -26,6 +26,7 @@ TEST_CASE("Tuning defaults match the PRD's scalar table", "[tuning]")
     CHECK(t.time_bonus_points_per_second == prd::PRD_DEFAULTS_TIME_BONUS_POINTS_PER_SECOND);
     CHECK(t.hint_cost_coins == prd::PRD_DEFAULTS_HINT_COST_COINS);
     CHECK(t.top10_size == prd::PRD_DEFAULTS_TOP10_SIZE);
+    CHECK(t.max_players == prd::PRD_DEFAULTS_MAX_PLAYERS);
     CHECK(t.name_max_length == prd::PRD_DEFAULTS_NAME_MAX_LENGTH);
 }
 

@@ -234,13 +234,17 @@ SaveData full_save()
     hbm_test::reach_level(s, 20);
     hbm_test::answer_right(s);
     SaveData data;
-    data.coins = 123456;
-    data.won_once = true;
+    data.device.id = "9f1c2a7b3d4e5f60";
+    data.shared.players[0].won_once = true;
+    data.shared.players[0].coins = {{data.device.id, 123456, 0}};
     for (int i = 0; i < 10; ++i)
     {
-        data.top10.push_back({std::string("PLAYER ") + static_cast<char>('A' + i), 100000 - 1000 * i});
+        data.shared.top10.push_back(
+            {std::string("PLAYER ") + static_cast<char>('A' + i), 100000 - 1000 * i, data.device.id, i + 1});
     }
-    data.run = s.snapshot();
+    data.device.next_seq = 11;
+    data.device.run = s.snapshot();
+    data.device.run_player = "first";
     return data;
 }
 
@@ -273,7 +277,7 @@ TEST_CASE("A full save is written and read fast", "[perf][core][save]")
     REQUIRE(document.has_value());
 
     measure_calls("core.save.serialise", "ns_per_call", 2000, [&] { use(serialise(data).value().size()); });
-    measure_calls("core.save.parse", "ns_per_call", 2000, [&] { use(parse_save(text).data.top10.size()); });
+    measure_calls("core.save.parse", "ns_per_call", 2000, [&] { use(parse_save(text).data.shared.top10.size()); });
     measure_calls("core.json.parse_full_save", "ns_per_call", 2000,
                   [&] { use(json::parse(text)->kind() == json::Kind::OBJECT); });
     measure_calls("core.json.write_full_save", "ns_per_call", 2000, [&] { use(json::write(*document).size()); });

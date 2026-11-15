@@ -116,7 +116,7 @@ function(hbm_generate_tuning_header json_file out_file)
 
     foreach(key IN ITEMS
             streak_bonus_coin_every time_bonus_points_per_second perfect_level_bonus_points perfect_level_coins
-            win_bonus_coins hint_cost_coins hint_tiles_removed top10_size name_max_length operand_minimum)
+            win_bonus_coins hint_cost_coins hint_tiles_removed top10_size max_players name_max_length operand_minimum)
         hbm_json_int(value "${json}" ${key})
         string(APPEND body "    .${key} = ${value},\n")
     endforeach()

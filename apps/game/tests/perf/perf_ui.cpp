@@ -116,7 +116,7 @@ std::string saved_top10_text()
     const char* names[] = {"BOMB SQUAD", "ROCKET", "DAD", "MUM", "SPARKY", "NINJA", "CAT", "ALEX", "SUNNY"};
     for (int i = 0; i < 9; ++i)
     {
-        data.top10.push_back({names[i], 5000 - 500 * i});
+        data.shared.top10.push_back({names[i], 5000 - 500 * i, "", i + 1});
     }
     return *serialise(data);
 }

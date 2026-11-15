@@ -91,7 +91,7 @@ struct Shell
 std::string save_with_coins()
 {
     SaveData data;
-    data.coins = 10;
+    give_wallet(data, 10);
     return *serialise(data);
 }
 
@@ -185,14 +185,14 @@ TEST_CASE("The Haptics switch is on to begin with and writes through the control
     REQUIRE(s.rig.store.text().has_value());
     const ParseResult off = parse_save(*s.rig.store.text());
     REQUIRE(off.status == LoadStatus::OK);
-    CHECK_FALSE(off.data.haptics);
-    CHECK(off.data.sound); // the other switches are as they were
-    CHECK(off.data.music);
+    CHECK_FALSE(off.data.device.haptics);
+    CHECK(off.data.device.sound); // the other switches are as they were
+    CHECK(off.data.device.music);
 
     s.tap("hapticsSwitch");
     CHECK(s.rig.controller.haptics_enabled());
     CHECK(s.switch_word("hapticsSwitch") == "ON");
-    CHECK(parse_save(*s.rig.store.text()).data.haptics);
+    CHECK(parse_save(*s.rig.store.text()).data.device.haptics);
 }
 
 TEST_CASE("Turning haptics on is felt, as a preview, and turning them off is not", "[ui][haptics][settings]")
@@ -224,7 +224,7 @@ TEST_CASE("The Haptics switch answers the keyboard", "[ui][haptics][settings]")
 TEST_CASE("A save that turned haptics off shows the switch off", "[ui][haptics][settings]")
 {
     SaveData data;
-    data.haptics = false;
+    data.device.haptics = false;
     Shell s(PHONE, true, false, *serialise(data));
     s.tap("settingsButton");
     CHECK_FALSE(property_of(s.item("hapticsSwitch"), "checked").toBool());

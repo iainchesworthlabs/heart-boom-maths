@@ -138,7 +138,7 @@ Every number lives in a `Tuning` struct in `libs/core`. `Tuning::defaults()` ret
 
 ## Persistence
 
-One small JSON document per device. `libs/core` owns the schema. Platforms store and return the text, so every platform reads and writes the same file.
+One small JSON document per device. `libs/core` owns the schema. Platforms store and return the text, so every platform reads and writes the same file. The table below is version 1, which a build still reads and migrates; version 2 follows it.
 
 | Field | Holds | Written when |
 |---|---|---|
@@ -153,7 +153,7 @@ One small JSON document per device. `libs/core` owns the schema. Platforms store
 
 The plan's field table does not list `game_center`. The PRD and decision 6 require the switch to persist, so add it and note it in the schema. `haptics` is added the same way: an optional boolean that reads as its default when absent, a wrong type damages the save, the writer always writes it, and the version stays 1.
 
-Best score is the top entry of `top10`, so it is not stored twice.
+In version 1 the best score is the top entry of `top10`, so it is not stored twice.
 
 ### Version 2: players and a part that syncs
 
@@ -194,7 +194,17 @@ Version 2 (decided 15 Nov 2026, see `SPEC.md`, Players and Sync) splits the docu
 | `players[].coins` | One entry per device that earned or spent for this player. The wallet is the sum of `earned` less the sum of `spent`, never below 0 |
 | `players[].best` | The player's best final score |
 
-A version 1 save migrates to one player, `first`, with its coins as `earned` under the device, its top 10 entries numbered in rank order, and its run. A field added later for a new feature is optional on reading and takes its default when absent, as `haptics` did, so the version does not rise for each one.
+A version 1 save migrates to one player, `first`, with its coins as `earned` under the device, its top 10 entries numbered in rank order, and its run. A field added later for a new feature is optional on reading and takes its default when absent, as `haptics` did, so the version does not rise for each one. In version 2 `game_center`, `haptics` and `cloud_sync` are optional on reading. `id`, `sound`, `music`, `current_player` and `next_seq` are required.
+
+As built (`save_data.hpp`, `save_codec.hpp`):
+
+- `SaveData` is `{version, device, shared}`. The default is a first run: one unnamed player, `first`, who is current, with `next_seq` 1. A file with no players at all is valid, and `ensure_current_player` adds one.
+- A device that has no id yet writes the empty string as the `device` of its coin and top 10 entries. `assign_device_id` gives the id to those entries and to the device in one step. The app does this right after loading.
+- `run` and `run_player` are two fields that go together: both set, or both absent.
+- Format bounds, not game numbers: 64 players in the list (removed included), 64 coin entries per player, counters up to `MAX_SAVED_COUNTER` (2,147,483,647). `max_players` (4, in `tuning.json`) only stops `add_player`. A save with more active players is valid, because a merge can make one. The top 10 is checked for descending score only; of equal scores the order is the merge's business.
+- The migration moves values as they are and leaves their checking to the reader, so a damaged version 1 file reports the same rule as before (`COINS_OUT_OF_RANGE`, `NAME_INVALID` and so on) and not `MIGRATION_FAILED`.
+- `best` rises only when `record_score` puts an entry in the top 10, which for one player is the old rule that best is the top entry. A game that does not qualify does not raise it yet. Stage work that wants best for every game calls `record_best`.
+- `record_wallet` keeps both counters growing: a rise adds to this device's `earned`, a fall to its `spent`. When a merge has left the sums below zero, a rise also clears that shortfall so the wallet reads as asked.
 
 `merge(a, b)` is a function in `libs/core` over the `shared` part. It is commutative, associative and idempotent, and property tests hold that. Of equal scores in the merged top 10, the order is by `device` and then `seq`.
 

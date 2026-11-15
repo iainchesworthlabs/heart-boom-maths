@@ -22,6 +22,9 @@ namespace
 
 constexpr std::uint64_t FIRST_GATE_SEED = 11;
 constexpr std::uint64_t SECOND_GATE_SEED = 12;
+constexpr std::uint64_t FIRST_ID_BITS = 0x9F1C2A7B3D4E5F60ULL;
+constexpr std::uint64_t SECOND_ID_BITS = 0x00000000000000FFULL;
+constexpr std::string_view FIRST_ID = "9f1c2a7b3d4e5f60";
 
 /// One controller with every service recorded. The save store is passed in so a second rig can read what the first
 /// one wrote, as a restart does.
@@ -50,6 +53,7 @@ struct Rig
         options.session_seed = 20261114;
         options.tile_guard_ns = guard_ns; // most tests tap straight after a level starts; the guard has its own tests
         options.gate_seed_source = [this] { return gate_seeds_used++ == 0 ? FIRST_GATE_SEED : SECOND_GATE_SEED; };
+        options.id_source = [this] { return id_draws++ == 0 ? FIRST_ID_BITS : SECOND_ID_BITS; };
         return options;
     }
 
@@ -95,6 +99,7 @@ struct Rig
     RecordingHaptics haptics;
     RecordingLinks links;
     int gate_seeds_used = 0;
+    int id_draws = 0;
     GameController controller;
 };
 
@@ -140,12 +145,12 @@ TEST_CASE("A fresh controller shows the title screen on defaults", "[integration
 TEST_CASE("The settings and the wallet in the save reach the game and the services", "[integration][controller]")
 {
     SaveData data;
-    data.coins = 40;
-    data.won_once = true;
-    data.sound = false;
-    data.music = false;
-    data.game_center = true;
-    data.top10 = {{"ADA", 900}, {"BEN", 500}};
+    give_wallet(data, 40);
+    data.shared.players[0].won_once = true;
+    data.device.sound = false;
+    data.device.music = false;
+    data.device.game_center = true;
+    give_top10(data, {{"ADA", 900}, {"BEN", 500}});
     MemorySaveStore memory(*serialise(data));
     Rig rig(memory, true);
     CHECK(rig.controller.wallet() == 40);
@@ -280,7 +285,7 @@ TEST_CASE("Pausing stops time and resuming does not count the pause", "[integrat
     CHECK_FALSE(c.has_saved_run());
     rig.play_for_ms(100);
     CHECK(c.ticks_left() == before - 2);
-    CHECK_FALSE(saved(memory).run.has_value());
+    CHECK_FALSE(saved(memory).device.run.has_value());
 }
 
 TEST_CASE("A right and a wrong answer move the score, the timer and the sounds", "[integration][controller]")
@@ -340,7 +345,7 @@ TEST_CASE("The rising tone plays with the chime when the multiplier rises", "[in
 TEST_CASE("A hint costs coins, removes tiles and whooshes", "[integration][controller]")
 {
     SaveData data;
-    data.coins = 10;
+    give_wallet(data, 10);
     MemorySaveStore memory(*serialise(data));
     Rig rig(memory);
     GameController& c = rig.controller;
@@ -389,7 +394,7 @@ TEST_CASE("A cleared level shows its card and saves the wallet", "[integration][
     CHECK(rig.audio.count(SoundId::FANFARE) == 1);
 
     // 10 right answers (10 coins and one streak bonus of 1 at the fifth and tenth) and 5 for the perfect level.
-    CHECK(c.wallet() == saved(memory).coins);
+    CHECK(c.wallet() == wallet_of(saved(memory)));
     CHECK(c.wallet() == 10 + 2 + 5);
 
     rig.play_for_ms(5000); // the card has no clock
@@ -418,8 +423,8 @@ TEST_CASE("Clearing level 12 wins, pays once and either keeps going or finishes"
     CHECK(c.state() == State::Won);
     CHECK(bonus == 1000);
     CHECK(rig.audio.count(SoundId::FANFARE) == 12); // the win sends GAME_WON as well and adds no second fanfare
-    CHECK(saved(memory).won_once);
-    CHECK(saved(memory).coins >= 1000);
+    CHECK(current_player(saved(memory))->won_once);
+    CHECK(wallet_of(saved(memory)) >= 1000);
 
     c.keepGoing();
     CHECK(c.state() == State::Playing);
@@ -494,7 +499,7 @@ TEST_CASE("A whole scripted game runs to the bomb with the manual clock", "[inte
     rig.play_for_ms(5000);
     CHECK(rig.scores.submitted.size() == 1);
     CHECK(c.ticks_left() == 0);
-    CHECK(saved(memory).coins == 2);
+    CHECK(wallet_of(saved(memory)) == 2);
 }
 
 TEST_CASE("Leaving the alert zone stops the ticking, and a pause in it starts it again", "[integration][controller]")
@@ -530,7 +535,7 @@ TEST_CASE("QUIT on the pause screen ends the game and offers the name entry once
     CHECK(c.end_reason() == GameController::EndReason::Quit);
     CHECK(c.final_score() == 10);
     CHECK_FALSE(c.has_saved_run());
-    CHECK_FALSE(saved(memory).run.has_value());
+    CHECK_FALSE(saved(memory).device.run.has_value());
     CHECK(rig.scores.submitted == std::vector<std::int64_t>{10});
     CHECK(rig.audio.count(SoundId::CARTOON_POP) == 1);
 
@@ -545,7 +550,11 @@ TEST_CASE("QUIT on the pause screen ends the game and offers the name entry once
     CHECK(c.highlight_rank() == 1);
     CHECK(c.best_score() == 10);
     CHECK(c.top10().first().toMap().value("name").toString() == QStringLiteral("ADA LOVELACE"));
-    CHECK(saved(memory).top10 == std::vector<ScoreEntry>{{"ADA LOVELACE", 10}});
+    const SaveData on_disk = saved(memory);
+    REQUIRE(on_disk.shared.top10.size() == 1);
+    CHECK(on_disk.shared.top10[0] == ScoreEntry{"ADA LOVELACE", 10, std::string(FIRST_ID), 1});
+    CHECK(on_disk.shared.players[0].best == 10);
+    CHECK(on_disk.device.next_seq == 2);
     CHECK(c.saveName(QStringLiteral("again")) == 0); // already saved
 
     // Starting again clears the leftovers of the last game.
@@ -593,8 +602,8 @@ TEST_CASE("Leaving the foreground pauses, suspends audio and writes the save", "
     CHECK(c.state() == State::Paused);
     CHECK(rig.audio.suspends == 1);
     CHECK(memory.store_count() > stores);
-    CHECK(saved(memory).run.has_value());
-    CHECK(saved(memory).coins == 1);
+    CHECK(saved(memory).device.run.has_value());
+    CHECK(wallet_of(saved(memory)) == 1);
 
     rig.play_for_ms(10'000);
     CHECK(c.ticks_left() == before);
@@ -626,7 +635,7 @@ TEST_CASE("Leaving the foreground on the title screen or a card writes the save 
     rig.play_level_right();
     c.on_application_state(false);
     CHECK(c.state() == State::LevelClear);
-    CHECK_FALSE(saved(memory).run.has_value());
+    CHECK_FALSE(saved(memory).device.run.has_value());
     c.on_application_state(true);
     c.nextLevel();
     CHECK(c.state() == State::Playing);
@@ -655,7 +664,7 @@ TEST_CASE("CONTINUE restores the paused run once", "[integration][controller]")
         parts = first.controller.question_parts();
         tiles = first.controller.tiles();
     }
-    REQUIRE(saved(memory).run.has_value());
+    REQUIRE(saved(memory).device.run.has_value());
 
     Rig second(memory);
     GameController& c = second.controller;
@@ -672,7 +681,7 @@ TEST_CASE("CONTINUE restores the paused run once", "[integration][controller]")
     CHECK(c.tiles() == tiles);
     CHECK_FALSE(c.has_saved_run());
     CHECK(run_spy.count() == 1);
-    CHECK_FALSE(saved(memory).run.has_value()); // deleted as soon as it loads
+    CHECK_FALSE(saved(memory).device.run.has_value()); // deleted as soon as it loads
     second.play_for_ms(5000);
     CHECK(c.ticks_left() == ticks);
 
@@ -694,15 +703,15 @@ TEST_CASE("A paused run that is paused again after CONTINUE is saved again on le
     Rig second(memory);
     REQUIRE(second.controller.continueGame());
     second.controller.on_application_state(false);
-    CHECK(saved(memory).run.has_value());
+    CHECK(saved(memory).device.run.has_value());
     CHECK(second.controller.has_saved_run());
 }
 
 TEST_CASE("A saved run that cannot be restored starts clean", "[integration][controller]")
 {
     SaveData data;
-    data.coins = 3;
-    data.run = std::vector<std::int64_t>{1, 2, 3};
+    give_wallet(data, 3);
+    give_run(data, {1, 2, 3});
     MemorySaveStore memory(*serialise(data));
     Rig rig(memory);
     GameController& c = rig.controller;
@@ -715,7 +724,7 @@ TEST_CASE("A saved run that cannot be restored starts clean", "[integration][con
     CHECK(c.state() == State::Idle);
     CHECK_FALSE(c.has_saved_run());
     CHECK(c.wallet() == 3);
-    CHECK_FALSE(saved(memory).run.has_value());
+    CHECK_FALSE(saved(memory).device.run.has_value());
 
     c.startGame(); // the game is fine
     CHECK(c.state() == State::Playing);
@@ -733,7 +742,7 @@ TEST_CASE("CONTINUE does nothing without a run, and NEW GAME discards one", "[in
     REQUIRE(rig.controller.has_saved_run());
     rig.controller.startGame();
     CHECK_FALSE(rig.controller.has_saved_run());
-    CHECK_FALSE(saved(memory).run.has_value());
+    CHECK_FALSE(saved(memory).device.run.has_value());
     CHECK_FALSE(rig.controller.continueGame());
     CHECK(rig.controller.state() == State::Playing);
 }
@@ -748,10 +757,10 @@ TEST_CASE("The settings save at once and reach the audio service", "[integration
     c.setSoundEnabled(false);
     CHECK_FALSE(rig.audio.effects_enabled);
     CHECK(rig.audio.music_enabled);
-    CHECK_FALSE(saved(memory).sound);
+    CHECK_FALSE(saved(memory).device.sound);
     c.setMusicEnabled(false);
     CHECK_FALSE(rig.audio.music_enabled);
-    CHECK_FALSE(saved(memory).music);
+    CHECK_FALSE(saved(memory).device.music);
     CHECK(spy.count() == 2);
 
     c.setSoundEnabled(false); // no change, no signal
@@ -851,7 +860,7 @@ TEST_CASE("Game Center turns on only behind the gate and off at once", "[integra
     CHECK(c.submitGate(QString::number(make_gate_challenge(SECOND_GATE_SEED).number)));
     CHECK(c.game_center_enabled());
     CHECK(rig.scores.enabled);
-    CHECK(saved(memory).game_center);
+    CHECK(saved(memory).device.game_center);
     CHECK(rig.links.opened.empty());
 
     c.requestGameCenter(true); // already on: no gate
@@ -860,7 +869,7 @@ TEST_CASE("Game Center turns on only behind the gate and off at once", "[integra
     c.requestGameCenter(false);
     CHECK_FALSE(c.game_center_enabled());
     CHECK_FALSE(rig.scores.enabled);
-    CHECK_FALSE(saved(memory).game_center);
+    CHECK_FALSE(saved(memory).device.game_center);
 }
 
 TEST_CASE("A store that cannot write is survived", "[integration][controller]")
@@ -985,7 +994,7 @@ TEST_CASE("The saved run says its level and the time left for the title screen",
 TEST_CASE("A saved run the core would refuse shows no caption", "[integration][controller]")
 {
     SaveData data;
-    data.run = std::vector<std::int64_t>{1, 2, 3};
+    give_run(data, {1, 2, 3});
     MemorySaveStore memory(*serialise(data));
     Rig rig(memory);
     CHECK(rig.controller.has_saved_run());
@@ -1218,8 +1227,8 @@ std::string save_with_snapshot_after(const std::function<void(GameSession&)>& pl
     session.start_game();
     play(session);
     SaveData data;
-    data.coins = 4;
-    data.run = session.snapshot();
+    give_wallet(data, 4);
+    give_run(data, session.snapshot());
     return *serialise(data);
 }
 
@@ -1247,8 +1256,8 @@ TEST_CASE("A saved run that is not a paused level is refused and spent", "[integ
         CHECK(failed == 1);
         CHECK(rig.controller.state() == State::Idle);
         CHECK(rig.controller.level() == 0);
-        CHECK_FALSE(saved(memory).run.has_value());
-        CHECK(saved(memory).coins == 4);
+        CHECK_FALSE(saved(memory).device.run.has_value());
+        CHECK(wallet_of(saved(memory)) == 4);
     }
     SECTION("a finished game")
     {
@@ -1315,14 +1324,14 @@ TEST_CASE("Leaving the foreground in every state keeps what the save promises", 
     rig.answer_right();
     c.on_application_state(false);
     REQUIRE(c.state() == State::Paused);
-    CHECK(saved(memory).run.has_value());
+    CHECK(saved(memory).device.run.has_value());
     // Paused: leaving again keeps the run.
     c.on_application_state(true);
     c.on_application_state(false);
-    CHECK(saved(memory).run.has_value());
+    CHECK(saved(memory).device.run.has_value());
     c.on_application_state(true);
     c.resume();
-    CHECK_FALSE(saved(memory).run.has_value());
+    CHECK_FALSE(saved(memory).device.run.has_value());
 
     // Level clear: the wallet is on disk, there is no run to bring back.
     for (int i = 0; i < 9; ++i)
@@ -1333,8 +1342,8 @@ TEST_CASE("Leaving the foreground in every state keeps what the save promises", 
     const std::int64_t wallet = c.wallet();
     c.on_application_state(false);
     CHECK(c.state() == State::LevelClear);
-    CHECK(saved(memory).coins == wallet);
-    CHECK_FALSE(saved(memory).run.has_value());
+    CHECK(wallet_of(saved(memory)) == wallet);
+    CHECK_FALSE(saved(memory).device.run.has_value());
     c.on_application_state(true);
 
     // Bomb, then name entry: the wallet is on disk, the name is still waiting for the child.
@@ -1345,10 +1354,10 @@ TEST_CASE("Leaving the foreground in every state keeps what the save promises", 
     c.on_application_state(false);
     c.on_application_state(true);
     CHECK(c.name_entry_pending());
-    CHECK(saved(memory).top10.empty()); // not saved until SAVE: a kill here loses the entry
-    CHECK(saved(memory).coins == c.wallet());
+    CHECK(saved(memory).shared.top10.empty()); // not saved until SAVE: a kill here loses the entry
+    CHECK(wallet_of(saved(memory)) == c.wallet());
     CHECK(c.saveName(QStringLiteral("zoe")) == 1);
-    CHECK(saved(memory).top10.size() == 1);
+    CHECK(saved(memory).shared.top10.size() == 1);
 }
 
 TEST_CASE("Taps on the tiles are ignored for a moment after a level starts and after RESUME",
@@ -1553,7 +1562,7 @@ TEST_CASE("A save from before haptics turns them on, and one that turned them of
     CHECK(first.controller.wallet() == 5);
 
     SaveData data;
-    data.haptics = false;
+    data.device.haptics = false;
     MemorySaveStore off(*serialise(data));
     Rig second(off);
     CHECK_FALSE(second.controller.haptics_enabled());
@@ -1569,20 +1578,20 @@ TEST_CASE("The haptics switch saves at once and survives a restart", "[integrati
         rig.controller.setHapticsEnabled(false);
         CHECK_FALSE(rig.controller.haptics_enabled());
         CHECK_FALSE(rig.haptics.enabled);
-        CHECK_FALSE(saved(memory).haptics);
+        CHECK_FALSE(saved(memory).device.haptics);
         CHECK(spy.count() == 1);
         rig.controller.setHapticsEnabled(false); // no change, no signal
         CHECK(spy.count() == 1);
         // The other switches are untouched.
-        CHECK(saved(memory).sound);
-        CHECK(saved(memory).music);
+        CHECK(saved(memory).device.sound);
+        CHECK(saved(memory).device.music);
     }
     {
         Rig again(memory);
         CHECK_FALSE(again.controller.haptics_enabled());
         CHECK_FALSE(again.haptics.enabled);
         again.controller.setHapticsEnabled(true);
-        CHECK(saved(memory).haptics);
+        CHECK(saved(memory).device.haptics);
     }
     Rig third(memory);
     CHECK(third.controller.haptics_enabled());
@@ -1622,7 +1631,7 @@ TEST_CASE("A wrong answer is felt as an error", "[integration][haptics]")
 TEST_CASE("A hint is felt as a soft haptic", "[integration][haptics]")
 {
     SaveData data;
-    data.coins = 10;
+    give_wallet(data, 10);
     MemorySaveStore memory(*serialise(data));
     Rig rig(memory);
     rig.controller.startGame();
@@ -1796,4 +1805,133 @@ TEST_CASE("Leaving the app in the middle of the win's beats cuts them short", "[
     game.controller.on_application_state(false);
     game.device.advance_ms(1000);
     CHECK(game.device.backend.fired.size() == before);
+}
+
+// ---- Players and the device id (save version 2)
+// ----------------------------------------------------------------------
+
+TEST_CASE("A new device is given an id from the injected source, and keeps it", "[integration][controller][save]")
+{
+    MemorySaveStore memory;
+    {
+        Rig rig(memory);
+        CHECK(rig.id_draws == 1); // the player `first` exists already, so only the device id is drawn
+        rig.controller.setSoundEnabled(false);
+        const SaveData first_write = saved(memory);
+        CHECK(first_write.device.id == FIRST_ID);
+        CHECK(first_write.device.current_player == "first");
+        REQUIRE(first_write.shared.players.size() == 1);
+        CHECK(first_write.shared.players[0].id == "first");
+        CHECK(first_write.shared.players[0].name.empty());
+    }
+    // A restart reads the id back and draws nothing.
+    Rig again(memory);
+    CHECK(again.id_draws == 0);
+    again.controller.setSoundEnabled(true);
+    CHECK(saved(memory).device.id == FIRST_ID);
+}
+
+TEST_CASE("The wallet is the current player's, kept as what this device earned and spent",
+          "[integration][controller][save]")
+{
+    MemorySaveStore memory;
+    Rig rig(memory);
+    GameController& c = rig.controller;
+    c.startGame();
+    for (int i = 0; i < 3; ++i)
+    {
+        rig.answer_right();
+    }
+    c.pause();
+    REQUIRE(c.wallet() == 3);
+    const SaveData on_disk = saved(memory);
+    REQUIRE(on_disk.shared.players.size() == 1);
+    CHECK(on_disk.shared.players[0].coins == std::vector<CoinEntry>{{std::string(FIRST_ID), 3, 0}});
+    CHECK(wallet_of(on_disk) == 3);
+}
+
+TEST_CASE("A hint is spent as `spent`, and earned coins are never taken back", "[integration][controller][save]")
+{
+    SaveData data;
+    give_wallet(data, 10);
+    MemorySaveStore memory(*serialise(data));
+    Rig rig(memory);
+    GameController& c = rig.controller;
+    c.startGame();
+    c.useHint();
+    c.pause();
+    const SaveData on_disk = saved(memory);
+    // The 10 coins from the old save were given this device's id, then the hint cost 2.
+    CHECK(on_disk.shared.players[0].coins == std::vector<CoinEntry>{{std::string(FIRST_ID), 10, 2}});
+    CHECK(wallet_of(on_disk) == 8);
+    CHECK(c.wallet() == 8);
+}
+
+TEST_CASE("A version 1 save becomes one player on this device", "[integration][controller][save]")
+{
+    MemorySaveStore memory(R"({"version":1,"coins":137,"won_once":true,"sound":true,"music":false,"top10":)"
+                           R"([{"name":"ADA","score":900},{"name":"BEN","score":500}],"run":[1,2,3]})");
+    Rig rig(memory);
+    GameController& c = rig.controller;
+    CHECK(c.wallet() == 137);
+    CHECK(c.session_view().won_once);
+    CHECK(c.best_score() == 900);
+    CHECK(c.top10().size() == 2);
+    CHECK(c.has_saved_run());
+    CHECK_FALSE(c.music_enabled());
+
+    c.setSoundEnabled(false); // any save writes version 2
+    const SaveData on_disk = saved(memory);
+    CHECK(on_disk.version == 2);
+    CHECK(on_disk.device.id == FIRST_ID);
+    CHECK(on_disk.device.run_player == "first");
+    CHECK(on_disk.shared.players[0].coins == std::vector<CoinEntry>{{std::string(FIRST_ID), 137, 0}});
+    CHECK(on_disk.shared.players[0].best == 900);
+    CHECK(on_disk.shared.top10 ==
+          std::vector<ScoreEntry>{{"ADA", 900, std::string(FIRST_ID), 1}, {"BEN", 500, std::string(FIRST_ID), 2}});
+    CHECK(on_disk.device.next_seq == 3);
+}
+
+TEST_CASE("A saved run is kept with the player who paused it", "[integration][controller][save]")
+{
+    MemorySaveStore memory;
+    Rig rig(memory);
+    GameController& c = rig.controller;
+    c.startGame();
+    rig.answer_right();
+    c.pause();
+    SaveData on_disk = saved(memory);
+    REQUIRE(on_disk.device.run.has_value());
+    CHECK(on_disk.device.run_player == "first");
+
+    c.resume(); // the run is spent when it resumes
+    on_disk = saved(memory);
+    CHECK_FALSE(on_disk.device.run.has_value());
+    CHECK(on_disk.device.run_player.empty());
+}
+
+TEST_CASE("A save with no active player gets an unnamed one, as the current player", "[integration][controller][save]")
+{
+    SaveData data;
+    data.shared.players.clear();
+    give_wallet(data, 0);
+    MemorySaveStore memory(*serialise(data));
+    Rig rig(memory);
+    CHECK(rig.id_draws == 2); // the device id, then the id of the new player
+    rig.controller.setSoundEnabled(false);
+    const SaveData on_disk = saved(memory);
+    REQUIRE(on_disk.shared.players.size() == 1);
+    CHECK(on_disk.shared.players[0] == Player{.id = std::string(hex_id(SECOND_ID_BITS))});
+    CHECK(on_disk.device.current_player == hex_id(SECOND_ID_BITS));
+}
+
+TEST_CASE("The best score on the title is the current player's", "[integration][controller][save]")
+{
+    SaveData data;
+    data.shared.players[0].best = 700;
+    data.shared.top10 = {{"ADA", 900, "", 1}};
+    MemorySaveStore memory(*serialise(data));
+    Rig rig(memory);
+    CHECK(rig.controller.best_score() == 700);
+    CHECK(rig.controller.top10().size() == 1);
 }

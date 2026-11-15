@@ -88,13 +88,17 @@ std::string full_save_text()
     }
     s.pause();
     SaveData data;
-    data.coins = 123456;
-    data.won_once = true;
+    data.device.id = "9f1c2a7b3d4e5f60";
+    data.shared.players[0].won_once = true;
+    data.shared.players[0].coins = {{data.device.id, 123456, 0}};
     for (int i = 0; i < 10; ++i)
     {
-        data.top10.push_back({std::string("PLAYER ") + static_cast<char>('A' + i), 100000 - 1000 * i});
+        data.shared.top10.push_back(
+            {std::string("PLAYER ") + static_cast<char>('A' + i), 100000 - 1000 * i, data.device.id, i + 1});
     }
-    data.run = s.snapshot();
+    data.device.next_seq = 11;
+    data.device.run = s.snapshot();
+    data.device.run_player = "first";
     return serialise(data).value();
 }
 

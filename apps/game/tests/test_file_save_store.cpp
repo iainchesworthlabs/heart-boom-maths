@@ -158,7 +158,7 @@ TEST_CASE("A damaged save is moved aside and the game starts on defaults", "[int
     rig.controller.setSoundEnabled(false);
     const ParseResult parsed = parse_save(read_file(path).toStdString());
     CHECK(parsed.status == LoadStatus::OK);
-    CHECK_FALSE(parsed.data.sound);
+    CHECK_FALSE(parsed.data.device.sound);
     CHECK(read_file(path + QStringLiteral(".bad")) == "{ this is not json");
 }
 

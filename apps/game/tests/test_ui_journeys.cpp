@@ -38,10 +38,12 @@ std::string full_list_save()
 {
     SaveData data;
     const char* names[] = {"BOMB SQUAD", "ROCKET", "DAD", "MUM", "SPARKY", "NINJA", "CAT", "ALEX", "SUNNY", "TINY"};
+    std::vector<ScoreEntry> entries;
     for (int i = 0; i < 10; ++i)
     {
-        data.top10.push_back({names[i], 100 - 10 * i});
+        entries.push_back({names[i], 100 - 10 * i});
     }
+    give_top10(data, std::move(entries));
     return *serialise(data);
 }
 
@@ -265,7 +267,7 @@ TEST_CASE("Journey: a new player plays a first game, uses a hint, loses, and is 
     CHECK(j.c().state() == State::Playing);
     CHECK(j.text_of("levelLabel") == "LEVEL 1");
     CHECK(j.text_of("questionCount") == "1 / 10");
-    CHECK_FALSE(j.on_disk().run.has_value());
+    CHECK_FALSE(j.on_disk().device.run.has_value());
 
     // 3. No coins, no hint. One coin is not enough either. Two is exactly the price.
     CHECK_FALSE(j.enabled("hintButton"));
@@ -316,7 +318,7 @@ TEST_CASE("Journey: a new player plays a first game, uses a hint, loses, and is 
     }
     REQUIRE(j.c().state() == State::LevelClear);
     CHECK(j.screen() == "levelClear");
-    CHECK(j.on_disk().coins == j.c().wallet());
+    CHECK(wallet_of(j.on_disk()) == j.c().wallet());
 
     // 7. NEXT LEVEL: level 2 with a fresh timer.
     j.tap("nextLevelButton");
@@ -331,8 +333,8 @@ TEST_CASE("Journey: a new player plays a first game, uses a hint, loses, and is 
     j.wait_out_holds();
     REQUIRE(j.screen() == "nameEntry");
     CHECK(j.c().name_entry_rank() == 1);
-    CHECK(j.on_disk().top10.empty()); // nothing is in the list until SAVE
-    CHECK(j.on_disk().coins == j.c().wallet());
+    CHECK(j.on_disk().shared.top10.empty()); // nothing is in the list until SAVE
+    CHECK(wallet_of(j.on_disk()) == j.c().wallet());
     CHECK_FALSE(j.enabled("saveButton"));
 
     // 9. A name, SAVE: the top 10 with the new entry marked, and the list is on disk.
@@ -341,9 +343,9 @@ TEST_CASE("Journey: a new player plays a first game, uses a hint, loses, and is 
     j.tap("saveButton");
     REQUIRE(j.screen() == "top10");
     CHECK(j.c().highlight_rank() == 1);
-    REQUIRE(j.on_disk().top10.size() == 1);
-    CHECK(j.on_disk().top10.front().name == "ZOE");
-    CHECK(j.on_disk().top10.front().score == j.c().final_score());
+    REQUIRE(j.on_disk().shared.top10.size() == 1);
+    CHECK(j.on_disk().shared.top10.front().name == "ZOE");
+    CHECK(j.on_disk().shared.top10.front().score == j.c().final_score());
 
     // 10. Back lands on the game-over card, where the score is the best.
     j.tap("backButton");
@@ -355,7 +357,7 @@ TEST_CASE("Journey: a new player plays a first game, uses a hint, loses, and is 
     REQUIRE(j.screen() == "play");
     CHECK(j.text_of("levelLabel") == "LEVEL 1");
     CHECK(j.text_of("pointsValue") == "0");
-    CHECK(j.c().wallet() == j.on_disk().coins); // the coins stayed
+    CHECK(j.c().wallet() == wallet_of(j.on_disk())); // the coins stayed
 }
 
 // ---- Journey: dying and ranking
@@ -408,8 +410,8 @@ TEST_CASE("Journey: a score that does not rank, then one that does, then SKIP an
     j.tap("skipButton");
     REQUIRE(j.screen() == "gameOver");
     CHECK_FALSE(j.visible("newBestBadge"));
-    CHECK(j.on_disk().top10.size() == 10);
-    CHECK(j.on_disk().top10.back().name == "TINY");
+    CHECK(j.on_disk().shared.top10.size() == 10);
+    CHECK(j.on_disk().shared.top10.back().name == "TINY");
 
     // 6. PLAY AGAIN and the same again; SAVE this time: the new entry is 8th and the 10th falls off.
     j.tap("playAgainButton");
@@ -426,7 +428,7 @@ TEST_CASE("Journey: a score that does not rank, then one that does, then SKIP an
     CHECK(property_of(j.h.find_item("scoreRow8"), "highlighted").toBool());
     CHECK(property_of(j.h.find_item("scoreRow8"), "name").toString() == "KIT");
     CHECK(j.has("scoreRow10"));
-    const std::vector<ScoreEntry> disk = j.on_disk().top10;
+    const std::vector<ScoreEntry> disk = j.on_disk().shared.top10;
     REQUIRE(disk.size() == 10);
     CHECK(disk[7].name == "KIT");
     CHECK(disk[9].name == "SUNNY"); // the entry at 10 points, TINY, is the one that fell off
@@ -456,8 +458,8 @@ TEST_CASE("Journey: clearing level 12 pays the bonus once, KEEP GOING into endle
     REQUIRE(j.screen() == "won");
     CHECK(property_of(j.h.find("bonusCard"), "text").toString() == "+1,000 COINS");
     CHECK(j.c().win_bonus() == 1000);
-    CHECK(j.on_disk().won_once);
-    CHECK(j.on_disk().coins == j.c().wallet());
+    CHECK(current_player(j.on_disk())->won_once);
+    CHECK(wallet_of(j.on_disk()) == j.c().wallet());
     CHECK(j.c().wallet() >= 1000);
 
     // 2. KEEP GOING: level 13, the first endless level, with its badge.
@@ -470,11 +472,11 @@ TEST_CASE("Journey: clearing level 12 pays the bonus once, KEEP GOING into endle
     j.rig.play_for_ms(2000);
     j.tap("pauseButton");
     REQUIRE(j.visible("pauseOverlay"));
-    CHECK(j.on_disk().run.has_value());
+    CHECK(j.on_disk().device.run.has_value());
     j.tap("quitButton");
     REQUIRE(j.screen() == "nameEntry");
     CHECK(j.c().end_reason() == GameController::EndReason::Quit);
-    CHECK_FALSE(j.on_disk().run.has_value()); // an ended game leaves no run to continue
+    CHECK_FALSE(j.on_disk().device.run.has_value()); // an ended game leaves no run to continue
     j.type_name("ace");
     j.tap("saveButton");
     REQUIRE(j.screen() == "top10");
@@ -498,7 +500,7 @@ TEST_CASE("Journey: clearing level 12 pays the bonus once, KEEP GOING into endle
     CHECK(j.c().win_bonus() == 0);
     CHECK(property_of(j.h.find("bonusCard"), "text").toString() == "BONUS WON BEFORE");
     CHECK(j.c().wallet() - wallet_after_first_game < 1000);
-    CHECK(j.on_disk().won_once);
+    CHECK(current_player(j.on_disk())->won_once);
 
     // 5. FINISH ends the game like QUIT: no BOOM, the name screen, SKIP, the card.
     j.tap("finishButton");
@@ -536,7 +538,7 @@ TEST_CASE("Journey: pause, Settings from the pause screen, leave the app, be kil
         first.tap("pauseButton");
         REQUIRE(first.c().state() == State::Paused);
         REQUIRE(first.visible("pauseOverlay"));
-        CHECK(first.on_disk().run.has_value());
+        CHECK(first.on_disk().device.run.has_value());
         const int frozen = first.c().ticks_left();
         first.rig.play_for_ms(5000);
         CHECK(first.c().ticks_left() == frozen);
@@ -555,14 +557,14 @@ TEST_CASE("Journey: pause, Settings from the pause screen, leave the app, be kil
         // 3. RESUME and then the app is switched away from: it pauses at once with the clock stopped.
         first.tap("resumeButton");
         REQUIRE(first.c().state() == State::Playing);
-        CHECK_FALSE(first.on_disk().run.has_value()); // spent on resuming
+        CHECK_FALSE(first.on_disk().device.run.has_value()); // spent on resuming
         first.rig.play_for_ms(1000);
         first.background();
         REQUIRE(first.c().state() == State::Paused);
         REQUIRE(first.screen() == "play");
         CHECK(first.visible("pauseOverlay"));
         CHECK(first.rig.audio.suspends == 1);
-        CHECK(first.on_disk().run.has_value());
+        CHECK(first.on_disk().device.run.has_value());
         const int at_leaving = first.c().ticks_left();
         first.rig.play_for_ms(20000);
         CHECK(first.c().ticks_left() == at_leaving);
@@ -605,7 +607,7 @@ TEST_CASE("Journey: pause, Settings from the pause screen, leave the app, be kil
     CHECK(static_cast<int>(second.c().points()) == points);
     CHECK(second.c().ticks_left() == ticks);
     CHECK(second.c().question_parts() == parts);
-    CHECK_FALSE(second.on_disk().run.has_value());
+    CHECK_FALSE(second.on_disk().device.run.has_value());
     second.rig.play_for_ms(5000);
     CHECK(second.c().ticks_left() == ticks);
 
@@ -617,7 +619,7 @@ TEST_CASE("Journey: pause, Settings from the pause screen, leave the app, be kil
 
     // 8. Leaving again saves a new run, and NEW GAME on the next launch throws it away.
     second.background();
-    REQUIRE(second.on_disk().run.has_value());
+    REQUIRE(second.on_disk().device.run.has_value());
     Journey third(PHONE, second.save());
     REQUIRE(third.visible("continueButton"));
     third.tap("playButton");
@@ -625,7 +627,7 @@ TEST_CASE("Journey: pause, Settings from the pause screen, leave the app, be kil
     CHECK(third.c().state() == State::Playing);
     CHECK(third.c().level() == 1);
     CHECK(third.c().question_number() == 1);
-    CHECK_FALSE(third.on_disk().run.has_value());
+    CHECK_FALSE(third.on_disk().device.run.has_value());
     CHECK_FALSE(third.c().has_saved_run());
 }
 
@@ -634,15 +636,15 @@ TEST_CASE("Journey: a saved run that cannot be opened, and a save from a newer v
     SECTION("a run the game cannot restore leaves a calm title and a working PLAY")
     {
         SaveData data;
-        data.coins = 7;
-        data.run = std::vector<std::int64_t>{1, 2, 3};
+        give_wallet(data, 7);
+        give_run(data, {1, 2, 3});
         Journey j(PHONE, *serialise(data));
         REQUIRE(j.visible("continueButton"));
         j.tap("continueButton");
         CHECK(j.screen() == "title");
         CHECK_FALSE(j.visible("continueButton"));
         CHECK(j.c().wallet() == 7);
-        CHECK_FALSE(j.on_disk().run.has_value());
+        CHECK_FALSE(j.on_disk().device.run.has_value());
         j.tap("playButton");
         CHECK(j.screen() == "play");
     }
@@ -685,8 +687,8 @@ TEST_CASE("Journey: Settings switches, the gate for Game Center and for a link, 
         j.tap("musicSwitch");
         CHECK_FALSE(j.rig.audio.effects_enabled);
         CHECK_FALSE(j.rig.audio.music_enabled);
-        CHECK_FALSE(j.on_disk().sound);
-        CHECK_FALSE(j.on_disk().music);
+        CHECK_FALSE(j.on_disk().device.sound);
+        CHECK_FALSE(j.on_disk().device.music);
 
         // 2. Game Center, where there is a leaderboard: the gate, a wrong number, CANCEL; then the right number.
         j.tap("gameCenterSwitch");
@@ -697,13 +699,13 @@ TEST_CASE("Journey: Settings switches, the gate for Game Center and for a link, 
         CHECK_FALSE(j.c().game_center_enabled());
         j.tap("cancelButton");
         CHECK_FALSE(j.c().gate_active());
-        CHECK_FALSE(j.on_disk().game_center);
+        CHECK_FALSE(j.on_disk().device.game_center);
         j.tap("gameCenterSwitch");
         j.keypad(j.gate_answer());
         j.tap("openButton");
         CHECK(j.c().game_center_enabled());
         CHECK(j.rig.scores.enabled);
-        CHECK(j.on_disk().game_center);
+        CHECK(j.on_disk().device.game_center);
         CHECK(j.page() == "settings");
 
         // 3. About from Settings, and a link: the gate, the Escape key closes it, then the right number opens it once.
@@ -898,18 +900,18 @@ TEST_CASE("Lifecycle: leaving the app and coming back in every state shows the s
             CHECK(j.visible(test.shown));
             CHECK_FALSE(j.c().gate_active());
             CHECK(j.c().wallet() == wallet);
-            CHECK(j.on_disk().coins == wallet);
+            CHECK(wallet_of(j.on_disk()) == wallet);
             if (test.where == Where::PLAYING || test.where == Where::PAUSED)
             {
-                CHECK(j.on_disk().run.has_value());
+                CHECK(j.on_disk().device.run.has_value());
             }
             else
             {
-                CHECK_FALSE(j.on_disk().run.has_value());
+                CHECK_FALSE(j.on_disk().device.run.has_value());
             }
             if (test.where == Where::WON)
             {
-                CHECK(j.on_disk().won_once);
+                CHECK(current_player(j.on_disk())->won_once);
             }
         }
     }

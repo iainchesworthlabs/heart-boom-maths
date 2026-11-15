@@ -18,18 +18,21 @@ namespace heart_boom_maths
 using MigrationStep = bool (*)(json::Value& document);
 
 /// The schema this build understands: the current version and the steps that lead to it. `steps[i]` takes version
-/// i + 1 to i + 2, so there are `current_version - 1` of them. The release schema has version 1 and no steps; tests
-/// build their own to prove the chain without shipping a made-up migration.
+/// i + 1 to i + 2, so there are `current_version - 1` of them. The release schema has version 2 and one step, from 1;
+/// tests build their own to prove the chain without shipping a made-up migration.
 struct SaveSchema
 {
     int current_version = SAVE_VERSION;
     std::span<const MigrationStep> steps;
 
-    [[nodiscard]] static SaveSchema release() noexcept
-    {
-        return {};
-    }
+    [[nodiscard]] static SaveSchema release() noexcept;
 };
+
+/// The step from version 1 to version 2: one player, `first`, with the old wallet and win-bonus mark; the old top 10
+/// numbered in rank order; the settings and the saved run on the device. It moves values as they are and leaves their
+/// checking to the reader, so a damaged version 1 file reports the same rule it always did. Returns false only for a
+/// document that is not an object.
+[[nodiscard]] bool migrate_save_v1_to_v2(json::Value& document);
 
 enum class LoadStatus
 {

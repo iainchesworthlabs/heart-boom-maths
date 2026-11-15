@@ -80,16 +80,32 @@ std::string random_jsonish(Rng& rng, std::size_t length)
                                                   "false",
                                                   "null",
                                                   "version",
+                                                  "device",
+                                                  "shared",
+                                                  "players",
                                                   "coins",
                                                   "top10",
                                                   "name",
+                                                  "name_rev",
                                                   "score",
+                                                  "seq",
+                                                  "earned",
+                                                  "spent",
+                                                  "removed",
+                                                  "best",
+                                                  "id",
+                                                  "first",
+                                                  "current_player",
+                                                  "next_seq",
                                                   "run",
+                                                  "run_player",
                                                   "sound",
                                                   "music",
                                                   "won_once",
                                                   "game_center",
                                                   "haptics",
+                                                  "cloud_sync",
+                                                  "9f1c2a7b3d4e5f60",
                                                   " ",
                                                   "\n",
                                                   "\xC3",
@@ -148,14 +164,24 @@ std::string mutate(Rng& rng, std::string text)
 std::string rich_save()
 {
     SaveData data;
-    data.coins = 1234;
-    data.won_once = true;
-    data.game_center = true;
+    data.device.id = "9f1c2a7b3d4e5f60";
+    data.device.game_center = true;
+    data.device.cloud_sync = true;
+    data.device.next_seq = 11;
+    data.shared.players[0].name = "ROCKET";
+    data.shared.players[0].name_rev = 1;
+    data.shared.players[0].won_once = true;
+    data.shared.players[0].best = 10000;
+    data.shared.players[0].coins = {{data.device.id, 1234, 100}, {"0123456789abcdef", 5, 0}};
+    data.shared.players.push_back(Player{.id = "a1b2c3d4e5f60718", .name = "BEN", .name_rev = 2});
+    data.shared.players.push_back(Player{.id = "00000000000000ff", .removed = true});
     for (int i = 0; i < 10; ++i)
     {
-        data.top10.push_back({"PLAYER " + std::string(1, static_cast<char>('A' + i)), 10000 - i * 7});
+        data.shared.top10.push_back(
+            {"PLAYER " + std::string(1, static_cast<char>('A' + i)), 10000 - i * 7, data.device.id, i + 1});
     }
-    data.run = std::vector<std::int64_t>{3, 1, 400, -9, 9223372036854775807, 0, 12, 12, 12};
+    data.device.run = std::vector<std::int64_t>{3, 1, 400, -9, 9223372036854775807, 0, 12, 12, 12};
+    data.device.run_player = "first";
     return serialise(data).value();
 }
 
@@ -187,7 +213,8 @@ TEST_CASE("random JSON-shaped garbage never crashes the reader", "[property][fuz
 TEST_CASE("mutated saves never crash the reader or yield invalid data", "[property][fuzz][save]")
 {
     Rng rng(SEED + 2);
-    const std::string seeds[] = {rich_save(), std::string(SAVE_V1_FIXTURE), serialise(SaveData{}).value()};
+    const std::string seeds[] = {rich_save(), std::string(SAVE_V1_FIXTURE), std::string(SAVE_V2_FIXTURE),
+                                 serialise(SaveData{}).value()};
     int still_ok = 0;
     for (int i = 0; i < CASES; ++i)
     {
@@ -236,7 +263,9 @@ TEST_CASE("hostile shapes are refused quickly", "[unit][fuzz][save]")
         damaged(deep);
     }
     damaged("{\"version\":1,\"run\":[" + std::string(300000, '1') + "]}");
+    damaged("{\"version\":2,\"device\":{\"run\":[" + std::string(300000, '1') + "]}}");
     damaged("{\"version\":1,\"coins\":0,\"name\":\"" + std::string(100000, 'A') + "\"}");
+    damaged("{\"version\":2,\"shared\":{\"players\":[{\"name\":\"" + std::string(100000, 'A') + "\"}]}}");
     {
         std::string wide = "{\"version\":1,\"top10\":[";
         for (int i = 0; i < 20000; ++i)
@@ -244,6 +273,21 @@ TEST_CASE("hostile shapes are refused quickly", "[unit][fuzz][save]")
             wide += i == 0 ? "{}" : ",{}";
         }
         damaged(wide + "]}");
+    }
+    {
+        // Thousands of players and thousands of coin entries are refused before any of them is read.
+        std::string players = "{\"version\":2,\"shared\":{\"players\":[";
+        for (int i = 0; i < 20000; ++i)
+        {
+            players += i == 0 ? "{}" : ",{}";
+        }
+        damaged(players + "]}}");
+        std::string coins = "{\"version\":2,\"shared\":{\"players\":[{\"coins\":[";
+        for (int i = 0; i < 20000; ++i)
+        {
+            coins += i == 0 ? "{}" : ",{}";
+        }
+        damaged(coins + "]}]}}");
     }
     {
         // Many small members: well inside the size limit, and must not take quadratic time or crash.
