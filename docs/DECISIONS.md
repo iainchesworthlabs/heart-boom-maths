@@ -74,7 +74,7 @@ Order of work: the foundation (players, save version 2, the merge, iCloud sync),
 
 The mechanics of the party cat, the bonus animal and diamonds are new proposals: the PRD holds only their names.
 
-Still to do for decision 1, with the sync work: `COMPLIANCE.md`, the privacy policy and the store forms, and a check of how Apple's privacy answers treat data kept in the user's own iCloud.
+Decision 1 is built (the cloud-sync branch): `COMPLIANCE.md` and the privacy policy are written, and `ios.md` lists what was and was not confirmed against Apple's documentation. Still to do, and the owner's: the store forms and App Privacy answers (Apple's definition of "collect" does not name iCloud, so how data kept in the user's own iCloud is answered is for the owner to confirm), turning the iCloud capability on for the App ID, and the device tests.
 
 ### Gaps in the players rules (15 Nov 2026)
 

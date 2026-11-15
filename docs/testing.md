@@ -200,10 +200,11 @@ is usually that runtime's: look for a frame in this project's code before suspec
 ctest --preset linux-debug -L unit
 ```
 
-Screenshots for a design review: the hidden test `Screenshots of the title chip, WHO'S PLAYING and the name screen of a player`
-(tag `[screenshots]`, in `test_ui_journeys.cpp`) writes PNG files of the players screens at the compact and the regular
-size when `HBM_SCREENSHOT_DIR` names a folder, and does nothing otherwise. Run it by hand:
-`HBM_SCREENSHOT_DIR=private/qa-compare/players heart_boom_maths_ui_tests "[screenshots]"`.
+Screenshots for a design review: the hidden tests `Screenshots of the title chip, WHO'S PLAYING and the name screen of a player`
+(in `test_ui_journeys.cpp`) and `Screenshots of Settings with the iCloud sync row` (in `test_ui_cloud.cpp`), both tagged
+`[screenshots]`, write PNG files at the compact and the regular size when `HBM_SCREENSHOT_DIR` names a folder, and do
+nothing otherwise (the Settings one writes `settings-icloud-compact.png` and `settings-icloud-regular.png`). Run them by
+hand: `HBM_SCREENSHOT_DIR=private/qa-compare/players heart_boom_maths_ui_tests "[screenshots]"`.
 
 ## Performance tests
 

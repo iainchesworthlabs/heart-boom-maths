@@ -48,7 +48,7 @@ Every state of the core has exactly one screen, and every screen can be left by 
 | About (page) | from Settings | the back arrow (to Settings); the licence and notices texts open over it and close with their own back arrow |
 | WHO'S PLAYING (page) | from the player chip on the title | the back arrow; a player's card (makes that player current); NAME or RENAME (the player's name screen); ADD PLAYER (the name screen of the new player); REMOVE (the gate) |
 | Player name (page) | from WHO'S PLAYING | SAVE (gives the name), SKIP for a player just added or CANCEL for a rename, Escape and the back key (the same as SKIP or CANCEL); each goes back to WHO'S PLAYING |
-| Parental gate | the controller has one open: About's two links, the Game Center switch, REMOVE on WHO'S PLAYING | CANCEL, the back arrow, or the right number |
+| Parental gate | the controller has one open: About's two links, the Game Center switch, the iCloud sync switch, REMOVE on WHO'S PLAYING | CANCEL, the back arrow, or the right number |
 
 ## State and transition table
 
@@ -78,6 +78,8 @@ The controller states, the trigger of each move, and what is written to the save
 | Idle, GameOver | REMOVE and the right number | same | the player is marked removed; that player's saved run is deleted |
 | GameOver | HOME | GameOver, title overlay | none |
 | any | a setting changes | same | the setting |
+| Idle, Paused, GameOver with no name waiting | iCloud sync is on and a trigger arrives (the switch turned on, start-up, the app active, the store reporting a change, a save) | same | the cloud copy, and when the other devices had more, the local save and the player's wallet |
+| Playing, LevelClear, Won, GameOver with a name waiting | the same trigger | same | nothing: a sync is owed and runs at the next moment above |
 | any | the app leaves the foreground | same, or Paused from Playing | everything above, as in the lifecycle table |
 
 Every game over, whatever the reason, submits the final score to the score service once (a no-op unless Game Center is on and available) and offers the name screen when the score qualifies, as SPEC says for QUIT and FINISH.
@@ -155,6 +157,17 @@ Tests: `Journey: the chip on the title opens WHO'S PLAYING; add, switch, rename 
 7. Players are switched from the title only. While a game is played, paused, on a card, on the win screen or waiting for a name, the controller refuses; the chip is not on those screens.
 8. A player with a name who earns a place in the top 10 sees no name screen: the entry is saved at once under their name and the Top 10 page opens with it marked, then the game-over card. A player with no name is asked once, and SAVE names the player. Every finished game counts towards the player's best, so NEW BEST! on the card means a better score than that player's own best.
 
+### 7. iCloud sync between a family's devices
+
+Tests: `test_cloud_controller.cpp` (the controller), `test_cloud_sync.cpp` (the rules) and `test_ui_cloud.cpp` (the row and the gate). Only on an Apple device with an iCloud account; elsewhere there is no row and nothing below happens.
+
+1. Settings shows iCloud sync under Game Center (and under Haptics), OFF. Nothing has been read, written or listened to: a default install never contacts iCloud.
+2. The switch opens the gate (ASK A GROWN-UP, "To turn on iCloud sync", TURN ON). A wrong number or CANCEL leaves it off and the store untouched. The right number turns it on, and the first sync runs: the players and the top 10 go to the family's iCloud if it holds nothing, or are joined with what another device put there.
+3. While it is on, a change another device made reaches this one when the store says so, when the app comes back, and at each save. It is taken only on the title or the pause screen. During play, on the level-clear card, on the win screen or while a name is waiting, it waits and is taken at the next such moment, so a level never changes the coins under the player. The title, WHO'S PLAYING and the top 10 then show the other device's players, names, coins and scores. If the player here was removed on the other device, another player becomes current.
+4. Coins earned on two devices are added, not replaced: a player who earned 50 on the phone and 30 on the tablet has 80 on both.
+5. The switch turns off at once, with no gate. The copy in iCloud stays, and nothing more is read or written until it is turned on again (with the gate).
+6. If the person signs out of iCloud, the row goes away and sync stops; the choice is kept, and sync resumes when an account returns. An iCloud copy written by a later build of the game is left alone.
+
 ## Leaving the foreground
 
 Tests: the `Lifecycle:` cases in `test_ui_journeys.cpp`, and `Leaving the foreground in every state keeps what the save promises` in `test_game_controller.cpp`. The app calls `GameController::on_application_state(false)` when Qt reports a state other than Active (a lock screen, a call, an app switch, a window losing focus, a hidden browser tab). It pauses a running game, stops the tick driver and the ticking sound, suspends audio, closes the gate, and writes the save. Coming back resumes audio only.
@@ -191,7 +204,8 @@ The ticking sound stops when the game pauses, when it leaves the alert zone and 
 | Game over (bomb, QUIT or FINISH) | wallet and the player's best; the player's own run is removed |
 | SAVE on the name screen | top 10, and the player's name |
 | A game that ends with a place in the top 10, for a named player | top 10 and the player's best, with the wallet |
-| A setting changes, or the gate passes for Game Center | the setting |
+| A setting changes, or the gate passes for Game Center or iCloud sync | the setting |
+| An iCloud sync that changed the local data | the player list, the wallets and the top 10 (the device's own settings, run and current player stay) |
 | Any other time the app leaves the foreground | everything that is current |
 
 Writes are atomic (a temporary file renamed over the old one). A damaged file is moved to `save.json.bad` before the first write and the game starts on defaults. A file with a higher version is read as defaults, no save is written for the whole session, and the file is never touched (`A save from a newer version is never overwritten`, and the newer-save journey above). A saved run is never offered from either kind of file.
@@ -237,6 +251,8 @@ OK means the code does it and a test covers it. The tests are in `apps/game/test
 | Killed on the name screen, on level clear, on win | decision | D2, D1 |
 | The Top 10 from the title, from game over, after SAVE | OK | journeys 1 and 2; `The top 10 opens from the title and from the game-over card...` |
 | Settings saved and applied; Game Center only where available and behind the gate | OK | journey 5; `Game Center turns on only behind the gate and off at once` |
+| iCloud sync only where available, behind the gate, off at once, no store use while off | OK | journey 7; `Turning iCloud sync on goes through the parental gate and leaves it on`, `The switch is off by default, and the store is not touched until it is on` |
+| A change from another device during play, on a card, or while a name waits | OK: owed, taken at the next title or pause | journey 7 step 3; `A trigger during play only marks a sync as owed...` |
 | About links: cancel, wrong number, right number | OK | journey 5; `Opening a link never reaches the link opener until the gate is passed...` |
 | The gate when the app leaves the foreground | fixed | journey 5 step 4 |
 | Escape and back on every screen | fixed, with D5 | `Keys:` cases |
@@ -253,4 +269,4 @@ OK means the code does it and a test covers it. The tests are in `apps/game/test
 
 ## Not verified here
 
-Everything above runs offscreen with a manual clock. Not tried: Qt's application-state events on a real iOS, Android or browser build (the release checklist covers them), the Android back key on a device, Windows and Linux parental controls, and a hard kill of the real process (the restart in the tests is a second controller on the first one's save text).
+Everything above runs offscreen with a manual clock. The iCloud store itself (the Apple calls) was not run: it is the one part that needs two Apple devices ([iOS](ios.md)). Not tried: Qt's application-state events on a real iOS, Android or browser build (the release checklist covers them), the Android back key on a device, Windows and Linux parental controls, and a hard kill of the real process (the restart in the tests is a second controller on the first one's save text).

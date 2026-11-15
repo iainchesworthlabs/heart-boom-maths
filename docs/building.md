@@ -47,7 +47,7 @@ ctest --preset linux-debug
 | `windows-msvc-asan` | AddressSanitizer on Windows; no Tracy |
 | `windows-msvc-profile`, `linux-profile` | Optimised with symbols, Tracy on and started at launch, for taking a profile. The Windows one also builds `tracy-capture` and `tracy-csvexport`. See [Profiling](profiling.md) |
 | `ios-release` | The iPhone and iPad application (`apps/ios`), unsigned, on a Mac with Xcode; no tests and no Qt application |
-| `ios-game-release` | The whole game on an iPhone or iPad, linked statically against Qt for iOS, unsigned, on a Mac with Xcode. See iOS below and [iOS and Game Center](ios.md) |
+| `ios-game-release` | The whole game on an iPhone or iPad, linked statically against Qt for iOS, unsigned, on a Mac with Xcode. See iOS below and [iOS, Game Center and iCloud sync](ios.md) |
 | `wasm-release` | The game in a browser (`apps/game`), single-threaded. See WebAssembly below |
 | `android-arm64-release`, `android-arm64-debug` | The game for an Android phone or tablet: an unsigned APK and AAB, and a debug-signed APK. See Android below |
 | `wasm-core` | The rules and the text harness for Node, to check the golden replays on WebAssembly. See WebAssembly below |
@@ -124,9 +124,14 @@ kit (the module `qtmultimedia` is not needed), whose root is the environment var
 `qt.toolchain.cmake` is the preset's toolchain file, and the macOS desktop kit in `ICL_QT_ROOT`, which Qt uses as its host
 tools (`QT_HOST_PATH`). It does not use vcpkg, builds no tests and does not build `apps/ios`. The bundle is described in
 `apps/game/ios/` (`Info.plist.in`, the entitlements, the asset catalogue) and checked with
-`apps/game/ios/verify_game_app.sh <app> --bundle-id <id> --executable heart-boom-maths --entitlements apps/game/ios/heart-boom-maths.entitlements`.
+`apps/game/ios/verify_game_app.sh <app> --bundle-id <id> --executable heart-boom-maths --entitlements build/ios-game-release/heart-boom-maths.entitlements`.
 `HEART_BOOM_MATHS_IOS_BUILD_NUMBER`, `HEART_BOOM_MATHS_IOS_SIGNING_TEAM` and `HEART_BOOM_MATHS_IOS_SIGNING_PROFILE` work as
-for `ios-release`.
+for `ios-release`. Two options choose the entitlements of the bundle, and each is ON by default for a local build:
+`HEART_BOOM_MATHS_IOS_GAME_CENTER` (`com.apple.developer.game-center`) and `HEART_BOOM_MATHS_IOS_ICLOUD`
+(`com.apple.developer.ubiquity-kvstore-identifier`, for iCloud sync). A signed build asks for an entitlement only when its
+provisioning profile carries it, which the release workflow reads; turn the matching option OFF for a profile that does not.
+CMake writes the entitlements file for the two options to `heart-boom-maths.entitlements` in the build directory; give that
+file to `verify_game_app.sh`, with `--game-center` and `--icloud` set to the same states (`docs/ios.md`).
 ### Android
 
 `cmake --preset android-arm64-release` (an unsigned APK and AAB) and `android-arm64-debug` (an APK signed with Android's debug

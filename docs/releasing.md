@@ -66,6 +66,10 @@ job, of what it checks and of the Game Center rule below.
 - **Game Center follows the profile.** The entitlement is requested only when the provisioning profile carries it
   (`HEART_BOOM_MATHS_IOS_GAME_CENTER`, set by the job from the profile). Without it the build is signed and goes to
   TestFlight, and signing in to Game Center fails quietly in the game. The job prints which it chose.
+- **iCloud sync follows the profile, the same way.** The key-value store entitlement
+  (`com.apple.developer.ubiquity-kvstore-identifier`) is requested (`HEART_BOOM_MATHS_IOS_ICLOUD`) only when the profile
+  carries it with the value `TEAMID.com.iainchesworthlabs.heartboommaths`. Without it the build is signed and goes to
+  TestFlight with no iCloud sync switch in Settings. The job prints which it chose.
 - **Running it by hand.** `gh workflow run release.yml --ref <branch>` builds and signs the game and has Apple validate
   it; add `-f upload_testflight=true` to upload the build to TestFlight from a branch with no tag. The other release jobs
   run too; the iOS one is `Package (iOS)`.
@@ -96,6 +100,9 @@ What the owner does in Apple's developer portal and App Store Connect, once per 
    App ID, make the App Store profile again and set the secret again, create the leaderboard in App Store Connect and put
    its identifier into `GAME_CENTER_LEADERBOARD_ID`. Also still to come before the store, not TestFlight: the real app
    icon and a privacy policy URL.
+7. For iCloud sync (not needed for a first TestFlight build): turn the **iCloud** capability on for the App ID with
+   **Key-value storage** ticked (no iCloud Documents or CloudKit), make the App Store profile again (once, after Game Center
+   and iCloud are both on) and set the secret again. Then the two-device and child-account tests of `docs/ios.md`.
 
 The agent that works in the repository does none of these: secrets, variables and the Apple account are the owner's.
 
