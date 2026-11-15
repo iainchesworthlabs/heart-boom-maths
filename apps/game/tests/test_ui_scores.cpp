@@ -42,8 +42,8 @@ struct SizeCase
 std::string save_text(const std::vector<ScoreEntry>& top10, bool won_once = false)
 {
     SaveData data;
-    data.top10 = top10;
-    data.won_once = won_once;
+    give_top10(data, top10);
+    data.shared.players[0].won_once = won_once;
     const auto text = serialise(data);
     REQUIRE(text.has_value());
     return *text;
@@ -551,8 +551,10 @@ TEST_CASE("SKIP drops the entry and lands on the game-over card; the top 10 stay
     s.tap("skipButton");
     CHECK(s.screen() == "gameOver");
     CHECK(s.c().top10().isEmpty());
-    CHECK_FALSE(s.visible("newBestBadge"));
-    CHECK(s.value_of("bestScoreRow") == "0");
+    // The entry is dropped, but the game still counts towards the player's best (SPEC, Players): NEW BEST! is about the
+    // player's own best and not about the list.
+    CHECK(s.visible("newBestBadge"));
+    CHECK(s.value_of("bestScoreRow") == "40");
 
     // The top 10 opens from the card, says it is empty, and backs out to the card again.
     s.tap("top10Button");

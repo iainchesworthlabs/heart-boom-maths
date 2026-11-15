@@ -10,6 +10,7 @@
 #include "services/audio_service.hpp"
 #include "services/build_info.hpp"
 #include "services/clock.hpp"
+#include "services/cloud_store.hpp"
 #include "services/haptics_service.hpp"
 #include "services/link_opener.hpp"
 #include "services/save_quarantine.hpp"
@@ -51,6 +52,7 @@ struct GameServices
     HapticsService* haptics = nullptr; // optional: a null service is the same as a device that cannot
     LinkOpener* links = nullptr;
     Clock* clock = nullptr;
+    CloudStore* cloud = nullptr; // optional: none is the same as a device that cannot sync (NullCloudStore)
 };
 
 struct GameOptions
@@ -61,6 +63,10 @@ struct GameOptions
     /// Where the parental gate gets the seed of each challenge. Empty means the system random generator. Tests set it
     /// to a fixed list so the number to type back is known.
     std::function<std::uint64_t()> gate_seed_source;
+
+    /// Where the 64 random bits come from that become this device's id, and the id of a player the save needs and does
+    /// not have. Empty means the system random generator. Tests set it to a fixed value so the ids are known.
+    std::function<std::uint64_t()> id_source;
 
     /// How long answer taps are ignored after a level starts or the pause screen closes. Tests that tap straight away
     /// set it to 0.
@@ -155,11 +161,25 @@ class GameController final : public QObject
     Q_PROPERTY(qint64 bestScore READ best_score NOTIFY topScoresChanged FINAL)
     Q_PROPERTY(int highlightRank READ highlight_rank NOTIFY topScoresChanged FINAL)
 
-    // The saved run that CONTINUE offers on the title screen.
+    // The saved run that CONTINUE offers on the title screen. A device keeps one run, with the player who paused it, so
+    // both are false and empty while another player is the current one.
     Q_PROPERTY(bool hasSavedRun READ has_saved_run NOTIFY savedRunChanged FINAL)
     // What the saved run was when it was saved, for the caption under CONTINUE: keys level and secondsLeft. Empty when
-    // there is no run, or when it is not a state the core would restore.
+    // there is no run, when it is another player's, or when it is not a state the core would restore.
     Q_PROPERTY(QVariantMap savedRun READ saved_run NOTIFY savedRunChanged FINAL)
+
+    // The players. `players` lists the active ones in the order of the save; each map has id, name (empty until it is
+    // typed), displayName (the name, or PLAYER 1, PLAYER 2 and so on by place in this list), best, coins, current and
+    // named. `playerName` and `playerId` are the current player's. canChangePlayers is true only on the title (the core
+    // idle, or over and dealt with): switching, adding and removing are refused in every other state. canAddPlayer is
+    // false when the list is full (maxPlayers, from the tuning) and canRemovePlayer when only one player is left.
+    Q_PROPERTY(QVariantList players READ players NOTIFY playersChanged FINAL)
+    Q_PROPERTY(QString playerName READ player_name NOTIFY playersChanged FINAL)
+    Q_PROPERTY(QString playerId READ player_id NOTIFY playersChanged FINAL)
+    Q_PROPERTY(int maxPlayers READ max_players CONSTANT FINAL)
+    Q_PROPERTY(bool canChangePlayers READ can_change_players NOTIFY playersChanged FINAL)
+    Q_PROPERTY(bool canAddPlayer READ can_add_player NOTIFY playersChanged FINAL)
+    Q_PROPERTY(bool canRemovePlayer READ can_remove_player NOTIFY playersChanged FINAL)
 
     // The numbers of the title screen's tagline, from the tuning: the questions of a level and the seconds of level 1.
     Q_PROPERTY(int firstLevelQuestions READ first_level_questions CONSTANT FINAL)
@@ -174,6 +194,12 @@ class GameController final : public QObject
     // then.
     Q_PROPERTY(bool hapticsEnabled READ haptics_enabled NOTIFY settingsChanged FINAL)
     Q_PROPERTY(bool hapticsAvailable READ haptics_available CONSTANT FINAL)
+    // iCloud sync of the players and the top 10 (SPEC, Sync between a family's devices). cloudSyncAvailable is true
+    // only on a device whose cloud store can sync and has an account signed in, and Settings shows the switch only
+    // then; it is read again when the app becomes active, because a person can sign in or out meanwhile.
+    // cloudSyncEnabled is the switch, and is false whenever sync cannot run.
+    Q_PROPERTY(bool cloudSyncEnabled READ cloud_sync_enabled NOTIFY settingsChanged FINAL)
+    Q_PROPERTY(bool cloudSyncAvailable READ cloud_sync_available NOTIFY settingsChanged FINAL)
 
     // The parental gate.
     Q_PROPERTY(bool gateActive READ gate_active NOTIFY gateChanged FINAL)
@@ -183,6 +209,9 @@ class GameController final : public QObject
     Q_PROPERTY(QString gateUrl READ gate_url NOTIFY gateChanged FINAL)
     // How many digits the number has.
     Q_PROPERTY(int gateDigits READ gate_digits CONSTANT FINAL)
+    // The display name of the player a RemovePlayer gate is for, so the screen can say who. Empty for any other
+    // purpose.
+    Q_PROPERTY(QString gatePlayerName READ gate_player_name NOTIFY gateChanged FINAL)
 
     // True when the save on disk came from a newer build: it is left alone, and nothing of this session is saved.
     Q_PROPERTY(bool saveBlocked READ save_blocked CONSTANT FINAL)
@@ -223,12 +252,15 @@ public:
         None,
         Link,
         GameCenter,
+        RemovePlayer,
+        CloudSync,
     };
     Q_ENUM(GatePurpose)
 
     /// Reads the save at once: the wallet, the settings and the top 10 are in the properties from the first read.
     /// Every pointer in `services` except `quarantine` must be set.
     GameController(GameServices services, GameOptions options = {}, QObject* parent = nullptr);
+    ~GameController() override;
 
     // ---- Commands for QML ----------------------------------------------------------------------------------------
 
@@ -247,15 +279,37 @@ public:
     Q_INVOKABLE void keepGoing();
     Q_INVOKABLE void finish();
 
-    /// Name entry. The typed text is normalised (capitals, A to Z and spaces, at most nameMaxLength). Returns the rank
-    /// the entry took, or 0 when nothing was saved.
+    /// Name entry for a score that earned a place, for a player who has no name yet. The typed text is normalised
+    /// (capitals, A to Z and spaces, at most nameMaxLength, no space at either end). It names the current player and
+    /// saves the entry under that name. Returns the rank the entry took, or 0 when nothing was saved. A player who has
+    /// a name gets no name screen: the entry is saved when the game ends (see scoreSavedAtOnce).
     Q_INVOKABLE int saveName(const QString& typed);
+    /// SKIP drops the entry and leaves the player unnamed.
     Q_INVOKABLE void skipName();
     [[nodiscard]] Q_INVOKABLE QString normaliseName(const QString& typed) const;
 
     /// Whether SAVE may be offered for what is typed: the name has at least one letter once cut and normalised. The
     /// core also accepts a name of spaces only, but a score saved under a blank name would show as an empty row.
     [[nodiscard]] Q_INVOKABLE bool canSaveName(const QString& typed) const;
+
+    // ---- WHO'S PLAYING. Switching, adding and removing work only while canChangePlayers (the title).
+
+    /// Makes a player the current one: the wallet is recorded for the old player first, and the session takes the new
+    /// player's wallet and win-bonus mark. Returns true when that player is now current (also when it already was).
+    Q_INVOKABLE bool selectPlayer(const QString& id);
+
+    /// Adds an unnamed player and makes it the current one. Returns the new id, or an empty string when refused (the
+    /// list is full, or the game is not on the title).
+    Q_INVOKABLE QString addPlayer();
+
+    /// Names a player, or renames one, in any state. The typed text is normalised as for a score. Returns false and
+    /// changes nothing when no active player has that id or the name has no letter.
+    Q_INVOKABLE bool renamePlayer(const QString& id, const QString& typed);
+
+    /// Opens the parental gate to remove a player. The player goes, with a saved run that player paused, when the gate
+    /// is passed. Returns false, and opens nothing, when removing is refused: no active player has that id, it is the
+    /// last one, or the game is not on the title.
+    Q_INVOKABLE bool requestRemovePlayer(const QString& id);
 
     Q_INVOKABLE void setSoundEnabled(bool enabled);
     Q_INVOKABLE void setMusicEnabled(bool enabled);
@@ -268,6 +322,10 @@ public:
     /// Turning Game Center off is immediate. Turning it on opens the parental gate. Ignored where the platform has no
     /// leaderboard.
     Q_INVOKABLE void requestGameCenter(bool enabled);
+
+    /// Turning iCloud sync off is immediate, and leaves the copy in the family's iCloud as it is. Turning it on opens
+    /// the parental gate, and the switch is set only when the gate is passed. Ignored where the device cannot sync.
+    Q_INVOKABLE void requestCloudSync(bool enabled);
 
     /// Opens the parental gate for a web address. Only an https address is accepted: returns false for anything else.
     /// The address opens (through LinkOpener) only when submitGate() gets the right number.
@@ -345,6 +403,14 @@ public:
     [[nodiscard]] int highlight_rank() const;
     [[nodiscard]] bool has_saved_run() const;
     [[nodiscard]] QVariantMap saved_run() const;
+    [[nodiscard]] QVariantList players() const;
+    [[nodiscard]] QString player_name() const;
+    [[nodiscard]] QString player_id() const;
+    [[nodiscard]] int max_players() const;
+    [[nodiscard]] bool can_change_players() const;
+    [[nodiscard]] bool can_add_player() const;
+    [[nodiscard]] bool can_remove_player() const;
+    [[nodiscard]] QString gate_player_name() const;
     [[nodiscard]] int first_level_questions() const;
     [[nodiscard]] int first_level_seconds() const;
     [[nodiscard]] bool sound_enabled() const;
@@ -353,6 +419,8 @@ public:
     [[nodiscard]] bool game_center_available() const;
     [[nodiscard]] bool haptics_enabled() const;
     [[nodiscard]] bool haptics_available() const;
+    [[nodiscard]] bool cloud_sync_enabled() const;
+    [[nodiscard]] bool cloud_sync_available() const;
     [[nodiscard]] bool gate_active() const;
     [[nodiscard]] GatePurpose gate_purpose() const;
     [[nodiscard]] QString gate_words() const;
@@ -385,6 +453,7 @@ signals:
     void nameEntryChanged();
     void topScoresChanged();
     void savedRunChanged();
+    void playersChanged();
     void settingsChanged();
     void gateChanged();
 
@@ -398,7 +467,12 @@ signals:
     void alertEntered();
     void levelCleared();
     void gameWon(int bonusCoins);
+    // `rank` is the place the score took in the top 10 (saved at once for a player with a name, or waiting for the name
+    // screen for one without), and 0 when it does not qualify.
     void gameOver(EndReason reason, qint64 score, bool newBest, int rank);
+    // The finished game's score went into the top 10 under the current player's name with no name screen, as it would
+    // after SAVE. Sent right after gameOver; the shell opens the Top 10 page with the entry marked.
+    void scoreSavedAtOnce(int rank);
 
     // The grown-up's answer to the gate was right or wrong.
     void gatePassed(GatePurpose purpose);
@@ -417,17 +491,37 @@ private:
     void finish_game(const Event& event);
     void sync_driver();
     void update_music();
+    void record_session_in_save();
+    void save_now();
     void persist();
+    void apply_cloud_sync();
+    void request_cloud_sync();
+    void run_owed_cloud_sync();
+    void sync_with_cloud_now();
+    void announce_wallet();
+    [[nodiscard]] bool cloud_sync_active() const;
+    [[nodiscard]] bool can_take_synced_wallet() const;
     void begin_gate(GatePurpose purpose);
     void end_gate();
     void apply_settings();
     void sync_haptics();
     void play_haptic(HapticId id);
     void remember_run();
+    void forget_saved_run();
+    void forget_own_saved_run();
+    void assign_ids();
+    void switch_to_player(const std::string& id);
+    void take_current_player_into_session();
+    void remove_player_now(const std::string& id);
+    [[nodiscard]] bool run_is_current_players() const;
+    [[nodiscard]] QString display_name_of(const std::string& id) const;
+    [[nodiscard]] static std::string trimmed_name(const std::string& normalised);
 
     [[nodiscard]] static State to_state(SessionState state) noexcept;
 
     GameServices m_Services;
+    NullCloudStore m_NullCloud;
+    CloudStore* m_Cloud;
     const Tuning* m_Tuning;
     GameSession m_Session;
     SaveManager m_SaveManager;
@@ -440,6 +534,13 @@ private:
     QTimer m_Timer;
     bool m_Active = true;
     bool m_HapticsQuiet = false; // the service is suspended: the app is in the background or the game is paused
+
+    // iCloud sync. The store is listened to only while the switch is on and the store can sync. A trigger at a moment
+    // when the session could not take a changed wallet leaves a sync owed, which runs at the next moment that can.
+    bool m_CloudWatching = false;
+    bool m_CloudOwed = false;
+    bool m_CloudSyncing = false;
+    bool m_CloudAvailableShown = false;
 
     SessionView m_Shown;  // what the signals last reported
     SessionView m_Before; // the view before the command being processed: the question an answer was given to
@@ -466,9 +567,11 @@ private:
     bool m_ScoreSubmitted = false;
 
     std::function<std::uint64_t()> m_GateSeedSource;
+    std::function<std::uint64_t()> m_IdSource;
     GatePurpose m_GatePurpose = GatePurpose::None;
     GateChallenge m_GateChallenge;
     std::string m_GateUrl;
+    std::string m_GatePlayer; // the player a RemovePlayer gate is for
 
     BuildInfo m_BuildInfo;
 };

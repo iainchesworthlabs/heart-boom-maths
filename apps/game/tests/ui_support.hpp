@@ -11,6 +11,7 @@
 #include "services/clock.hpp"
 
 #include <QByteArray>
+#include <QImage>
 #include <QObject>
 #include <QQuickItem>
 #include <QQuickView>
@@ -41,6 +42,10 @@ struct UiRig
     /// Settings.
     UiRig(std::uint64_t seed, bool scores_available, std::string saved_text, bool haptics_available);
 
+    /// `cloud_available` makes the cloud store report an iCloud account, which shows the iCloud sync row in Settings.
+    UiRig(std::uint64_t seed, bool scores_available, std::string saved_text, bool haptics_available,
+          bool cloud_available);
+
     /// A rig whose device already holds a save, such as a top 10 with entries in it.
     UiRig(std::uint64_t seed, std::string save_text);
 
@@ -56,6 +61,7 @@ struct UiRig
     RecordingHaptics haptics;
     RecordingLinks links;
     heart_boom_maths::MemorySaveStore store;
+    FakeCloudStore cloud;
     int gate_seeds_used = 0;
     heart_boom_maths::game::GameController controller;
 };
@@ -71,8 +77,10 @@ public:
     QmlHarness(heart_boom_maths::game::GameController* game, const QString& component, QSize size,
                const QString& extra_name = {}, QObject* extra = nullptr);
 
-    /// A harness around QML written inline, for a component that needs no controller. It may import HeartBoomMaths.
-    static QmlHarness from_source(const QByteArray& qml, QSize size);
+    /// A harness around QML written inline. It may import HeartBoomMaths. A controller, when given, is the context
+    /// property `hostGame`, so the inline QML can hand it to a component (`AppRoot { game: hostGame }`).
+    static QmlHarness from_source(const QByteArray& qml, QSize size,
+                                  heart_boom_maths::game::GameController* game = nullptr);
 
     [[nodiscard]] QQuickItem* root() const;
     [[nodiscard]] QQuickView& view();
@@ -89,17 +97,33 @@ public:
     /// Writes what the window shows to a PNG. Returns false when it could not.
     bool grab(const QString& path);
 
+    /// What the window shows, as an image. Null when it could not be rendered.
+    QImage grab_image();
+
 private:
     struct FromSource
     {
     };
-    QmlHarness(FromSource, const QByteArray& qml, QSize size);
+    QmlHarness(FromSource, const QByteArray& qml, QSize size, heart_boom_maths::game::GameController* game);
 
     void finish_loading(const QString& what);
 
     std::unique_ptr<QTemporaryDir> m_Dir; // holds inline QML
     std::unique_ptr<QQuickView> m_View;
 };
+
+/// What a phone's cut-out, rounded corners and home indicator keep clear, as the safe-area frame is told by tests.
+struct Margins
+{
+    int left = 0;
+    int top = 0;
+    int right = 0;
+    int bottom = 0;
+};
+
+/// The window as the application builds it (AppRoot: the shell inside the safe area, the alert layer over all of it) on
+/// a controller, with the safe-area margins a device would report simulated by `margins`.
+[[nodiscard]] QmlHarness app_root(heart_boom_maths::game::GameController* game, QSize size, Margins margins = {});
 
 /// The `ui` tests read a property of a QML object by name.
 [[nodiscard]] QVariant property_of(const QObject* object, const char* name);

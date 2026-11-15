@@ -2,7 +2,7 @@
 
 This page maps every screen of the game as built, every way between them, what is saved at each step, and what happens when the app is interrupted. It was written from the code (`AppShell.qml`, `game_controller.*`, `answer_feedback.*`, `tick_driver.*`, `parental_gate.*`, `main.cpp` and the session states in `libs/core`) and checked against [`SPEC.md`](SPEC.md), [`game-architecture.md`](game-architecture.md) and [`COMPLIANCE.md`](COMPLIANCE.md). The journeys are walked by the `ui` tests in `apps/game/tests/test_ui_journeys.cpp`, which assert the screen after every step.
 
-Vocabulary: the **state** is the core session's state as the controller shows it (Idle, Playing, Paused, LevelClear, Won, GameOver). The **screen** is what `AppShell.qml` shows for it. Two things sit outside the state: a **page** (Settings, About, Top 10, stacked over the screen) and the **parental gate** (over everything while the controller has one open).
+Vocabulary: the **state** is the core session's state as the controller shows it (Idle, Playing, Paused, LevelClear, Won, GameOver). The **screen** is what `AppShell.qml` shows for it. Two things sit outside the state: a **page** (Settings, About, Top 10, WHO'S PLAYING and the name screen of a player, stacked over the screen) and the **parental gate** (over everything while the controller has one open).
 
 ## Open decisions
 
@@ -17,6 +17,8 @@ These are cases the documents do not settle. Each needs an answer from the proje
 | D5 | The back key on the cards. It is implemented as: play pauses, pause resumes, Top 10 goes back, game over goes home, and the level-clear, win and name screens ignore it so a stray press cannot close the app or drop a score. SPEC is silent. | A. As built. B. Name entry's back key means SKIP. C. Let the system close the app everywhere. | A. Confirm it is what the designer wants. |
 | D6 | Decided: SPEC says the saved run is "deleted as soon as it loads". The persistence table in `game-architecture.md` now says the same. The code already followed SPEC: CONTINUE deletes the run, and leaving the app again writes it again. A crash on the restored pause screen, before the app leaves the foreground, loses it. | Settled | Settled |
 | D7 | Coins earned in a level are written at the next pause, level clear or game over. A hard kill with no warning (battery, crash) loses the coins of the level being played and any hint spent in it. SPEC lists those save moments, so this is as specified. | A. Keep it. B. Also write after each answer. | A. |
+| D8 | The device keeps one saved run (SPEC, Players). QUIT is reached through the pause screen, and pausing saves a run for the player now playing, which replaces another player's run. So when a second player quits a game, the first player's saved run is gone, though the game that player paused was never touched. A bomb or a game that is never paused leaves it alone. | A. As built: the rule is the one in SPEC, and the run is replaced when the device has to save one for the player now playing. B. Keep a run for each player (a save change). | A for now. B needs a schema change and is the owner's call. |
+| D9 | A removed player stays in the list as a mark, so a merge cannot bring the player back, and the list holds 64 of them. A family that adds and removes players many times (the 64th place) can never add another: ADD PLAYER is hidden as if the list were full. | A. Keep it. B. Let a build forget removed players that every device has seen (a sync rule). | A: it takes about 60 add and remove cycles to meet. |
 
 ## Gaps closed in this pass
 
@@ -34,17 +36,19 @@ Every state of the core has exactly one screen, and every screen can be left by 
 
 | Screen | Shown when | Leaves by |
 |---|---|---|
-| Title | state Idle, or GameOver after HOME | PLAY or NEW GAME (starts level 1), CONTINUE (restores the saved run to Paused), TOP 10 and the gear (pages) |
+| Title | state Idle, or GameOver after HOME | PLAY or NEW GAME (starts level 1), CONTINUE (restores the saved run to Paused, only while it is the current player's), TOP 10, the gear and the player card (pages) |
 | Play | Playing, Paused (with the pause overlay), and for a hold after the last answer of a level or the bomb | the pause button, the last answer (level clear, win), the bomb (game over) |
 | Pause overlay | Paused | RESUME, QUIT, the gear (Settings page) |
 | Level clear | LevelClear, once the hold of the last answer has ended | NEXT LEVEL |
 | Win | Won, once the hold has ended | KEEP GOING (level 13), FINISH (game over) |
-| Name entry | GameOver when the score earned a place | SAVE (the Top 10 page, then the game-over card), SKIP (the game-over card) |
+| Name entry | GameOver when the score earned a place and the player has no name | SAVE (names the player; the Top 10 page, then the game-over card), SKIP (the game-over card) |
 | Game over | GameOver | PLAY AGAIN, TOP 10 (page), HOME |
 | Top 10 (page) | opened from Title, the game-over card, or SAVE | the back arrow, PLAY or PLAY AGAIN or NEW GAME |
 | Settings (page) | from the title's gear or the pause overlay's gear | the back arrow; ABOUT |
 | About (page) | from Settings | the back arrow (to Settings); the licence and notices texts open over it and close with their own back arrow |
-| Parental gate | the controller has one open: About's two links, the Game Center switch | CANCEL, the back arrow, or the right number |
+| WHO'S PLAYING (page) | from the player card on the title | the back arrow; a player's card (makes that player current); NAME or RENAME (the player's name screen); ADD PLAYER (the name screen of the new player); REMOVE (the gate) |
+| Player name (page) | from WHO'S PLAYING | SAVE (gives the name), SKIP for a player just added or CANCEL for a rename, Escape and the back key (the same as SKIP or CANCEL); each goes back to WHO'S PLAYING |
+| Parental gate | the controller has one open: About's two links, the Game Center switch, the iCloud sync switch, REMOVE on WHO'S PLAYING | CANCEL, the back arrow, or the right number |
 
 ## State and transition table
 
@@ -53,22 +57,29 @@ The controller states, the trigger of each move, and what is written to the save
 | From | Trigger | To | Disk |
 |---|---|---|---|
 | (launch) | the controller reads the save | Idle | nothing is written until the first action |
-| Idle, GameOver | PLAY, NEW GAME, PLAY AGAIN | Playing, level 1 | wallet and settings; a saved run is dropped |
-| Idle | CONTINUE with a restorable run | Paused | the run is deleted at once |
+| Idle, GameOver | PLAY, NEW GAME, PLAY AGAIN | Playing, level 1 | wallet and settings; the current player's own saved run is dropped, another player's stays |
+| Idle | CONTINUE with a restorable run of the current player | Paused | the run is deleted at once; the wallet is the player's as it is now |
 | Idle | CONTINUE that cannot restore | Idle | the run is deleted; a calm line on the title |
 | Playing | pause button, Escape, back key, the app leaving the foreground | Paused | wallet, settings, top 10 and the run |
 | Paused | RESUME, Escape, back key | Playing | the run is deleted |
-| Paused | QUIT | GameOver (reason Quit) | wallet; the run is deleted |
+| Paused | QUIT | GameOver (reason Quit) | wallet; the player's run is deleted |
 | Playing | the last of the 10 answers, level below 12 | LevelClear | wallet |
 | Playing | the last answer of level 12 | Won | wallet and `won_once` (the bonus is paid once) |
 | Playing | time reaches 0, or a wrong answer takes it to 0 | GameOver (reason Bomb) | wallet; no run |
 | LevelClear | NEXT LEVEL | Playing, next level | none |
 | Won | KEEP GOING | Playing, level 13 | none |
 | Won | FINISH | GameOver (reason Finish) | wallet |
-| GameOver | SAVE on the name screen | GameOver | top 10 |
-| GameOver | SKIP | GameOver | none; the score is not in the list |
+| GameOver | SAVE on the name screen | GameOver | top 10, the player's name |
+| GameOver | SKIP | GameOver | none; the score is not in the list and the player stays unnamed |
+| Playing, Paused, Won | the game ends with a place in the top 10, for a player who has a name | GameOver | top 10 at once, under the name; no name screen; the Top 10 page opens next |
+| Idle, GameOver | a player on WHO'S PLAYING | same | the old player's wallet, then the choice of current player |
+| Idle, GameOver | ADD PLAYER | same | the new player, who is current |
+| any | SAVE on a player's name screen | same | the name |
+| Idle, GameOver | REMOVE and the right number | same | the player is marked removed; that player's saved run is deleted |
 | GameOver | HOME | GameOver, title overlay | none |
 | any | a setting changes | same | the setting |
+| Idle, Paused, GameOver with no name waiting | iCloud sync is on and a trigger arrives (the switch turned on, start-up, the app active, the store reporting a change, a save) | same | the cloud copy, and when the other devices had more, the local save and the player's wallet |
+| Playing, LevelClear, Won, GameOver with a name waiting | the same trigger | same | nothing: a sync is owed and runs at the next moment above |
 | any | the app leaves the foreground | same, or Paused from Playing | everything above, as in the lifecycle table |
 
 Every game over, whatever the reason, submits the final score to the score service once (a no-op unless Game Center is on and available) and offers the name screen when the score qualifies, as SPEC says for QUIT and FINISH.
@@ -133,6 +144,30 @@ Test: `Journey: Settings switches, the gate for Game Center and for a link, and 
 5. Back out through Settings to the title.
 6. After a restart both switches are as they were left, and the services are told before the first screen shows.
 
+### 6. A family: who is playing
+
+Tests: `Journey: the chip on the title opens WHO'S PLAYING; add, switch, rename and remove players`, `Journey: the title, its CONTINUE and its numbers follow the player who is chosen`, `Journey: a named player's high score goes straight to the Top 10 page` and the `players` cases of `test_game_controller.cpp`.
+
+1. The title shows one card across the top: the player's name (PLAYER 1 for a player with no name, by place in the list) with a down chevron, and under it their best score and their coins. The whole card is a button and opens WHO'S PLAYING.
+2. The page lists the players with the best score and the coins. The one playing has a tick and PLAYING. With one player there is no REMOVE; with four there is no ADD PLAYER.
+3. ADD PLAYER makes a new player current at once and opens the name screen: SAVE names them, SKIP leaves them unnamed. A card makes that player current; the wallet is recorded for the old player first, and the title's best score, coins and CONTINUE are the new player's.
+4. NAME or RENAME opens the same name screen with the name they have. CANCEL leaves it.
+5. REMOVE asks a grown-up (the gate: ASK A GROWN-UP, the number in words, REMOVE). A wrong number or CANCEL removes no one. The player and any run that player paused go.
+6. The saved run stays with the player who paused it. CONTINUE and its caption show only for that player. Another player's new game, or game over, leaves it; their own pause replaces it (D8).
+7. Players are switched from the title only. While a game is played, paused, on a card, on the win screen or waiting for a name, the controller refuses; the card is not on those screens.
+8. A player with a name who earns a place in the top 10 sees no name screen: the entry is saved at once under their name and the Top 10 page opens with it marked, then the game-over card. A player with no name is asked once, and SAVE names the player. Every finished game counts towards the player's best, so NEW BEST! on the card means a better score than that player's own best.
+
+### 7. iCloud sync between a family's devices
+
+Tests: `test_cloud_controller.cpp` (the controller), `test_cloud_sync.cpp` (the rules) and `test_ui_cloud.cpp` (the row and the gate). Only on an Apple device with an iCloud account; elsewhere there is no row and nothing below happens.
+
+1. Settings shows iCloud sync under Game Center (and under Haptics), OFF. Nothing has been read, written or listened to: a default install never contacts iCloud.
+2. The switch opens the gate (ASK A GROWN-UP, "To turn on iCloud sync", TURN ON). A wrong number or CANCEL leaves it off and the store untouched. The right number turns it on, and the first sync runs: the players and the top 10 go to the family's iCloud if it holds nothing, or are joined with what another device put there.
+3. While it is on, a change another device made reaches this one when the store says so, when the app comes back, and at each save. It is taken only on the title or the pause screen. During play, on the level-clear card, on the win screen or while a name is waiting, it waits and is taken at the next such moment, so a level never changes the coins under the player. The title, WHO'S PLAYING and the top 10 then show the other device's players, names, coins and scores. If the player here was removed on the other device, another player becomes current.
+4. Coins earned on two devices are added, not replaced: a player who earned 50 on the phone and 30 on the tablet has 80 on both.
+5. The switch turns off at once, with no gate. The copy in iCloud stays, and nothing more is read or written until it is turned on again (with the gate).
+6. If the person signs out of iCloud, the row goes away and sync stops; the choice is kept, and sync resumes when an account returns. An iCloud copy written by a later build of the game is left alone.
+
 ## Leaving the foreground
 
 Tests: the `Lifecycle:` cases in `test_ui_journeys.cpp`, and `Leaving the foreground in every state keeps what the save promises` in `test_game_controller.cpp`. The app calls `GameController::on_application_state(false)` when Qt reports a state other than Active (a lock screen, a call, an app switch, a window losing focus, a hidden browser tab). It pauses a running game, stops the tick driver and the ticking sound, suspends audio, closes the gate, and writes the save. Coming back resumes audio only.
@@ -154,6 +189,8 @@ Tests: the `Lifecycle:` cases in `test_ui_journeys.cpp`, and `Leaving the foregr
 
 The ticking sound stops when the game pauses, when it leaves the alert zone and when the app leaves the foreground, and starts again on RESUME if the game is still in the alert zone.
 
+In the alert zone a red frame pulses round the window, and a white flash crosses it when the multiplier steps up. Both are drawn over the whole window, edge to edge under a phone's cut-out and home indicator (`AlertFrame`, laid over the safe area by `AppRoot`); the play screen's content stays inside the safe area. It is one thin line at the edge of the window, the same width all the way round, with rounded corners on a screen that has a home indicator. Pausing ends the frame. Tests: `The alert frame and the streak flash cover the whole window while the play screen stays in the safe area`.
+
 ## When the save is written
 
 | Moment | What |
@@ -164,9 +201,13 @@ The ticking sound stops when the game pauses, when it leaves the alert zone and 
 | CONTINUE | the run is removed as soon as it is read, restorable or not |
 | Level clear | wallet |
 | Level 12 cleared | wallet and `won_once` |
-| Game over (bomb, QUIT or FINISH) | wallet; the run is removed |
-| SAVE on the name screen | top 10 |
-| A setting changes, or the gate passes for Game Center | the setting |
+| A switch of player | the old player's wallet, then the choice of current player |
+| ADD PLAYER, a player's name, REMOVE with the right number | the player list (and the run, when its player is removed) |
+| Game over (bomb, QUIT or FINISH) | wallet and the player's best; the player's own run is removed |
+| SAVE on the name screen | top 10, and the player's name |
+| A game that ends with a place in the top 10, for a named player | top 10 and the player's best, with the wallet |
+| A setting changes, or the gate passes for Game Center or iCloud sync | the setting |
+| An iCloud sync that changed the local data | the player list, the wallets and the top 10 (the device's own settings, run and current player stay) |
 | Any other time the app leaves the foreground | everything that is current |
 
 Writes are atomic (a temporary file renamed over the old one). A damaged file is moved to `save.json.bad` before the first write and the game starts on defaults. A file with a higher version is read as defaults, no save is written for the whole session, and the file is never touched (`A save from a newer version is never overwritten`, and the newer-save journey above). A saved run is never offered from either kind of file.
@@ -183,6 +224,8 @@ The Escape key and the Android back key. A page or the gate always takes the key
 | Level clear, Win, Name entry | nothing | nothing (see D5) |
 | Game over | nothing | HOME |
 | Top 10 | back | back |
+| WHO'S PLAYING | one step back | one step back |
+| Name screen of a player | SKIP or CANCEL | SKIP or CANCEL |
 | Settings, About, a licence text | one step back | one step back |
 | Parental gate | CANCEL | CANCEL |
 
@@ -210,6 +253,8 @@ OK means the code does it and a test covers it. The tests are in `apps/game/test
 | Killed on the name screen, on level clear, on win | decision | D2, D1 |
 | The Top 10 from the title, from game over, after SAVE | OK | journeys 1 and 2; `The top 10 opens from the title and from the game-over card...` |
 | Settings saved and applied; Game Center only where available and behind the gate | OK | journey 5; `Game Center turns on only behind the gate and off at once` |
+| iCloud sync only where available, behind the gate, off at once, no store use while off | OK | journey 7; `Turning iCloud sync on goes through the parental gate and leaves it on`, `The switch is off by default, and the store is not touched until it is on` |
+| A change from another device during play, on a card, or while a name waits | OK: owed, taken at the next title or pause | journey 7 step 3; `A trigger during play only marks a sync as owed...` |
 | About links: cancel, wrong number, right number | OK | journey 5; `Opening a link never reaches the link opener until the gate is passed...` |
 | The gate when the app leaves the foreground | fixed | journey 5 step 4 |
 | Escape and back on every screen | fixed, with D5 | `Keys:` cases |
@@ -226,4 +271,4 @@ OK means the code does it and a test covers it. The tests are in `apps/game/test
 
 ## Not verified here
 
-Everything above runs offscreen with a manual clock. Not tried: Qt's application-state events on a real iOS, Android or browser build (the release checklist covers them), the Android back key on a device, Windows and Linux parental controls, and a hard kill of the real process (the restart in the tests is a second controller on the first one's save text).
+Everything above runs offscreen with a manual clock. The iCloud store itself (the Apple calls) was not run: it is the one part that needs two Apple devices ([iOS](ios.md)). Not tried: Qt's application-state events on a real iOS, Android or browser build (the release checklist covers them), the Android back key on a device, Windows and Linux parental controls, and a hard kill of the real process (the restart in the tests is a second controller on the first one's save text).

@@ -138,8 +138,9 @@ jobs:
           retention-days: 7
 
       # What Xcode made, from the bundle alone: everything apps/ios/packaging/verify_app.sh checks of any bundle of this
-      # project, then the orientations, the capabilities, the Game Center entitlement of the file (an unsigned build embeds
-      # none), the frameworks, and the size of the bundle, which goes to the job summary. (An unsigned build: no --signed.)
+      # project, then the orientations, the capabilities, the Game Center and iCloud entitlements of the file CMake wrote
+      # (an unsigned build embeds none), the frameworks, and the size of the bundle, which goes to the job summary. (An
+      # unsigned build: no --signed.)
       - name: Check the application bundle
         shell: bash
         run: |
@@ -149,4 +150,4 @@ jobs:
           echo "bundle: $app"
           ls -la "$app"
           apps/game/ios/verify_game_app.sh "$app" --bundle-id "$BUNDLE_ID" --executable heart-boom-maths \
-            --entitlements apps/game/ios/heart-boom-maths.entitlements
+            --entitlements build/ios-game-release/heart-boom-maths.entitlements

@@ -22,6 +22,7 @@ add_library(heart_boom_maths_app STATIC
     src/qml_types.hpp
     src/tick_driver.cpp
     src/services/build_info.cpp
+    src/services/cloud_sync.cpp
     src/services/file_save_store.cpp
     src/services/game_center_score_service.cpp
     src/services/notices.cpp
@@ -154,13 +155,16 @@ qt_add_resources(heart_boom_maths_app images
 # the other files in the directory only then. One file per line, so two branches that each add a screen rarely collide.
 set(HEART_BOOM_MATHS_QML_FILES
     qml/AboutScreen.qml
+    qml/AlertFrame.qml
     qml/AnswerGrid.qml
     qml/AnswerTile.qml
+    qml/AppRoot.qml
     qml/AppShell.qml
     qml/ArrowIcon.qml
     qml/BackIcon.qml
     qml/Badge.qml
     qml/ChevronIcon.qml
+    qml/CloudIcon.qml
     qml/CoinCard.qml
     qml/CoinWallet.qml
     qml/ComicButton.qml
@@ -192,6 +196,7 @@ set(HEART_BOOM_MATHS_QML_FILES
     qml/PlayScreen.qml
     qml/PlayStats.qml
     qml/PlayTopBar.qml
+    qml/PlayersScreen.qml
     qml/QuestionCard.qml
     qml/RowButton.qml
     qml/SafeAreaFrame.qml
@@ -310,6 +315,8 @@ if(HEART_BOOM_MATHS_BUILD_TESTS)
     add_executable(heart_boom_maths_game_tests
         tests/test_main.cpp
         tests/test_build_info.cpp
+        tests/test_cloud_controller.cpp
+        tests/test_cloud_sync.cpp
         tests/test_event_sounds.cpp
         tests/test_file_save_store.cpp
         tests/test_game_center.cpp
@@ -455,6 +462,7 @@ if(HEART_BOOM_MATHS_BUILD_TESTS)
         tests/ui_main.cpp
         tests/ui_support.cpp
         tests/test_answer_feedback.cpp
+        tests/test_ui_cloud.cpp
         tests/test_ui_components.cpp
         tests/test_ui_haptics.cpp
         tests/test_ui_journeys.cpp

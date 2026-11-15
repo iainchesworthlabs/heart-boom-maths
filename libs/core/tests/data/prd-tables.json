@@ -149,6 +149,7 @@
     "time_bonus_points_per_second": 10,
     "hint_cost_coins": 2,
     "top10_size": 10,
+    "max_players": 4,
     "name_max_length": 12
   }
 }

@@ -31,6 +31,14 @@ constexpr int MAX_LEVEL = 1'000'000;
 
 constexpr std::int64_t SMALL_LIMIT = 1'000'000'000;
 
+// The wallet and the win-bonus mark come from the save. They are taken before a game starts and, since a saved run
+// holds the wallet as it was at the pause, again on the pause screen after a restore, when the player's wallet has
+// moved on (a sync, or the same player's coins earned on another device).
+[[nodiscard]] bool accepts_save_values(SessionState state) noexcept
+{
+    return state == SessionState::IDLE || state == SessionState::GAME_OVER || state == SessionState::PAUSED;
+}
+
 [[nodiscard]] bool is_endless(const Tuning& t, int level) noexcept
 {
     return level > t.campaign_levels;
@@ -488,7 +496,7 @@ void GameSession::finish()
 
 void GameSession::set_wallet(std::int64_t coins)
 {
-    if (m_View.state == SessionState::IDLE || m_View.state == SessionState::GAME_OVER)
+    if (accepts_save_values(m_View.state))
     {
         m_View.wallet = std::clamp<std::int64_t>(coins, 0, MAX_WALLET);
         refresh_view();
@@ -497,7 +505,7 @@ void GameSession::set_wallet(std::int64_t coins)
 
 void GameSession::set_won_once(bool won_once)
 {
-    if (m_View.state == SessionState::IDLE || m_View.state == SessionState::GAME_OVER)
+    if (accepts_save_values(m_View.state))
     {
         m_View.won_once = won_once;
     }

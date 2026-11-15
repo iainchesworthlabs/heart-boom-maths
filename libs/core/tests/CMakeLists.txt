@@ -4,19 +4,23 @@ hbm_generate_prd_tables_header(
     "${CMAKE_CURRENT_SOURCE_DIR}/data/prd-tables.json"
     "${CMAKE_CURRENT_BINARY_DIR}/generated/prd_tables.hpp")
 
-# The version 1 save fixture becomes a header, so the test reads no file at run time and needs no path from the build.
+# The save fixtures, one per schema version, become a header, so the test reads no file at run time and needs no path
+# from the build.
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/data/save-v1.json" HBM_SAVE_V1_FIXTURE)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/data/save-v2.json" HBM_SAVE_V2_FIXTURE)
 # The licence line is written in two pieces so that REUSE does not read it as this file's.
 string(CONCAT hbm_save_fixtures_text
     "// SPDX-License-" "Identifier: GPL-3.0-or-later\n"
     "#pragma once\n"
     "#include <string_view>\n"
-    "inline constexpr std::string_view SAVE_V1_FIXTURE = R\"fixture(@HBM_SAVE_V1_FIXTURE@)fixture\";\n")
+    "inline constexpr std::string_view SAVE_V1_FIXTURE = R\"fixture(@HBM_SAVE_V1_FIXTURE@)fixture\";\n"
+    "inline constexpr std::string_view SAVE_V2_FIXTURE = R\"fixture(@HBM_SAVE_V2_FIXTURE@)fixture\";\n")
 file(CONFIGURE
     OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/save_fixtures.hpp"
     CONTENT "${hbm_save_fixtures_text}"
     @ONLY)
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/data/save-v1.json")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/data/save-v1.json" "${CMAKE_CURRENT_SOURCE_DIR}/data/save-v2.json")
 
 # Every file in data/replays becomes a byte array in a header, so the replay test reads no file at run time. The files are
 # read as hex because a long string literal is more than some compilers accept. A new or changed file re-runs CMake.
@@ -61,6 +65,8 @@ add_executable(heart_boom_maths_core_tests
     test_save.cpp
     test_save_fuzz.cpp
     test_save_manager.cpp
+    test_save_merge.cpp
+    test_save_players.cpp
     test_session.cpp
     test_session_property.cpp
     test_tuning.cpp

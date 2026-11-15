@@ -149,9 +149,9 @@ jobs:
   # (docs/releasing.md, docs/ios.md). The build that needs no secret is ios-game-build.yml; the one-screen stub of apps/ios
   # and ios-build.yml stay as a template to copy.
   #
-  # Game Center follows the provisioning profile: the entitlement is requested only when the profile carries it, because
-  # Xcode refuses to sign a bundle that asks for an entitlement its profile lacks. When the owner turns the capability on
-  # for the App ID and makes the profile again, the next run builds with it, with no change here.
+  # Game Center and iCloud sync follow the provisioning profile: each entitlement is requested only when the profile
+  # carries it, because Xcode refuses to sign a bundle that asks for an entitlement its profile lacks. When the owner turns
+  # a capability on for the App ID and makes the profile again, the next run builds with it, with no change here.
   ios:
     name: Package (iOS)
     needs: version
@@ -184,7 +184,8 @@ jobs:
           method: app-store
 
       # Reads the profile the action put where Xcode looks for it. Only names, dates and counts are printed. The Game
-      # Center entitlement is asked for only if the profile has it; a profile that expires within 14 days stops the run
+      # Center and the iCloud key-value store entitlements are asked for only if the profile has them (the second with
+      # the value TEAM.* or TEAM.BUNDLE_ID, see below); a profile that expires within 14 days stops the run
       # here, with a sentence, and not as a build that fails an hour in or a TestFlight build that stops working.
       - name: Read the provisioning profile
         id: profile
@@ -228,6 +229,22 @@ jobs:
           {
             echo "game-center-cmake=$cmake_value"
             echo "game-center-verify=$verify_value"
+          } >> "$GITHUB_OUTPUT"
+
+          # The same rule for iCloud sync. A profile holds the key as the team id and a wildcard (TEAM.*, Apple's TN2415)
+          # and the app asks for the full value (TEAM.BUNDLE_ID), which the wildcard allows; the full value in a profile
+          # is accepted too. Anything else (the key missing, another team, another bundle) leaves the entitlement out,
+          # because a bundle that asks for a value the profile does not allow is refused at signing.
+          kvstore="$(pb 'Entitlements:com.apple.developer.ubiquity-kvstore-identifier')"
+          if [ "$kvstore" = "$TEAM_ID.*" ] || [ "$kvstore" = "$TEAM_ID.$BUNDLE_ID" ]; then
+            icloud_cmake=ON; icloud_verify=on
+          else
+            icloud_cmake=OFF; icloud_verify=off
+          fi
+          echo "iCloud key-value store entitlement: $icloud_cmake (the profile's com.apple.developer.ubiquity-kvstore-identifier is '${kvstore:-missing}'; ON needs '$TEAM_ID.*' or '$TEAM_ID.$BUNDLE_ID')"
+          {
+            echo "icloud-cmake=$icloud_cmake"
+            echo "icloud-verify=$icloud_verify"
           } >> "$GITHUB_OUTPUT"
 
       - name: Set up CMake
@@ -281,14 +298,16 @@ jobs:
           PROFILE_NAME: ${{ steps.signing.outputs.profile-name }}
           BUILD_NUMBER: ${{ github.run_number }}
           GAME_CENTER: ${{ steps.profile.outputs.game-center-cmake }}
+          ICLOUD: ${{ steps.profile.outputs.icloud-cmake }}
         run: |
           set -o pipefail
-          echo "build number $BUILD_NUMBER, Game Center $GAME_CENTER, profile '$PROFILE_NAME'"
+          echo "build number $BUILD_NUMBER, Game Center $GAME_CENTER, iCloud sync $ICLOUD, profile '$PROFILE_NAME'"
           cmake --preset ios-game-release \
             -DHEART_BOOM_MATHS_IOS_BUILD_NUMBER="$BUILD_NUMBER" \
             -DHEART_BOOM_MATHS_IOS_SIGNING_TEAM="$TEAM_ID" \
             -DHEART_BOOM_MATHS_IOS_SIGNING_PROFILE="$PROFILE_NAME" \
-            -DHEART_BOOM_MATHS_IOS_GAME_CENTER="$GAME_CENTER" 2>&1 | tee configure.log
+            -DHEART_BOOM_MATHS_IOS_GAME_CENTER="$GAME_CENTER" \
+            -DHEART_BOOM_MATHS_IOS_ICLOUD="$ICLOUD" 2>&1 | tee configure.log
 
       - name: Name the package
         id: name
@@ -325,8 +344,9 @@ jobs:
 
       # The signed IPA, opened as a device would: everything verify_app.sh checks (identifier, version, the icon, no
       # permission text, arm64, a valid signature, an App Store profile for this identifier) and what only the game
-      # promises (orientations, the Game Center entitlement in the state the profile allowed, the frameworks, the sound
-      # files, the size). It prints the state it found.
+      # promises (orientations, the Game Center and iCloud entitlements in the state the profile allowed, the frameworks,
+      # the sound files, the size). It prints the state it found. The entitlements file is the one CMake wrote for the two
+      # options, in the build directory.
       - name: Check the IPA
         shell: bash
         env:
@@ -334,11 +354,13 @@ jobs:
           VERSION: ${{ steps.name.outputs.version }}
           REF_TYPE: ${{ github.ref_type }}
           GAME_CENTER: ${{ steps.profile.outputs.game-center-verify }}
+          ICLOUD: ${{ steps.profile.outputs.icloud-verify }}
         run: |
           set -euo pipefail
           ls -l "$IPA"
           args=(--bundle-id "$BUNDLE_ID" --executable "$EXECUTABLE" --signed --store \
-            --game-center "$GAME_CENTER" --entitlements apps/game/ios/heart-boom-maths.entitlements)
+            --game-center "$GAME_CENTER" --icloud "$ICLOUD" \
+            --entitlements build/ios-game-release/heart-boom-maths.entitlements)
           if [ "$REF_TYPE" = tag ]; then args+=(--version "${VERSION%%-*}"); fi
           apps/game/ios/verify_game_app.sh "$IPA" "${args[@]}"
 
@@ -384,10 +406,12 @@ jobs:
           UPLOADED: ${{ github.ref_type == 'tag' || inputs.upload_testflight == true }}
           BUILD_NUMBER: ${{ github.run_number }}
           GAME_CENTER: ${{ steps.profile.outputs.game-center-cmake }}
+          ICLOUD: ${{ steps.profile.outputs.icloud-cmake }}
         run: |
           {
             echo "### iOS build for TestFlight"
             echo "Game Center entitlement: $GAME_CENTER (it follows the provisioning profile; docs/ios.md)."
+            echo "iCloud key-value store entitlement: $ICLOUD (it follows the provisioning profile; docs/ios.md)."
             if [ "$UPLOADED" = true ]; then
               echo "Uploaded as build $BUILD_NUMBER. Apple processes it for a few minutes; then it is in the TestFlight app for the internal testers."
             else

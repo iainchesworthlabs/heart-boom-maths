@@ -132,7 +132,7 @@ struct SessionView
 ///
 ///   IDLE or GAME_OVER:  start_game(), set_wallet(), set_won_once()
 ///   PLAYING:            tick(), answer(), use_hint(), pause()
-///   PAUSED:             resume(), quit()
+///   PAUSED:             resume(), quit(), set_wallet(), set_won_once()
 ///   LEVEL_CLEAR:        next_level()
 ///   WON:                keep_going(), finish()
 ///
@@ -170,8 +170,9 @@ public:
     /// FINISH on the win screen: the same as QUIT (decision G4).
     void finish();
 
-    /// The wallet and the win-bonus flag come from the save file. Only accepted before a game starts (IDLE or
-    /// GAME_OVER). A negative wallet becomes 0.
+    /// The wallet and the win-bonus flag come from the save file. Accepted before a game starts (IDLE or GAME_OVER)
+    /// and on the pause screen, so a run restored from a snapshot can take the player's wallet as it is now and not as
+    /// it was at the pause. Ignored in every other state. A negative wallet becomes 0.
     void set_wallet(std::int64_t coins);
     void set_won_once(bool won_once);
 

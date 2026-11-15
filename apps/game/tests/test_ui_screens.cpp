@@ -21,6 +21,7 @@
 using namespace hbm_test;
 using namespace heart_boom_maths;
 using namespace heart_boom_maths::game;
+using Catch::Matchers::WithinAbs;
 using State = GameController::State;
 
 namespace
@@ -37,8 +38,8 @@ const QString REPOSITORY_URL = QStringLiteral("https://github.com/iainchesworthl
 std::string board_save()
 {
     SaveData data;
-    data.coins = 61;
-    data.top10.push_back(ScoreEntry{"BOMB SQUAD", 1640});
+    give_wallet(data, 61);
+    give_top10(data, {ScoreEntry{"BOMB SQUAD", 1640}});
     return *serialise(data);
 }
 
@@ -61,8 +62,8 @@ std::string saved_run_text(int right_answers = 2, int play_ms = 4000)
 std::string broken_run_text()
 {
     SaveData data;
-    data.coins = 7;
-    data.run = std::vector<std::int64_t>{1, 2, 3};
+    give_wallet(data, 7);
+    give_run(data, {1, 2, 3});
     return *serialise(data);
 }
 
@@ -203,17 +204,17 @@ TEST_CASE("The title screen shows the best score, the coins, PLAY, TOP 10 and th
         CHECK(s.item(name)->height() >= 44);
         CHECK(s.inside(s.item(name)));
     }
-    for (const char* name : {"bestScore", "walletPill", "hero", "tagline", "titleCaption"})
+    for (const char* name : {"playerChip", "bestScore", "walletPill", "hero", "tagline", "titleCaption"})
     {
         INFO(name);
         CHECK(s.inside(s.item(name)));
     }
 
-    // Top to bottom: the pills, the burst, the tagline, the buttons, the caption. Nothing overlaps.
+    // Top to bottom: the player card, the burst, the tagline, the buttons, the caption. Nothing overlaps.
     const auto top_of = [&](const char* name) { return s.item(name)->mapToScene(QPointF(0, 0)).y(); };
     const auto bottom_of = [&](const char* name)
     { return s.item(name)->mapToScene(QPointF(0, s.item(name)->height())).y(); };
-    CHECK(bottom_of("bestScore") <= top_of("hero") + 1);
+    CHECK(bottom_of("playerChip") <= top_of("hero"));
     CHECK(bottom_of("hero") <= top_of("tagline"));
     CHECK(bottom_of("tagline") <= top_of("playButton"));
     CHECK(bottom_of("playButton") <= top_of("top10Button"));
@@ -230,6 +231,97 @@ TEST_CASE("The title screen in a window of the phone's shape matches the board's
     CHECK(s.item("settingsButton")->width() == 64);
     CHECK(s.item("hero")->width() == 342);
     CHECK(s.item("hero")->height() == 262);
+
+    // The player card is 24 taller than the two pills it replaced and the column gave that height back above the hero,
+    // so the burst and everything under it are where board CP1 has them (the heights of the board, 56 to 808 less the
+    // margins).
+    const auto top_of = [&](const char* name) { return s.item(name)->mapToScene(QPointF(0, 0)).y(); };
+    CHECK_THAT(top_of("hero"), WithinAbs(119.7, 1.0));
+    CHECK_THAT(top_of("tagline"), WithinAbs(552.7, 1.0));
+    // The buttons and the caption sit on the bottom margin, so the caption's own text height moves them: it is 19 high
+    // under one font engine and a pixel less under another. Two pixels holds that and is still well short of the 16 a
+    // changed margin or gap would move them.
+    CHECK_THAT(top_of("playButton"), WithinAbs(609.7, 2.0));
+    CHECK_THAT(top_of("top10Button"), WithinAbs(709.7, 2.0));
+    CHECK_THAT(top_of("titleCaption"), WithinAbs(789.7, 2.0));
+    CHECK(s.item("playerChip")->height() == 72);
+}
+
+namespace
+{
+
+/// A save for a player with the longest name, a big best score and a big wallet: the widest the card has to hold.
+std::string widest_player_save()
+{
+    SaveData data;
+    REQUIRE(rename_player(data.shared, "first", "WWWWWWWWWWWW").has_value());
+    REQUIRE(record_wallet(data.shared.players[0], "", 98765).has_value());
+    data.shared.players[0].best = 1234567;
+    return *serialise(data);
+}
+
+} // namespace
+
+TEST_CASE("The player card is one button across the top with the name, the best score and the coins",
+          "[ui][title][players]")
+{
+    struct Arrangement
+    {
+        const char* name;
+        QSize size;
+    };
+    const Arrangement arrangement = GENERATE(Arrangement{"phone", PHONE}, Arrangement{"short phone", QSize{375, 667}},
+                                             Arrangement{"tablet", TABLET}, Arrangement{"desktop", DESKTOP});
+    const bool saved_run = GENERATE(false, true);
+    CAPTURE(arrangement.name, saved_run);
+    Screens s(arrangement.size, false, saved_run ? saved_run_text() : widest_player_save());
+    REQUIRE(s.visible("titleScreen"));
+    QQuickItem* card = s.item("playerChip");
+
+    // One white button, the width of the column, inside the window, with a hit target as large as the card.
+    CHECK(property_of(card, "variant").toString() == "secondary");
+    CHECK(s.inside(card));
+    CHECK_THAT(card->width(), WithinAbs(property_of(s.h.find("titleScreen"), "contentWidth").toDouble(), 1.0));
+    CHECK(card->height() >= 44);
+    const QString name = property_of(card, "accessibleName").toString();
+    CHECK(name.startsWith("Playing as "));
+    CHECK(name.contains(s.text_of("playerChipName")));
+    CHECK(name.contains(s.text_of("bestScoreValue")));
+    CHECK(name.contains(QLocale(QLocale::English).toString(property_of(s.h.find("walletPill"), "value").toInt()) +
+                        " coins"));
+    CHECK(name.endsWith("Choose who is playing"));
+
+    // The name, the best score and the coins are inside the card, the name above them, the best score on the left and
+    // the coins on the right, and none of them touches another.
+    const QRectF box(card->mapToScene(QPointF(0, 0)), QSizeF(card->width(), card->height()));
+    const auto rect_of = [&](const char* object_name)
+    {
+        QQuickItem* item = s.item(object_name);
+        return QRectF(item->mapToScene(QPointF(0, 0)), QSizeF(item->width(), item->height()));
+    };
+    const QRectF name_box = rect_of("playerChipName");
+    const QRectF best_box = rect_of("bestScore");
+    const QRectF coins_box = rect_of("walletPill");
+    for (const QRectF& part : {name_box, best_box, coins_box})
+    {
+        CHECK(box.contains(part));
+    }
+    CHECK(name_box.bottom() <= best_box.top() + 4); // the text boxes of two lines may share a few pixels of leading
+    CHECK(name_box.bottom() <= coins_box.top() + 4);
+    CHECK(best_box.right() < coins_box.left());
+    // The longest name fits in its room without being cut, on every size.
+    if (!saved_run)
+    {
+        CHECK_FALSE(property_of(s.h.find("playerChipName"), "truncated").toBool());
+    }
+
+    // Nothing of the card, its hard shadow included, reaches the burst or the heart.
+    const double shadow = property_of(card, "shadowOffset").toDouble();
+    CHECK(box.bottom() + shadow <= s.item("hero")->mapToScene(QPointF(0, 0)).y() + 0.5);
+
+    // A tap anywhere on the card, on the best score or the coins as much as on the name, opens WHO'S PLAYING.
+    s.tap("bestScoreValue");
+    CHECK(s.visible("playersScreen"));
 }
 
 TEST_CASE("With a saved run the title offers CONTINUE and NEW GAME and says what was saved", "[ui][title][saved]")
@@ -385,8 +477,8 @@ TEST_CASE("Settings shows the switches with ON and OFF in words and writes them 
     REQUIRE(s.rig.store.text().has_value());
     const ParseResult saved = parse_save(*s.rig.store.text());
     REQUIRE(saved.status == LoadStatus::OK);
-    CHECK_FALSE(saved.data.sound);
-    CHECK_FALSE(saved.data.music);
+    CHECK_FALSE(saved.data.device.sound);
+    CHECK_FALSE(saved.data.device.music);
 
     s.tap("soundSwitch");
     CHECK(s.rig.controller.sound_enabled());

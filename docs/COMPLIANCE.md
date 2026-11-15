@@ -10,12 +10,13 @@ Heart Boom Maths targets the lowest age rating in each store: 4+ on the App Stor
 |---|---|
 | Cartoon content only | The bomb pops into a star burst. No frightening art or sound |
 | No ads, no purchases | Coins are earned in play and have no money value. No store code |
-| No chat, no accounts | No network code for either |
+| No chat, no accounts | No network code for either, and no sign-in or server of the game's own. iCloud sync (below) uses the iCloud account the person already has on the device |
 | No third-party analytics or crash reporting | No such dependency may be added. CI and the release traffic capture check this |
 | No location | No location permission |
 | No notifications | Never request notification permission |
 | No links out except behind a parental gate | One call opens a URL (`LinkOpener::open`), reached only through the gate. CI fails if another appears |
-| Typed names stay on the device | Names are in the save file only |
+| Typed names stay on the family's own devices | Names are in the save file. Only if a grown-up turns iCloud sync on do they also go to that family's iCloud account, and nowhere else. They never reach the developer |
+| iCloud sync is off by default and behind the parental gate | A Settings switch on iPhone and iPad only. With it off, or on any other platform, the game touches no cloud API: nothing reads, writes or listens to the store. The one cloud API in the code base is `NSUbiquitousKeyValueStore`, in `src/platform/ios/cloud_platform.mm` |
 | No permissions beyond what a store lists for a game with no data | Haptics use `performHapticFeedback` on Android, which needs none (never `Vibrator.vibrate()` and its VIBRATE permission), the UIKit feedback generators on iOS and `navigator.vibrate` in a browser. They collect and send nothing. See [Haptics](haptics.md) |
 | No listening socket in a shipped build unless asked | The desktop release builds carry the Tracy client dormant: it starts only for `--profile` or `HBM_PROFILE=1`, and then listens on the loopback interface only. The web, Android and iOS builds have no Tracy, and CI checks that. See [Profiling](profiling.md) |
 
@@ -23,7 +24,7 @@ Entering the App Store Kids Category is a separate decision. It adds the parenta
 
 ## Data
 
-v1 sends no personal data anywhere. The only data path is the optional Game Center score, which carries one number.
+v1 sends no personal data to the developer or to anyone outside the family. There are two optional data paths, both Apple devices only, both off by default and behind the parental gate: the Game Center score, which carries one number, and iCloud sync, which keeps the players and the top 10 in the family's own iCloud account.
 
 | Topic | Platform behaviour for children | Heart Boom Maths |
 |---|---|---|
@@ -34,6 +35,18 @@ v1 sends no personal data anywhere. The only data path is the optional Game Cent
 | Android | Supervised accounts have no Play Games followers feature. Games aimed at under-13s need not use Play Games Services | v1 Android does not use Play Games Services |
 
 Game Center on Apple devices is a Settings switch, off by default, behind the parental gate. With the switch off the game never contacts Game Center and never shows a sign-in sheet. The working assumption is that Game Center is allowed at this age rating. Confirm it against Apple's Kids Category rules before submission. If it is not allowed, remove score submission (`NullScoreService` on every platform) and keep the local top 10.
+
+### iCloud sync
+
+| Topic | Heart Boom Maths |
+|---|---|
+| What is stored | One piece of text under one key of the iCloud key-value store: the players (names, coins, win mark, best score) and the top 10 (names and scores). Not the Settings switches, the saved run or which player is current |
+| Whose iCloud | The Apple Account signed in on the device, and only that one. The game has no account, sign-in or server of its own. Apple's iCloud moves the key between the devices on that account |
+| Who can read it | The family's devices. Nothing is sent to the developer, and the developer has no way to read an iCloud account |
+| When it is used | Only while the Settings switch is on. A default install never reads, writes or listens to the store. Turning it on needs the parental gate. Turning it off needs none and leaves the copy in iCloud as it is |
+| Children | The names are the nicknames typed into the game (A to Z, 12 letters). Apple's page on the key-value store says it keeps values on disk unencrypted and advises against sensitive data; the game keeps nicknames and scores, no password, address or identifier. How the store behaves on a child's Apple Account in Family Sharing is not confirmed (below) |
+| Apple's privacy answers | Data kept in the person's own iCloud that the developer cannot reach is, on Apple's definition of "collect" (data transmitted off the device where you or your partners can access it), not collected. Apple's page does not name iCloud, so the owner confirms the App Privacy answers in App Store Connect (docs/ios.md) |
+| Privacy manifest | `NSUbiquitousKeyValueStore` is not on Apple's list of required-reason APIs, so the manifest does not change (docs/ios.md) |
 
 ## Rules by region
 
@@ -68,7 +81,13 @@ Each item is a task for M5 or M7, and the result goes in the PRD.
 - [ ] Research Windows and Linux parental controls, and test the pause on focus loss.
 - [ ] Write the privacy policy: no data collected, no accounts, no ads. Link it from both stores and from About, behind the parental gate.
 - [ ] Read the Children's Online Privacy Code once registered and confirm the game's scope.
-- [ ] Traffic capture on a device: the app makes no network requests of its own (Game Center switch off), and only the Game Center call with it on.
+- [ ] Traffic capture on a device: the app makes no network requests of its own (Game Center and iCloud sync switches off), and only the Game Center call with Game Center on.
+- [ ] Traffic capture on a device with iCloud sync on: the game process makes no connection of its own; the only traffic is the system's own iCloud traffic to Apple, and nothing goes to any other host.
+- [ ] A fresh install with iCloud sync off: nothing reads, writes or listens to the store (no iCloud sign-in or permission prompt, no traffic).
+- [ ] Two devices on one Apple Account with sync on: a player added on each, coins earned on each, a rename, a removal and top 10 entries on each end up the same on both, and the coins are the sum of what each earned (none lost, none booked as spent).
+- [ ] A child's Apple Account in Family Sharing: is the switch offered, does the key sync, what does the parent see in the iCloud settings. Record the result here and in `ios.md`.
+- [ ] iCloud signed out, and iCloud Drive off while signed in: the row is not offered, nothing crashes, and signing back in resumes sync.
+- [ ] Find where a parent can delete the game's iCloud data in the iCloud settings, and write the exact path into the privacy policy.
 - [ ] On a desktop release package: with no flag and no `HBM_PROFILE`, nothing listens on port 8086 (`netstat`), and `TracyClient.dll` or the Tracy library is listed in the notices.
 - [ ] Parental gate form checked against the current Apple and Google rules for children's apps.
 
@@ -79,6 +98,8 @@ Each item is a task for M5 or M7, and the result goes in the PRD.
 - Google Play, target audience and content: https://support.google.com/googleplay/android-developer/answer/9867159
 - Apple, Game Center and privacy: https://www.apple.com/legal/privacy/data/en/game-center/
 - Apple, Game Center parental controls: https://support.apple.com/en-au/HT201304
+- Apple, the iCloud key-value store: https://developer.apple.com/documentation/foundation/nsubiquitouskeyvaluestore
+- Apple, App Privacy details ("collect"): https://developer.apple.com/app-store/app-privacy-details/
 - Google, Play Games for supervised accounts: https://support.google.com/googleplay/answer/3129346
 - Android games guidelines: https://developer.android.com/games/guidelines
 - Google, Family Link daily limit: https://support.google.com/families/answer/7103340

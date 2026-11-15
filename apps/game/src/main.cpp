@@ -3,6 +3,7 @@
 #include "heart_boom_maths/save_store.hpp"
 #include "heart_boom_maths/version.hpp"
 #include "platform/browser.hpp"
+#include "platform/cloud_platform.hpp"
 #include "platform/haptics_platform.hpp"
 #include "platform/platform.hpp"
 #include "platform/score_platform.hpp"
@@ -13,6 +14,7 @@
 #include "services/audio_factory.hpp"
 #include "services/backed_haptics_service.hpp"
 #include "services/clock.hpp"
+#include "services/cloud_store.hpp"
 #include "services/file_save_store.hpp"
 #include "services/first_gesture_filter.hpp"
 #include "services/haptic_backend.hpp"
@@ -138,6 +140,10 @@ int main(int argc, char* argv[])
     app.installEventFilter(&first_gesture);
     // The Game Center service on an Apple device, which stays idle until its Settings switch is on, and none elsewhere.
     const std::unique_ptr<game::ScoreService> scores = game::platform::make_score_service();
+    // The family's iCloud copy of the players and the top 10 on an Apple device; none elsewhere or in a test run.
+    // Making the store touches nothing: it is used only while the Settings switch for iCloud sync is on.
+    const std::unique_ptr<game::CloudStore> cloud =
+        smoke_test ? std::make_unique<game::NullCloudStore>() : game::platform::make_cloud_store();
     // Touch feedback: a phone's motor, or the browser's vibrate function. The desktop and a test run have none, and the
     // switch in Settings is then not shown.
     const std::unique_ptr<game::HapticBackend> haptic_backend =
@@ -163,6 +169,7 @@ int main(int argc, char* argv[])
     services.haptics = &haptics;
     services.links = &links;
     services.clock = &clock;
+    services.cloud = cloud.get();
     game::GameController controller(services, game::GameOptions::with_random_seed());
     // Leaving the Active state (background, lock screen, a window losing focus) pauses and saves.
     QObject::connect(&app, &QGuiApplication::applicationStateChanged, &controller,

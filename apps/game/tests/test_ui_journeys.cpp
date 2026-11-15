@@ -6,6 +6,7 @@
 #include "ui_support.hpp"
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 #include <QByteArray>
 #include <QQuickItem>
@@ -38,10 +39,12 @@ std::string full_list_save()
 {
     SaveData data;
     const char* names[] = {"BOMB SQUAD", "ROCKET", "DAD", "MUM", "SPARKY", "NINJA", "CAT", "ALEX", "SUNNY", "TINY"};
+    std::vector<ScoreEntry> entries;
     for (int i = 0; i < 10; ++i)
     {
-        data.top10.push_back({names[i], 100 - 10 * i});
+        entries.push_back({names[i], 100 - 10 * i});
     }
+    give_top10(data, std::move(entries));
     return *serialise(data);
 }
 
@@ -102,6 +105,46 @@ struct Journey
         REQUIRE(item != nullptr);
         click(item);
         h.settle();
+    }
+
+    /// For the controls of a list, whose names are made from a place in it ("renameButton1").
+    void tap(const QString& name)
+    {
+        tap(name.toLatin1().constData());
+    }
+
+    [[nodiscard]] bool visible(const QString& name) const
+    {
+        return visible(name.toLatin1().constData());
+    }
+
+    [[nodiscard]] QString text_of(const QString& name) const
+    {
+        return text_of(name.toLatin1().constData());
+    }
+
+    /// How many players WHO'S PLAYING shows.
+    [[nodiscard]] int player_cards() const
+    {
+        int count = 0;
+        while (has(QStringLiteral("playerCard%1").arg(count).toLatin1().constData()))
+        {
+            ++count;
+        }
+        return count;
+    }
+
+    /// True when the named item lies inside the window.
+    [[nodiscard]] bool inside(const QString& name) const
+    {
+        QQuickItem* item = h.find_item(name);
+        if (item == nullptr)
+        {
+            return false;
+        }
+        const QRectF r = item->mapRectToScene(QRectF(0, 0, item->width(), item->height()));
+        return r.left() >= -0.5 && r.top() >= -0.5 && r.right() <= h.root()->width() + 0.5 &&
+               r.bottom() <= h.root()->height() + 0.5;
     }
 
     [[nodiscard]] QQuickItem* tile(int position) const
@@ -265,7 +308,7 @@ TEST_CASE("Journey: a new player plays a first game, uses a hint, loses, and is 
     CHECK(j.c().state() == State::Playing);
     CHECK(j.text_of("levelLabel") == "LEVEL 1");
     CHECK(j.text_of("questionCount") == "1 / 10");
-    CHECK_FALSE(j.on_disk().run.has_value());
+    CHECK_FALSE(j.on_disk().device.run.has_value());
 
     // 3. No coins, no hint. One coin is not enough either. Two is exactly the price.
     CHECK_FALSE(j.enabled("hintButton"));
@@ -316,7 +359,7 @@ TEST_CASE("Journey: a new player plays a first game, uses a hint, loses, and is 
     }
     REQUIRE(j.c().state() == State::LevelClear);
     CHECK(j.screen() == "levelClear");
-    CHECK(j.on_disk().coins == j.c().wallet());
+    CHECK(wallet_of(j.on_disk()) == j.c().wallet());
 
     // 7. NEXT LEVEL: level 2 with a fresh timer.
     j.tap("nextLevelButton");
@@ -331,8 +374,8 @@ TEST_CASE("Journey: a new player plays a first game, uses a hint, loses, and is 
     j.wait_out_holds();
     REQUIRE(j.screen() == "nameEntry");
     CHECK(j.c().name_entry_rank() == 1);
-    CHECK(j.on_disk().top10.empty()); // nothing is in the list until SAVE
-    CHECK(j.on_disk().coins == j.c().wallet());
+    CHECK(j.on_disk().shared.top10.empty()); // nothing is in the list until SAVE
+    CHECK(wallet_of(j.on_disk()) == j.c().wallet());
     CHECK_FALSE(j.enabled("saveButton"));
 
     // 9. A name, SAVE: the top 10 with the new entry marked, and the list is on disk.
@@ -341,9 +384,9 @@ TEST_CASE("Journey: a new player plays a first game, uses a hint, loses, and is 
     j.tap("saveButton");
     REQUIRE(j.screen() == "top10");
     CHECK(j.c().highlight_rank() == 1);
-    REQUIRE(j.on_disk().top10.size() == 1);
-    CHECK(j.on_disk().top10.front().name == "ZOE");
-    CHECK(j.on_disk().top10.front().score == j.c().final_score());
+    REQUIRE(j.on_disk().shared.top10.size() == 1);
+    CHECK(j.on_disk().shared.top10.front().name == "ZOE");
+    CHECK(j.on_disk().shared.top10.front().score == j.c().final_score());
 
     // 10. Back lands on the game-over card, where the score is the best.
     j.tap("backButton");
@@ -355,7 +398,7 @@ TEST_CASE("Journey: a new player plays a first game, uses a hint, loses, and is 
     REQUIRE(j.screen() == "play");
     CHECK(j.text_of("levelLabel") == "LEVEL 1");
     CHECK(j.text_of("pointsValue") == "0");
-    CHECK(j.c().wallet() == j.on_disk().coins); // the coins stayed
+    CHECK(j.c().wallet() == wallet_of(j.on_disk())); // the coins stayed
 }
 
 // ---- Journey: dying and ranking
@@ -408,8 +451,8 @@ TEST_CASE("Journey: a score that does not rank, then one that does, then SKIP an
     j.tap("skipButton");
     REQUIRE(j.screen() == "gameOver");
     CHECK_FALSE(j.visible("newBestBadge"));
-    CHECK(j.on_disk().top10.size() == 10);
-    CHECK(j.on_disk().top10.back().name == "TINY");
+    CHECK(j.on_disk().shared.top10.size() == 10);
+    CHECK(j.on_disk().shared.top10.back().name == "TINY");
 
     // 6. PLAY AGAIN and the same again; SAVE this time: the new entry is 8th and the 10th falls off.
     j.tap("playAgainButton");
@@ -426,7 +469,7 @@ TEST_CASE("Journey: a score that does not rank, then one that does, then SKIP an
     CHECK(property_of(j.h.find_item("scoreRow8"), "highlighted").toBool());
     CHECK(property_of(j.h.find_item("scoreRow8"), "name").toString() == "KIT");
     CHECK(j.has("scoreRow10"));
-    const std::vector<ScoreEntry> disk = j.on_disk().top10;
+    const std::vector<ScoreEntry> disk = j.on_disk().shared.top10;
     REQUIRE(disk.size() == 10);
     CHECK(disk[7].name == "KIT");
     CHECK(disk[9].name == "SUNNY"); // the entry at 10 points, TINY, is the one that fell off
@@ -456,8 +499,8 @@ TEST_CASE("Journey: clearing level 12 pays the bonus once, KEEP GOING into endle
     REQUIRE(j.screen() == "won");
     CHECK(property_of(j.h.find("bonusCard"), "text").toString() == "+1,000 COINS");
     CHECK(j.c().win_bonus() == 1000);
-    CHECK(j.on_disk().won_once);
-    CHECK(j.on_disk().coins == j.c().wallet());
+    CHECK(current_player(j.on_disk())->won_once);
+    CHECK(wallet_of(j.on_disk()) == j.c().wallet());
     CHECK(j.c().wallet() >= 1000);
 
     // 2. KEEP GOING: level 13, the first endless level, with its badge.
@@ -470,11 +513,11 @@ TEST_CASE("Journey: clearing level 12 pays the bonus once, KEEP GOING into endle
     j.rig.play_for_ms(2000);
     j.tap("pauseButton");
     REQUIRE(j.visible("pauseOverlay"));
-    CHECK(j.on_disk().run.has_value());
+    CHECK(j.on_disk().device.run.has_value());
     j.tap("quitButton");
     REQUIRE(j.screen() == "nameEntry");
     CHECK(j.c().end_reason() == GameController::EndReason::Quit);
-    CHECK_FALSE(j.on_disk().run.has_value()); // an ended game leaves no run to continue
+    CHECK_FALSE(j.on_disk().device.run.has_value()); // an ended game leaves no run to continue
     j.type_name("ace");
     j.tap("saveButton");
     REQUIRE(j.screen() == "top10");
@@ -498,13 +541,19 @@ TEST_CASE("Journey: clearing level 12 pays the bonus once, KEEP GOING into endle
     CHECK(j.c().win_bonus() == 0);
     CHECK(property_of(j.h.find("bonusCard"), "text").toString() == "BONUS WON BEFORE");
     CHECK(j.c().wallet() - wallet_after_first_game < 1000);
-    CHECK(j.on_disk().won_once);
+    CHECK(current_player(j.on_disk())->won_once);
 
-    // 5. FINISH ends the game like QUIT: no BOOM, the name screen, SKIP, the card.
+    // 5. FINISH ends the game like QUIT: no BOOM. The player was named ACE at the first name screen, so there is no
+    // name screen now: the entry is saved at once and the Top 10 page opens with it marked, then the card.
     j.tap("finishButton");
-    REQUIRE(j.screen() == "nameEntry");
+    REQUIRE(j.screen() == "top10");
     CHECK(j.c().end_reason() == GameController::EndReason::Finish);
-    j.tap("skipButton");
+    CHECK_FALSE(j.has("nameEntryScreen"));
+    REQUIRE(j.c().highlight_rank() >= 1);
+    CHECK(property_of(j.h.find_item(QStringLiteral("scoreRow%1").arg(j.c().highlight_rank()).toLatin1().constData()),
+                      "name")
+              .toString() == "ACE");
+    j.tap("backButton");
     REQUIRE(j.screen() == "gameOver");
     CHECK_FALSE(j.visible("boomBurst"));
 
@@ -536,7 +585,7 @@ TEST_CASE("Journey: pause, Settings from the pause screen, leave the app, be kil
         first.tap("pauseButton");
         REQUIRE(first.c().state() == State::Paused);
         REQUIRE(first.visible("pauseOverlay"));
-        CHECK(first.on_disk().run.has_value());
+        CHECK(first.on_disk().device.run.has_value());
         const int frozen = first.c().ticks_left();
         first.rig.play_for_ms(5000);
         CHECK(first.c().ticks_left() == frozen);
@@ -555,14 +604,14 @@ TEST_CASE("Journey: pause, Settings from the pause screen, leave the app, be kil
         // 3. RESUME and then the app is switched away from: it pauses at once with the clock stopped.
         first.tap("resumeButton");
         REQUIRE(first.c().state() == State::Playing);
-        CHECK_FALSE(first.on_disk().run.has_value()); // spent on resuming
+        CHECK_FALSE(first.on_disk().device.run.has_value()); // spent on resuming
         first.rig.play_for_ms(1000);
         first.background();
         REQUIRE(first.c().state() == State::Paused);
         REQUIRE(first.screen() == "play");
         CHECK(first.visible("pauseOverlay"));
         CHECK(first.rig.audio.suspends == 1);
-        CHECK(first.on_disk().run.has_value());
+        CHECK(first.on_disk().device.run.has_value());
         const int at_leaving = first.c().ticks_left();
         first.rig.play_for_ms(20000);
         CHECK(first.c().ticks_left() == at_leaving);
@@ -605,7 +654,7 @@ TEST_CASE("Journey: pause, Settings from the pause screen, leave the app, be kil
     CHECK(static_cast<int>(second.c().points()) == points);
     CHECK(second.c().ticks_left() == ticks);
     CHECK(second.c().question_parts() == parts);
-    CHECK_FALSE(second.on_disk().run.has_value());
+    CHECK_FALSE(second.on_disk().device.run.has_value());
     second.rig.play_for_ms(5000);
     CHECK(second.c().ticks_left() == ticks);
 
@@ -617,7 +666,7 @@ TEST_CASE("Journey: pause, Settings from the pause screen, leave the app, be kil
 
     // 8. Leaving again saves a new run, and NEW GAME on the next launch throws it away.
     second.background();
-    REQUIRE(second.on_disk().run.has_value());
+    REQUIRE(second.on_disk().device.run.has_value());
     Journey third(PHONE, second.save());
     REQUIRE(third.visible("continueButton"));
     third.tap("playButton");
@@ -625,7 +674,7 @@ TEST_CASE("Journey: pause, Settings from the pause screen, leave the app, be kil
     CHECK(third.c().state() == State::Playing);
     CHECK(third.c().level() == 1);
     CHECK(third.c().question_number() == 1);
-    CHECK_FALSE(third.on_disk().run.has_value());
+    CHECK_FALSE(third.on_disk().device.run.has_value());
     CHECK_FALSE(third.c().has_saved_run());
 }
 
@@ -634,15 +683,15 @@ TEST_CASE("Journey: a saved run that cannot be opened, and a save from a newer v
     SECTION("a run the game cannot restore leaves a calm title and a working PLAY")
     {
         SaveData data;
-        data.coins = 7;
-        data.run = std::vector<std::int64_t>{1, 2, 3};
+        give_wallet(data, 7);
+        give_run(data, {1, 2, 3});
         Journey j(PHONE, *serialise(data));
         REQUIRE(j.visible("continueButton"));
         j.tap("continueButton");
         CHECK(j.screen() == "title");
         CHECK_FALSE(j.visible("continueButton"));
         CHECK(j.c().wallet() == 7);
-        CHECK_FALSE(j.on_disk().run.has_value());
+        CHECK_FALSE(j.on_disk().device.run.has_value());
         j.tap("playButton");
         CHECK(j.screen() == "play");
     }
@@ -685,8 +734,8 @@ TEST_CASE("Journey: Settings switches, the gate for Game Center and for a link, 
         j.tap("musicSwitch");
         CHECK_FALSE(j.rig.audio.effects_enabled);
         CHECK_FALSE(j.rig.audio.music_enabled);
-        CHECK_FALSE(j.on_disk().sound);
-        CHECK_FALSE(j.on_disk().music);
+        CHECK_FALSE(j.on_disk().device.sound);
+        CHECK_FALSE(j.on_disk().device.music);
 
         // 2. Game Center, where there is a leaderboard: the gate, a wrong number, CANCEL; then the right number.
         j.tap("gameCenterSwitch");
@@ -697,13 +746,13 @@ TEST_CASE("Journey: Settings switches, the gate for Game Center and for a link, 
         CHECK_FALSE(j.c().game_center_enabled());
         j.tap("cancelButton");
         CHECK_FALSE(j.c().gate_active());
-        CHECK_FALSE(j.on_disk().game_center);
+        CHECK_FALSE(j.on_disk().device.game_center);
         j.tap("gameCenterSwitch");
         j.keypad(j.gate_answer());
         j.tap("openButton");
         CHECK(j.c().game_center_enabled());
         CHECK(j.rig.scores.enabled);
-        CHECK(j.on_disk().game_center);
+        CHECK(j.on_disk().device.game_center);
         CHECK(j.page() == "settings");
 
         // 3. About from Settings, and a link: the gate, the Escape key closes it, then the right number opens it once.
@@ -898,18 +947,18 @@ TEST_CASE("Lifecycle: leaving the app and coming back in every state shows the s
             CHECK(j.visible(test.shown));
             CHECK_FALSE(j.c().gate_active());
             CHECK(j.c().wallet() == wallet);
-            CHECK(j.on_disk().coins == wallet);
+            CHECK(wallet_of(j.on_disk()) == wallet);
             if (test.where == Where::PLAYING || test.where == Where::PAUSED)
             {
-                CHECK(j.on_disk().run.has_value());
+                CHECK(j.on_disk().device.run.has_value());
             }
             else
             {
-                CHECK_FALSE(j.on_disk().run.has_value());
+                CHECK_FALSE(j.on_disk().device.run.has_value());
             }
             if (test.where == Where::WON)
             {
-                CHECK(j.on_disk().won_once);
+                CHECK(current_player(j.on_disk())->won_once);
             }
         }
     }
@@ -1179,5 +1228,429 @@ TEST_CASE("Lifecycle: changing the window's shape in every state leaves one scre
         j.h.resize(size);
         CHECK(j.screen() == "top10");
         CHECK(j.has("top10Screen"));
+    }
+}
+
+// ---- Journey: who is playing
+// ---------------------------------------------------------------------------------------------
+
+namespace
+{
+
+/// The text of a save for a family of two: the first player has no name, 40 coins, a best of 700 and a run paused in
+/// the middle of level 1; BEN has 7 coins and a best of 300.
+std::string family_with_a_run()
+{
+    SaveData data;
+    REQUIRE(add_player(data.shared, "00000000000000b2").has_value());
+    REQUIRE(rename_player(data.shared, "00000000000000b2", "BEN").has_value());
+    REQUIRE(record_wallet(data.shared.players[0], "", 40).has_value());
+    REQUIRE(record_wallet(data.shared.players[1], "", 7).has_value());
+    data.shared.players[0].best = 700;
+    data.shared.players[1].best = 300;
+    UiRig first(SEED, *serialise(data));
+    first.controller.startGame();
+    first.answer_right();
+    first.controller.pause();
+    REQUIRE(first.store.text().has_value());
+    return *first.store.text();
+}
+
+/// The text of a save for one player who has a name.
+std::string named_player_save(const char* name)
+{
+    SaveData data;
+    REQUIRE(rename_player(data.shared, "first", name).has_value());
+    return *serialise(data);
+}
+
+/// The text of a save for one player with a name, a best score and coins, and, when asked, a run paused in level 1.
+std::string player_card_save(const char* name, int best, int coins, bool with_run)
+{
+    SaveData data;
+    REQUIRE(rename_player(data.shared, "first", name).has_value());
+    REQUIRE(record_wallet(data.shared.players[0], "", coins).has_value());
+    data.shared.players[0].best = best;
+    if (!with_run)
+    {
+        return *serialise(data);
+    }
+    UiRig first(SEED, *serialise(data));
+    first.controller.startGame();
+    first.answer_right();
+    first.controller.pause();
+    REQUIRE(first.store.text().has_value());
+    return *first.store.text();
+}
+
+} // namespace
+
+TEST_CASE("Journey: the chip on the title opens WHO'S PLAYING; add, switch, rename and remove players",
+          "[ui][journey][players]")
+{
+    const bool wide = GENERATE(false, true);
+    CAPTURE(wide);
+    Journey j(wide ? DESKTOP : PHONE);
+
+    // 1. The title says who is playing. A player with no name is PLAYER 1.
+    REQUIRE(j.screen() == "title");
+    REQUIRE(j.visible("playerChip"));
+    CHECK(j.text_of("playerChipName") == "PLAYER 1");
+    CHECK(property_of(j.h.find("playerChip"), "accessibleName").toString().contains("PLAYER 1"));
+    j.tap("playerChip");
+    REQUIRE(j.page() == "players");
+    CHECK_FALSE(j.visible("playButton")); // the title is under the page
+    CHECK(j.has("playersScreen"));
+
+    // 2. One player: marked as playing by a tick and the word, no REMOVE for the last one, ADD PLAYER there.
+    CHECK(j.player_cards() == 1);
+    CHECK(j.text_of("playerName0") == "PLAYER 1");
+    CHECK(j.visible("playerTick0"));
+    CHECK(j.visible("playingTag0"));
+    CHECK(j.text_of("playingTag0") == "PLAYING");
+    CHECK(j.text_of("playerBest0") == "0");
+    CHECK(j.text_of("playerCoins0") == "0");
+    CHECK(j.text_of("renameButton0") == "NAME");
+    CHECK_FALSE(j.visible("removeButton0"));
+    CHECK(j.visible("addPlayerButton"));
+    CHECK(j.inside(QStringLiteral("addPlayerButton")));
+
+    // 3. ADD PLAYER: the new player is current at once and the name screen opens for them. SAVE names them.
+    j.tap("addPlayerButton");
+    REQUIRE(j.page() == "playerName");
+    CHECK(j.has("playerNameScreen"));
+    CHECK_FALSE(j.visible("entryCard")); // there is no score to show
+    CHECK(j.text_of("skipButton") == "SKIP");
+    CHECK(j.c().players().size() == 2);
+    CHECK(j.c().player_name() == "PLAYER 2");
+    CHECK_FALSE(j.enabled("saveButton"));
+    j.type_name("ben");
+    CHECK(j.enabled("saveButton"));
+    j.tap("saveButton");
+    REQUIRE(j.page() == "players");
+    CHECK(j.player_cards() == 2);
+    CHECK(j.text_of("playerName0") == "PLAYER 1");
+    CHECK(j.text_of("playerName1") == "BEN");
+    CHECK(j.visible("playingTag1"));
+    CHECK_FALSE(j.visible("playingTag0"));
+    CHECK(j.visible("removeButton0"));
+    CHECK(j.visible("removeButton1"));
+    CHECK(j.text_of("renameButton1") == "RENAME");
+    CHECK(j.c().player_name() == "BEN");
+
+    // 4. ADD PLAYER and SKIP: a player with no name, who is playing.
+    j.tap("addPlayerButton");
+    REQUIRE(j.page() == "playerName");
+    j.tap("skipButton");
+    REQUIRE(j.page() == "players");
+    CHECK(j.player_cards() == 3);
+    CHECK(j.text_of("playerName2") == "PLAYER 3");
+    CHECK(j.visible("playingTag2"));
+    CHECK_FALSE(j.visible("playingTag1"));
+    CHECK(j.c().player_name() == "PLAYER 3");
+
+    // 5. Tapping a player makes that player current.
+    j.tap("playerSelect0");
+    CHECK(j.c().player_name() == "PLAYER 1");
+    CHECK(j.visible("playingTag0"));
+    CHECK_FALSE(j.visible("playingTag2"));
+    CHECK(j.page() == "players"); // the page stays: the grown-up may go on
+
+    // 6. Back to the title, which says who is playing now.
+    j.tap("backButton");
+    REQUIRE(j.page().isEmpty());
+    REQUIRE(j.screen() == "title");
+    CHECK(j.text_of("playerChipName") == "PLAYER 1");
+
+    // 7. Renaming opens the name screen with the name they have; CANCEL leaves it, SAVE changes it.
+    j.tap("playerChip");
+    j.tap("renameButton1");
+    REQUIRE(j.page() == "playerName");
+    CHECK(j.text_of("skipButton") == "CANCEL");
+    CHECK(j.text_of("nameText") == "BEN");
+    j.type_name("xx");
+    CHECK(j.text_of("nameText") == "BENXX");
+    j.tap("skipButton");
+    REQUIRE(j.page() == "players");
+    CHECK(j.text_of("playerName1") == "BEN");
+    j.tap("renameButton1");
+    j.type_name("ny");
+    j.tap("saveButton");
+    REQUIRE(j.page() == "players");
+    CHECK(j.text_of("playerName1") == "BENNY");
+    CHECK(j.c().player_name() == "PLAYER 1"); // renaming is not switching
+    CHECK(j.on_disk().shared.players[1].name == "BENNY");
+
+    // 8. Removing asks a grown-up. CANCEL, and a wrong number, remove no one.
+    j.tap("removeButton2");
+    REQUIRE(j.c().gate_active());
+    CHECK(j.has("gateScreen"));
+    CHECK(j.text_of("gatePromptText") == "To remove PLAYER 3, type this number:");
+    CHECK(j.text_of("openButton") == "REMOVE");
+    j.tap("cancelButton");
+    CHECK_FALSE(j.c().gate_active());
+    CHECK(j.player_cards() == 3);
+    j.tap("removeButton2");
+    j.keypad(j.gate_wrong_answer());
+    CHECK(j.c().gate_active());
+    CHECK(j.visible("gateFailedText"));
+    CHECK(j.player_cards() == 3);
+    j.keypad(j.gate_answer());
+    REQUIRE(j.enabled("openButton"));
+    j.tap("openButton");
+    CHECK_FALSE(j.c().gate_active());
+    CHECK(j.player_cards() == 2);
+    CHECK(j.page() == "players");
+    CHECK(j.on_disk().shared.players[2].removed);
+
+    // 9. Down to one: the last player has no REMOVE.
+    j.tap("removeButton1");
+    j.keypad(j.gate_answer());
+    j.tap("openButton");
+    REQUIRE(j.player_cards() == 1);
+    CHECK_FALSE(j.visible("removeButton0"));
+    CHECK(j.visible("addPlayerButton"));
+}
+
+TEST_CASE("Journey: a full list of players has no ADD PLAYER, and every card lies inside the window",
+          "[ui][journey][players]")
+{
+    const QSize size = GENERATE(PHONE, TABLET, DESKTOP);
+    CAPTURE(size.width());
+    Journey j(size);
+    j.tap("playerChip");
+    REQUIRE(j.page() == "players");
+    for (int count = 1; count <= j.c().max_players(); ++count)
+    {
+        CAPTURE(count);
+        REQUIRE(j.player_cards() == count);
+        CHECK(j.visible("addPlayerButton") == (count < j.c().max_players()));
+        for (int card = 0; card < count; ++card)
+        {
+            const QString suffix = QString::number(card);
+            CHECK(j.inside(QStringLiteral("playerCard") + suffix));
+            CHECK(j.inside(QStringLiteral("renameButton") + suffix));
+            CHECK(j.inside(QStringLiteral("playerSelect") + suffix));
+        }
+        CHECK(j.inside(QStringLiteral("backButton")));
+        if (count < j.c().max_players())
+        {
+            CHECK(j.inside(QStringLiteral("addPlayerButton")));
+            REQUIRE_FALSE(j.c().addPlayer().isEmpty());
+            j.h.settle();
+        }
+    }
+    CHECK(j.player_cards() == 4);
+    CHECK_FALSE(j.visible("addPlayerButton"));
+    CHECK(j.c().addPlayer().isEmpty());
+    // The name screen of a player fits too, with the keyboard that a small window shows.
+    j.tap("renameButton3");
+    REQUIRE(j.page() == "playerName");
+    for (const char* name : {"nameBurst", "nameField", "saveButton", "skipButton"})
+    {
+        INFO(name);
+        CHECK(j.inside(QString::fromLatin1(name)));
+    }
+}
+
+TEST_CASE("Journey: the title, its CONTINUE and its numbers follow the player who is chosen", "[ui][journey][players]")
+{
+    Journey j(PHONE, family_with_a_run());
+    REQUIRE(j.screen() == "title");
+
+    // The first player paused the run, has 40 coins, and a best of 700.
+    CHECK(j.text_of("playerChipName") == "PLAYER 1");
+    CHECK(j.visible("continueButton"));
+    CHECK(j.text_of("playButton") == "NEW GAME");
+    CHECK(j.text_of("titleCaption").startsWith("Saved game: level 1"));
+    CHECK(j.text_of("bestScoreValue") == "700");
+    CHECK(property_of(j.h.find("walletPill"), "value").toInt() == 41);
+
+    // BEN has neither the run nor those numbers.
+    j.tap("playerChip");
+    j.tap("playerSelect1");
+    j.tap("backButton");
+    CHECK(j.text_of("playerChipName") == "BEN");
+    CHECK_FALSE(j.visible("continueButton"));
+    CHECK(j.text_of("playButton") == "PLAY");
+    CHECK(j.text_of("titleCaption") == "Every game starts at level 1");
+    CHECK(j.text_of("bestScoreValue") == "300");
+    CHECK(property_of(j.h.find("walletPill"), "value").toInt() == 7);
+
+    // The run is still on the device, with its player.
+    CHECK(j.on_disk().device.run_player == "first");
+
+    // And back again: CONTINUE is the first player's, and resumes with their coins.
+    j.tap("playerChip");
+    j.tap("playerSelect0");
+    j.tap("backButton");
+    REQUIRE(j.visible("continueButton"));
+    CHECK(j.text_of("titleCaption").startsWith("Saved game: level 1"));
+    j.tap("continueButton");
+    REQUIRE(j.c().state() == State::Paused);
+    CHECK(j.c().wallet() == 41);
+    CHECK_FALSE(j.visible("playerChip")); // no chip on the play screen: players are switched from the title only
+}
+
+TEST_CASE("Journey: a named player's high score goes straight to the Top 10 page", "[ui][journey][players]")
+{
+    Journey j(PHONE, named_player_save("ROCKET"));
+    REQUIRE(j.text_of("playerChipName") == "ROCKET");
+
+    // 1. The bomb: the boom, and then, with no name screen, the Top 10 page with the new entry marked.
+    j.blow_up_after(3);
+    REQUIRE(j.screen() == "top10");
+    CHECK_FALSE(j.has("nameEntryScreen"));
+    REQUIRE(j.c().highlight_rank() == 1);
+    CHECK(property_of(j.h.find_item("scoreRow1"), "highlighted").toBool());
+    CHECK(property_of(j.h.find_item("scoreRow1"), "name").toString() == "ROCKET");
+    CHECK(j.text_of("top10PlayButton") == "PLAY AGAIN");
+    CHECK(j.on_disk().shared.top10.size() == 1);
+    CHECK(j.on_disk().shared.top10[0].name == "ROCKET");
+
+    // 2. Back goes to the game-over card, which says NEW BEST!
+    j.tap("backButton");
+    REQUIRE(j.screen() == "gameOver");
+    CHECK(j.visible("newBestBadge"));
+    CHECK(j.c().best_score() == j.c().final_score());
+
+    // 3. PLAY AGAIN, and QUIT: no BOOM and the same flow, for a score that is not a new best.
+    j.tap("playAgainButton");
+    REQUIRE(j.screen() == "play");
+    j.rig.answer_right();
+    j.wait_out_holds();
+    j.tap("pauseButton");
+    j.tap("quitButton");
+    REQUIRE(j.screen() == "top10");
+    CHECK(property_of(j.h.find_item(QStringLiteral("scoreRow%1").arg(j.c().highlight_rank()).toLatin1().constData()),
+                      "highlighted")
+              .toBool());
+    j.tap("backButton");
+    REQUIRE(j.screen() == "gameOver");
+    CHECK_FALSE(j.visible("newBestBadge")); // 10 points does not beat the best of the game before
+}
+
+TEST_CASE("Journey: an unnamed player is asked once, and the name they give is theirs afterwards",
+          "[ui][journey][players]")
+{
+    Journey j;
+    j.blow_up_after(3);
+    REQUIRE(j.screen() == "nameEntry");
+    CHECK(j.has("nameEntryScreen"));
+    CHECK(j.visible("entryCard")); // the score card, as on board CP11
+    CHECK(j.text_of("skipButton") == "SKIP");
+    j.type_name("ace");
+    j.tap("saveButton");
+    REQUIRE(j.screen() == "top10");
+    j.tap("backButton");
+    REQUIRE(j.screen() == "gameOver");
+    CHECK(j.c().player_name() == "ACE");
+
+    // The title says ACE now, and the next game needs no name screen.
+    j.tap("homeButton");
+    REQUIRE(j.screen() == "title");
+    CHECK(j.text_of("playerChipName") == "ACE");
+    j.tap("playButton");
+    j.rig.answer_right();
+    j.rig.play_for_ms(61000);
+    j.wait_out_holds();
+    CHECK(j.screen() == "top10");
+    CHECK_FALSE(j.has("nameEntryScreen"));
+}
+
+TEST_CASE("Journey: players are switched from the title only", "[ui][journey][players]")
+{
+    Journey j;
+    CHECK(j.visible("playerChip"));
+    j.tap("playButton");
+    REQUIRE(j.screen() == "play");
+    CHECK_FALSE(j.has("playerChip"));
+    CHECK_FALSE(j.c().can_change_players());
+    j.tap("pauseButton");
+    CHECK_FALSE(j.has("playerChip"));
+    CHECK_FALSE(j.c().can_change_players());
+}
+
+// ---- Screenshots of the players screens, for the designer to look at. Run by hand: the test does nothing unless
+// HBM_SCREENSHOT_DIR names a folder, and it is hidden from the ordinary run.
+TEST_CASE("Screenshots of WHO'S PLAYING and the name screen of a player", "[.][screenshots]")
+{
+    const QString dir = qEnvironmentVariable("HBM_SCREENSHOT_DIR");
+    if (dir.isEmpty())
+    {
+        return;
+    }
+    struct Shape
+    {
+        const char* label;
+        QSize size;
+    };
+    for (const Shape shape : {Shape{"compact", PHONE}, Shape{"regular", DESKTOP}})
+    {
+        SaveData data;
+        REQUIRE(rename_player(data.shared, "first", "ROCKET").has_value());
+        REQUIRE(record_wallet(data.shared.players[0], "", 61).has_value());
+        data.shared.players[0].best = 1640;
+        UiRig rig(SEED, *serialise(data));
+        QmlHarness h(&rig.controller, QStringLiteral("AppShell.qml"), shape.size);
+        const auto path = [&](const char* name)
+        { return QStringLiteral("%1/%2-%3.png").arg(dir, QLatin1String(name), QLatin1String(shape.label)); };
+        const auto tap = [&](const char* name)
+        {
+            QQuickItem* item = h.find_item(QLatin1String(name));
+            REQUIRE(item != nullptr);
+            click(item);
+            h.settle();
+        };
+
+        tap("playerChip");
+        CHECK(h.grab(path("whos-playing-1")));
+        for (const char* name : {"Dad", "Mum", "Ben"})
+        {
+            const QString id = rig.controller.addPlayer();
+            REQUIRE_FALSE(id.isEmpty());
+            REQUIRE(rig.controller.renamePlayer(id, QString::fromLatin1(name)));
+        }
+        REQUIRE(rig.controller.selectPlayer(QStringLiteral("first")));
+        h.settle();
+        CHECK(h.grab(path("whos-playing-4")));
+        tap("renameButton1");
+        CHECK(h.grab(path("player-name")));
+    }
+}
+
+// The title's player card at the sizes and with the names that matter, for the owner to look at. Same rules as above.
+TEST_CASE("Screenshots of the title's player card", "[.][screenshots]")
+{
+    const QString dir = qEnvironmentVariable("HBM_SCREENSHOT_DIR");
+    if (dir.isEmpty())
+    {
+        return;
+    }
+    struct Shot
+    {
+        const char* file;
+        QSize size;
+        const char* name;
+        int best;
+        int coins;
+        bool with_run;
+    };
+    const Shot shots[] = {
+        {"title-card-390x844-short-name", PHONE, "ROCKET", 1640, 61, false},
+        {"title-card-390x844-12-letters", PHONE, "WWWWWWWWWWWW", 1234567, 98765, false},
+        {"title-card-390x844-12-letters-narrow", PHONE, "MMMMMMMMMMMM", 1640, 61, false},
+        {"title-card-390x844-saved-run", PHONE, "ROCKET", 1640, 61, true},
+        {"title-card-375x667", QSize{375, 667}, "ROCKET", 1640, 61, false},
+        {"title-card-375x667-saved-run", QSize{375, 667}, "WWWWWWWWWWWW", 1640, 61, true},
+        {"title-card-1280x800", DESKTOP, "ROCKET", 1640, 61, false},
+        {"title-card-1280x800-saved-run", DESKTOP, "WWWWWWWWWWWW", 1640, 61, true},
+        {"title-card-820x1180", TABLET, "ROCKET", 1640, 61, false},
+    };
+    for (const Shot& shot : shots)
+    {
+        UiRig rig(SEED, player_card_save(shot.name, shot.best, shot.coins, shot.with_run));
+        QmlHarness h = app_root(&rig.controller, shot.size, {});
+        CHECK(h.grab(QStringLiteral("%1/%2.png").arg(dir, QLatin1String(shot.file))));
     }
 }

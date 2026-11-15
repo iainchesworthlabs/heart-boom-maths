@@ -20,9 +20,14 @@ import QtQuick.Layouts
 // The play screen stays up for a moment after the last answer of a level, or after the bomb, while AnswerFeedback holds the
 // look of that answer, and the next screen follows when the hold ends.
 //
-// Over any of those can sit a page: Settings, About, or Top 10. They stack (About opens from Settings and goes back to it),
-// and any change of the game's state clears them, so a page never outlives the game it was opened in. The pause screen
-// opens Settings too. The parental gate sits on top of everything while the controller has one open.
+// Over any of those can sit a page: Settings, About, Top 10, WHO'S PLAYING, or the name screen of a player. They stack (About
+// opens from Settings and goes back to it; the name screen opens from WHO'S PLAYING and goes back to it), and any change of
+// the game's state clears them, so a page never outlives the game it was opened in. The pause screen opens Settings too.
+// The parental gate sits on top of everything while the controller has one open.
+//
+// A game that ends with a place in the top 10 for a player who has a name has no name screen: the controller saves the entry
+// at once and says so (`scoreSavedAtOnce`), and the Top 10 page opens as soon as the game-over card is due, as it does after
+// SAVE.
 Item {
     id: root
 
@@ -41,8 +46,20 @@ Item {
     // The screen on show: "title", "play", "levelClear", "won", "nameEntry" or "gameOver", or "top10" while that page is open.
     readonly property string screen: page === "top10" ? "top10" : screenFor(game.state, answerFeedback.active, overlay, game.nameEntryPending)
 
-    // The pages opened over the screen, the last one on top: "settings", "about" or "top10".
+    // What the play screen asks of the layer over the whole window (AppRoot lays AlertFrame there, outside the safe area):
+    // `alertShown` while the red frame is wanted, `streakStepped` for the flash. The play screen sets the first while it is
+    // on show, and the value goes back to false when it goes.
+    property bool alertShown: false
+
+    signal streakStepped
+
+    // The pages opened over the screen, the last one on top: "settings", "about", "top10", "players" or "playerName".
     property var pages: []
+    // The player the "playerName" page is for, and whether the player has just been added.
+    property string namingPlayer: ""
+    property bool namingNew: false
+    // A score was saved without a name screen and the Top 10 page is still to open (it waits for the boom to end).
+    property bool top10Due: false
     // The page on top, or "" for none.
     readonly property string page: pages.length > 0 ? pages[pages.length - 1] : ""
 
@@ -57,6 +74,24 @@ Item {
     // Also the way in from the game-over screen.
     function showTop10() {
         root.pages = ["top10"];
+    }
+
+    // The way in from the player chip on the title.
+    function showPlayers() {
+        root.pages = ["players"];
+    }
+
+    function showPlayerName(playerId, isNew) {
+        root.namingPlayer = playerId;
+        root.namingNew = isNew;
+        root.pages = root.pages.concat(["playerName"]);
+    }
+
+    function openDueTop10() {
+        if (root.top10Due && root.screen === "gameOver") {
+            root.top10Due = false;
+            root.showTop10();
+        }
     }
 
     // Gives a loaded screen the keyboard.
@@ -105,7 +140,7 @@ Item {
     // name screens the key does nothing: each has its buttons, and a stray press must not close the app on a score that
     // was not saved yet. The Escape key of a desktop keeps its own shortcuts on the same screens.
     function backKeyPressed() {
-        if (root.page === "top10") {
+        if (root.page === "top10" || root.page === "playerName") {
             root.back();
             return;
         }
@@ -128,7 +163,7 @@ Item {
 
     Shortcut {
         sequence: "Back"
-        enabled: !root.game.gateActive && (root.page === "top10" || (root.page === "" && root.screen !== "title"))
+        enabled: !root.game.gateActive && (root.page === "top10" || root.page === "playerName" || (root.page === "" && root.screen !== "title"))
         onActivated: root.backKeyPressed()
     }
 
@@ -145,8 +180,18 @@ Item {
         function onStateChanged() {
             root.pages = [];
             root.overlay = "";
+            root.top10Due = false;
+        }
+
+        function onScoreSavedAtOnce() {
+            root.top10Due = true;
+            root.openDueTop10();
         }
     }
+
+    // The boom holds the play screen up for a moment; the Top 10 of a saved score opens when the card is due. It opens a
+    // moment after the change, not inside it: opening it changes `screen` again.
+    onScreenChanged: Qt.callLater(root.openDueTop10)
 
     Loader {
         id: screens
@@ -179,11 +224,20 @@ Item {
 
         Item {
             PlayScreen {
+                id: play
+
                 objectName: "playScreen"
                 anchors.fill: parent
                 game: root.game
                 feedback: answerFeedback
                 enabled: root.game.state !== GameController.Paused
+                onStreakStepped: root.streakStepped()
+            }
+
+            Binding {
+                target: root
+                property: "alertShown"
+                value: play.visible && play.alertShown
             }
 
             PauseOverlay {
@@ -205,6 +259,7 @@ Item {
             game: root.game
             onTop10Requested: root.showTop10()
             onSettingsRequested: root.showSettings()
+            onPlayersRequested: root.showPlayers()
         }
     }
 
@@ -227,6 +282,10 @@ Item {
                 return aboutPage;
             case "top10":
                 return top10Page;
+            case "players":
+                return playersPage;
+            case "playerName":
+                return playerNamePage;
             default:
                 return null;
             }
@@ -251,6 +310,33 @@ Item {
             objectName: "aboutScreen"
             game: root.game
             onBackClicked: root.back()
+        }
+    }
+
+    Component {
+        id: playersPage
+
+        PlayersScreen {
+            objectName: "playersScreen"
+            game: root.game
+            onNameRequested: (playerId, isNew) => root.showPlayerName(playerId, isNew)
+            onBackClicked: root.back()
+        }
+    }
+
+    // The name screen of a player: a new one (SAVE names it, SKIP leaves it unnamed) or one being renamed (SAVE or CANCEL).
+    Component {
+        id: playerNamePage
+
+        NameEntryScreen {
+            objectName: "playerNameScreen"
+            game: root.game
+            forPlayer: true
+            playerId: root.namingPlayer
+            initialName: root.game.players.find(p => p.id === root.namingPlayer)?.name ?? ""
+            burstText: root.namingNew ? qsTr("NEW PLAYER") : qsTr("NEW NAME")
+            skipText: root.namingNew ? qsTr("SKIP") : qsTr("CANCEL")
+            onFinished: root.back()
         }
     }
 

@@ -47,6 +47,33 @@ void check_result(const ParseResult& result)
     }
 }
 
+// Whatever came out of the payload reader must be shared data the game could have written itself.
+void check_shared_result(const SharedParseResult& result)
+{
+    switch (result.status)
+    {
+    case LoadStatus::OK:
+    {
+        REQUIRE_FALSE(result.damage.has_value());
+        SaveData whole;
+        whole.shared = result.data;
+        REQUIRE(validate(whole).has_value());
+        // A payload that reads is one that writes, to text that reads back as the same data.
+        const auto text = serialise_shared(result.data);
+        REQUIRE(text.has_value());
+        REQUIRE(parse_shared(*text).data == result.data);
+        break;
+    }
+    case LoadStatus::DAMAGED:
+        REQUIRE(result.damage.has_value());
+        REQUIRE(result.data == SharedData{});
+        break;
+    case LoadStatus::NEWER:
+        REQUIRE(result.data == SharedData{});
+        break;
+    }
+}
+
 std::string random_bytes(Rng& rng, std::size_t length)
 {
     std::string bytes;
@@ -80,16 +107,32 @@ std::string random_jsonish(Rng& rng, std::size_t length)
                                                   "false",
                                                   "null",
                                                   "version",
+                                                  "device",
+                                                  "shared",
+                                                  "players",
                                                   "coins",
                                                   "top10",
                                                   "name",
+                                                  "name_rev",
                                                   "score",
+                                                  "seq",
+                                                  "earned",
+                                                  "spent",
+                                                  "removed",
+                                                  "best",
+                                                  "id",
+                                                  "first",
+                                                  "current_player",
+                                                  "next_seq",
                                                   "run",
+                                                  "run_player",
                                                   "sound",
                                                   "music",
                                                   "won_once",
                                                   "game_center",
                                                   "haptics",
+                                                  "cloud_sync",
+                                                  "9f1c2a7b3d4e5f60",
                                                   " ",
                                                   "\n",
                                                   "\xC3",
@@ -144,19 +187,40 @@ std::string mutate(Rng& rng, std::string text)
     return text;
 }
 
+SaveData rich_data()
+{
+    SaveData data;
+    data.device.id = "9f1c2a7b3d4e5f60";
+    data.device.game_center = true;
+    data.device.cloud_sync = true;
+    data.device.next_seq = 11;
+    data.shared.players[0].name = "ROCKET";
+    data.shared.players[0].name_rev = 1;
+    data.shared.players[0].won_once = true;
+    data.shared.players[0].best = 10000;
+    data.shared.players[0].coins = {{data.device.id, 1234, 100}, {"0123456789abcdef", 5, 0}};
+    data.shared.players.push_back(Player{.id = "a1b2c3d4e5f60718", .name = "BEN", .name_rev = 2});
+    data.shared.players.push_back(Player{.id = "00000000000000ff", .removed = true});
+    for (int i = 0; i < 10; ++i)
+    {
+        data.shared.top10.push_back(
+            {"PLAYER " + std::string(1, static_cast<char>('A' + i)), 10000 - i * 7, data.device.id, i + 1});
+    }
+    data.device.run = std::vector<std::int64_t>{3, 1, 400, -9, 9223372036854775807, 0, 12, 12, 12};
+    data.device.run_player = "first";
+    return data;
+}
+
 // The text of a save with plenty in it, for the mutations to start from.
 std::string rich_save()
 {
-    SaveData data;
-    data.coins = 1234;
-    data.won_once = true;
-    data.game_center = true;
-    for (int i = 0; i < 10; ++i)
-    {
-        data.top10.push_back({"PLAYER " + std::string(1, static_cast<char>('A' + i)), 10000 - i * 7});
-    }
-    data.run = std::vector<std::int64_t>{3, 1, 400, -9, 9223372036854775807, 0, 12, 12, 12};
-    return serialise(data).value();
+    return serialise(rich_data()).value();
+}
+
+// The same data as a sync payload.
+std::string rich_payload()
+{
+    return serialise_shared(rich_data().shared).value();
 }
 
 } // namespace
@@ -187,7 +251,8 @@ TEST_CASE("random JSON-shaped garbage never crashes the reader", "[property][fuz
 TEST_CASE("mutated saves never crash the reader or yield invalid data", "[property][fuzz][save]")
 {
     Rng rng(SEED + 2);
-    const std::string seeds[] = {rich_save(), std::string(SAVE_V1_FIXTURE), serialise(SaveData{}).value()};
+    const std::string seeds[] = {rich_save(), std::string(SAVE_V1_FIXTURE), std::string(SAVE_V2_FIXTURE),
+                                 serialise(SaveData{}).value()};
     int still_ok = 0;
     for (int i = 0; i < CASES; ++i)
     {
@@ -216,6 +281,73 @@ TEST_CASE("every prefix of a save is handled", "[property][fuzz][save]")
     REQUIRE(parse_save(text).status == LoadStatus::OK);
 }
 
+TEST_CASE("random garbage never crashes the payload reader", "[property][fuzz][save]")
+{
+    Rng rng(SEED + 10);
+    for (int i = 0; i < CASES; ++i)
+    {
+        CAPTURE(SEED, i);
+        check_shared_result(parse_shared(random_bytes(rng, static_cast<std::size_t>(rng.below(300)))));
+    }
+    for (int i = 0; i < CASES; ++i)
+    {
+        CAPTURE(SEED, i);
+        check_shared_result(parse_shared(random_jsonish(rng, static_cast<std::size_t>(rng.below(60)))));
+    }
+}
+
+TEST_CASE("mutated payloads never crash the reader or yield invalid data", "[property][fuzz][save]")
+{
+    Rng rng(SEED + 11);
+    // A whole save has the payload's shape too, so the reader has to take it, or refuse it, without a fault.
+    const std::string seeds[] = {rich_payload(), rich_save(), serialise_shared(SharedData{}).value(),
+                                 serialise_shared(SharedData{.players = {}}).value()};
+    int still_ok = 0;
+    for (int i = 0; i < CASES; ++i)
+    {
+        CAPTURE(SEED, i);
+        const std::string text = mutate(rng, seeds[rng.below(std::size(seeds))]);
+        const SharedParseResult result = parse_shared(text);
+        check_shared_result(result);
+        still_ok += result.status == LoadStatus::OK ? 1 : 0;
+    }
+    REQUIRE(still_ok > 0);
+    REQUIRE(still_ok < CASES);
+}
+
+TEST_CASE("every prefix of a payload is handled", "[property][fuzz][save]")
+{
+    const std::string text = rich_payload();
+    for (std::size_t length = 0; length < text.size(); ++length)
+    {
+        CAPTURE(length);
+        const SharedParseResult result = parse_shared(std::string_view(text).substr(0, length));
+        REQUIRE(result.status == LoadStatus::DAMAGED);
+        check_shared_result(result);
+    }
+    REQUIRE(parse_shared(text).status == LoadStatus::OK);
+}
+
+TEST_CASE("hostile payload shapes are refused quickly", "[unit][fuzz][save]")
+{
+    const auto damaged = [](const std::string& text)
+    {
+        const SharedParseResult result = parse_shared(text);
+        REQUIRE(result.status == LoadStatus::DAMAGED);
+        check_shared_result(result);
+    };
+    damaged(std::string(200000, '['));
+    damaged(std::string(200000, '{'));
+    damaged("{\"version\":2,\"shared\":{\"players\":[" + std::string(300000, '1') + "]}}");
+    damaged("{\"version\":2,\"shared\":{\"players\":[{\"name\":\"" + std::string(100000, 'A') + "\"}]}}");
+    std::string players = "{\"version\":2,\"shared\":{\"players\":[";
+    for (int i = 0; i < 20000; ++i)
+    {
+        players += i == 0 ? "{}" : ",{}";
+    }
+    damaged(players + "]}}");
+}
+
 TEST_CASE("hostile shapes are refused quickly", "[unit][fuzz][save]")
 {
     const auto damaged = [](const std::string& text)
@@ -236,7 +368,9 @@ TEST_CASE("hostile shapes are refused quickly", "[unit][fuzz][save]")
         damaged(deep);
     }
     damaged("{\"version\":1,\"run\":[" + std::string(300000, '1') + "]}");
+    damaged("{\"version\":2,\"device\":{\"run\":[" + std::string(300000, '1') + "]}}");
     damaged("{\"version\":1,\"coins\":0,\"name\":\"" + std::string(100000, 'A') + "\"}");
+    damaged("{\"version\":2,\"shared\":{\"players\":[{\"name\":\"" + std::string(100000, 'A') + "\"}]}}");
     {
         std::string wide = "{\"version\":1,\"top10\":[";
         for (int i = 0; i < 20000; ++i)
@@ -244,6 +378,21 @@ TEST_CASE("hostile shapes are refused quickly", "[unit][fuzz][save]")
             wide += i == 0 ? "{}" : ",{}";
         }
         damaged(wide + "]}");
+    }
+    {
+        // Thousands of players and thousands of coin entries are refused before any of them is read.
+        std::string players = "{\"version\":2,\"shared\":{\"players\":[";
+        for (int i = 0; i < 20000; ++i)
+        {
+            players += i == 0 ? "{}" : ",{}";
+        }
+        damaged(players + "]}}");
+        std::string coins = "{\"version\":2,\"shared\":{\"players\":[{\"coins\":[";
+        for (int i = 0; i < 20000; ++i)
+        {
+            coins += i == 0 ? "{}" : ",{}";
+        }
+        damaged(coins + "]}]}}");
     }
     {
         // Many small members: well inside the size limit, and must not take quadratic time or crash.

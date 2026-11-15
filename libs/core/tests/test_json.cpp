@@ -281,3 +281,133 @@ TEST_CASE("json round-trips random documents", "[property][json]")
         REQUIRE(json::write(*back) == text);
     }
 }
+
+TEST_CASE("json says where a string became too long, whatever its parts", "[unit][json]")
+{
+    json::Limits limits;
+    limits.max_string_bytes = 5;
+    const auto offset_of = [&limits](std::string_view text)
+    {
+        const auto result = json::parse(text, limits);
+        REQUIRE_FALSE(result.has_value());
+        REQUIRE(result.error().code == ErrorCode::STRING_TOO_LONG);
+        return result.error().offset;
+    };
+    // The offset is just past the character that made the string one byte too long.
+    REQUIRE(offset_of("\"123456\"") == 7);
+    REQUIRE(offset_of("\"1234567890") == 7);       // with no closing quote the length is still what is found first
+    REQUIRE(offset_of("\"ab\\u0041cdef\"") == 12); // a run after an escape counts what the escape added
+    REQUIRE(offset_of("\"\xC3\xA9"
+                      "1234\"") == 7); // and after a two-byte character
+    REQUIRE(offset_of("{\"123456\":1}") == 8);
+    // A string of exactly the longest length is fine, in one piece or several.
+    REQUIRE(json::parse("\"12345\"", limits).has_value());
+    REQUIRE(json::parse("\"12\\n34\"", limits).has_value());
+    REQUIRE(json::parse("\"1\xC3\xA9"
+                        "23\"",
+                        limits)
+                .has_value());
+    // No room at all.
+    limits.max_string_bytes = 0;
+    REQUIRE(json::parse("\"\"", limits).has_value());
+    REQUIRE(offset_of("\"a\"") == 2);
+}
+
+TEST_CASE("json reads nested arrays and objects as the text says", "[unit][json]")
+{
+    const auto parsed = json::parse(R"({"b":[[1,2],[3,[4,5],{"x":[6]}],7],"a":{"k":[],"j":[{}]},"c":[8]})");
+    REQUIRE(parsed.has_value());
+    Value expected = Value::object();
+    expected.set("c", Value::array({Value::integer(8)}));
+    Value inner = Value::object();
+    inner.set("k", Value::array());
+    inner.set("j", Value::array({Value::object()}));
+    expected.set("a", std::move(inner));
+    Value x = Value::object();
+    x.set("x", Value::array({Value::integer(6)}));
+    expected.set("b", Value::array({Value::array({Value::integer(1), Value::integer(2)}),
+                                    Value::array({Value::integer(3),
+                                                  Value::array({Value::integer(4), Value::integer(5)}), std::move(x)}),
+                                    Value::integer(7)}));
+    REQUIRE(*parsed == expected);
+    REQUIRE(json::write(*parsed) == R"({"a":{"j":[{}],"k":[]},"b":[[1,2],[3,[4,5],{"x":[6]}],7],"c":[8]})");
+}
+
+TEST_CASE("json reads arrays and objects of any length, inside each other", "[unit][json]")
+{
+    // Lengths either side of the point where the reader stops using its shared stack for one array or object.
+    for (const std::size_t length :
+         {std::size_t{1}, std::size_t{2}, std::size_t{127}, std::size_t{128}, std::size_t{129}, std::size_t{300}})
+    {
+        CAPTURE(length);
+        // An array whose items are short arrays and objects, and an object whose members are arrays, each of the
+        // length, so a long one holds short ones and a short one holds long ones.
+        Value::Array items;
+        Value object = Value::object();
+        std::string text = "[";
+        std::string object_text = "{";
+        for (std::size_t i = 0; i < length; ++i)
+        {
+            const auto n = static_cast<std::int64_t>(i);
+            const std::string key = "k" + std::to_string(1000 + length - i); // keys come in descending order
+            Value::Array pair{Value::integer(n), Value::array({Value::string("x")})};
+            items.push_back(i % 2 == 0 ? Value::array(pair) : Value::integer(n));
+            object.set(key, Value::array(std::move(pair)));
+            text += (i == 0 ? "" : ",");
+            text += i % 2 == 0 ? "[" + std::to_string(i) + ",[\"x\"]]" : std::to_string(i);
+            object_text += (i == 0 ? "" : ",") + ("\"" + key + "\":[" + std::to_string(i) + ",[\"x\"]]");
+        }
+        text += "]";
+        object_text += "}";
+
+        const auto parsed_array = json::parse(text);
+        REQUIRE(parsed_array.has_value());
+        REQUIRE(*parsed_array == Value::array(std::move(items)));
+        const auto parsed_object = json::parse(object_text);
+        REQUIRE(parsed_object.has_value());
+        REQUIRE(*parsed_object == object);
+
+        // The same inside each other, and a document that goes on after them reads on from the right place.
+        const auto both = json::parse("{\"b\":" + text + ",\"a\":" + object_text + ",\"c\":[1]}");
+        REQUIRE(both.has_value());
+        REQUIRE(*both->find("b") == *parsed_array);
+        REQUIRE(*both->find("a") == *parsed_object);
+        REQUIRE(*both->find("c") == Value::array({Value::integer(1)}));
+    }
+}
+
+TEST_CASE("json finds a repeated key whether or not the members came in order", "[unit][json]")
+{
+    REQUIRE(error_of(R"({"a":1,"a":2})") == ErrorCode::DUPLICATE_KEY);
+    REQUIRE(error_of(R"({"a":1,"b":2,"a":3})") == ErrorCode::DUPLICATE_KEY);
+    REQUIRE(error_of(R"({"b":1,"a":2,"b":3})") == ErrorCode::DUPLICATE_KEY);
+    REQUIRE(error_of(R"({"a":1,"b":2,"b":3})") == ErrorCode::DUPLICATE_KEY);
+    REQUIRE(json::parse(R"({"a":1,"ab":2,"b":3})").has_value());
+    REQUIRE(json::parse(R"({"b":1,"ab":2,"a":3})").has_value());
+}
+
+TEST_CASE("json append_string and append_integer write what write writes", "[unit][json]")
+{
+    const std::string_view texts[] = {"",
+                                      "plain",
+                                      "a\"b\\c",
+                                      "tab\tnew\nline\rback\bform\f",
+                                      "\x01\x1f\x7f",
+                                      "\xC3\xA9 \xE2\x82\xAC \xF0\x9F\x98\x80",
+                                      "bad \xFF \xC3 \xE2\x82 end",
+                                      "\xED\xA0\x80 surrogate"};
+    for (const std::string_view text : texts)
+    {
+        std::string out = "x";
+        json::append_string(out, text);
+        REQUIRE(out == "x" + json::write(Value::string(std::string(text))));
+    }
+    for (const std::int64_t number :
+         {std::int64_t{0}, std::int64_t{-1}, std::int64_t{1234567890123}, std::numeric_limits<std::int64_t>::max(),
+          std::numeric_limits<std::int64_t>::min()})
+    {
+        std::string out = "x";
+        json::append_integer(out, number);
+        REQUIRE(out == "x" + json::write(Value::integer(number)));
+    }
+}

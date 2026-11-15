@@ -15,6 +15,10 @@ Item {
     /// The part of the window inside the safe area, in the frame's own coordinates.
     readonly property alias safeContent: inner
 
+    /// What the device keeps clear at the bottom, for what is drawn over the whole window (AlertFrame): a home indicator
+    /// means a screen with rounded corners.
+    readonly property real unsafeBottom: SafeArea.margins.bottom
+
     HalftoneBackground {
         objectName: "windowBackground"
         anchors.fill: parent
