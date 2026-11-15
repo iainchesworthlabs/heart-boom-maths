@@ -41,6 +41,10 @@ struct UiRig
     /// Settings.
     UiRig(std::uint64_t seed, bool scores_available, std::string saved_text, bool haptics_available);
 
+    /// `cloud_available` makes the cloud store report an iCloud account, which shows the iCloud sync row in Settings.
+    UiRig(std::uint64_t seed, bool scores_available, std::string saved_text, bool haptics_available,
+          bool cloud_available);
+
     /// A rig whose device already holds a save, such as a top 10 with entries in it.
     UiRig(std::uint64_t seed, std::string save_text);
 
@@ -56,6 +60,7 @@ struct UiRig
     RecordingHaptics haptics;
     RecordingLinks links;
     heart_boom_maths::MemorySaveStore store;
+    FakeCloudStore cloud;
     int gate_seeds_used = 0;
     heart_boom_maths::game::GameController controller;
 };

@@ -3,7 +3,8 @@
 # Check that the built iOS bundle of the game (a .app, or an exported .ipa) is the game the repository describes.
 #
 #   apps/game/ios/verify_game_app.sh <name.app | package.ipa> --bundle-id <id> --executable <name>
-#       [--game-center on|off] [--entitlements <heart-boom-maths.entitlements>] [--version <x.y.z>] [--signed [--store]]
+#       [--game-center on|off] [--icloud on|off] [--entitlements <heart-boom-maths.entitlements>] [--version <x.y.z>]
+#       [--signed [--store]]
 #
 # It first runs apps/ios/packaging/verify_app.sh, which checks what every bundle of this project must be (the identifier,
 # the icon, the launch screen, arm64, no link outside the system, the encryption key, and for --signed the signature and
@@ -15,8 +16,12 @@
 #   * the Game Center entitlement, in one of the two states the build can be in (--game-center, default on, the state of
 #     HEART_BOOM_MATHS_IOS_GAME_CENTER): on, it is in the entitlements file (--entitlements is then required) and with
 #     --signed in the signature; off, with --signed the signature must not carry it. The state found is printed;
+#   * the iCloud key-value store entitlement (com.apple.developer.ubiquity-kvstore-identifier), the same way (--icloud,
+#     default on, the state of HEART_BOOM_MATHS_IOS_ICLOUD). CMake writes the entitlements file for the two options, so a
+#     file that is given must also hold the entries of the state asked for and no other. With --signed the value in the
+#     signature must be the team and the bundle identifier (the form of the App ID's profile). The state found is printed;
 #   * the executable links GameKit (the score) and AVFoundation (the sound), and links none of the frameworks of
-#     advertising, tracking, purchases, location or notifications, which v1 must never use. Frameworks and symbols of
+#     advertising, tracking, purchases, location, notifications or CloudKit, which v1 must never use. Frameworks and symbols of
 #     networking are listed as notes and do not fail: Qt itself can bring some in without the game ever calling it. The
 #     proof that the game makes no request of its own is the traffic capture of docs/COMPLIANCE.md, on a device;
 #   * every sound file of apps/game/audio is in the executable, as a Qt resource: its name is found in the resource name
@@ -33,30 +38,35 @@ verify_common="$here/../../ios/packaging/verify_app.sh"
 target=""
 entitlements=""
 game_center=on
+icloud=on
 signed=false
 common_args=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --entitlements) entitlements="${2:?}"; shift 2 ;;
     --game-center) game_center="${2:?}"; shift 2 ;;
+    --icloud) icloud="${2:?}"; shift 2 ;;
     --signed) signed=true; common_args+=("$1"); shift ;;
     --bundle-id|--executable|--version) common_args+=("$1" "${2:?}"); shift 2 ;;
     --store) common_args+=("$1"); shift ;;
-    -h|--help) sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*) echo "verify_game_app.sh: unknown argument '$1'" >&2; exit 2 ;;
     *) target="$1"; shift ;;
   esac
 done
-[ -e "$target" ] || { echo "usage: verify_game_app.sh <app|ipa> --bundle-id <id> --executable <name> [--game-center on|off] [--entitlements <file>] [--version v] [--signed [--store]]" >&2; exit 2; }
+[ -e "$target" ] || { echo "usage: verify_game_app.sh <app|ipa> --bundle-id <id> --executable <name> [--game-center on|off] [--icloud on|off] [--entitlements <file>] [--version v] [--signed [--store]]" >&2; exit 2; }
 case "$game_center" in on | off) ;; *) echo "verify_game_app.sh: --game-center is on or off, not '$game_center'" >&2; exit 2 ;; esac
-if [ "$game_center" = on ]; then
-  [ -f "$entitlements" ] || { echo "verify_game_app.sh: --entitlements <file> is required and must exist when --game-center is on" >&2; exit 2; }
+case "$icloud" in on | off) ;; *) echo "verify_game_app.sh: --icloud is on or off, not '$icloud'" >&2; exit 2 ;; esac
+if [ "$game_center" = on ] || [ "$icloud" = on ]; then
+  [ -f "$entitlements" ] || { echo "verify_game_app.sh: --entitlements <file> is required and must exist when --game-center or --icloud is on" >&2; exit 2; }
 fi
 fail() { echo "FAILED: $*" >&2; exit 1; }
 
+bundle_id=""
 executable=""
 for ((i = 0; i < ${#common_args[@]}; i++)); do
   if [ "${common_args[$i]}" = "--executable" ]; then executable="${common_args[$((i + 1))]}"; fi
+  if [ "${common_args[$i]}" = "--bundle-id" ]; then bundle_id="${common_args[$((i + 1))]}"; fi
 done
 [ -n "$executable" ] || { echo "verify_game_app.sh: --executable is required" >&2; exit 2; }
 
@@ -101,9 +111,20 @@ usage="$(plutil -p "$plist" | grep -E 'Usage(Description)?"? =>' | head -n 1 || 
 [ -z "$usage" ] || fail "Info.plist has a usage text ($usage): the game asks for no permission"
 echo "    Info.plist: portrait on a phone, any way up on a tablet, full screen, arm64 and gamekit, no usage text"
 
+gc_key="com.apple.developer.game-center"
+icloud_key="com.apple.developer.ubiquity-kvstore-identifier"
 if $signed; then
   signed_entitlements="$(codesign -d --entitlements :- "$app" 2>/dev/null || true)"
-  if grep -q "com.apple.developer.game-center" <<<"$signed_entitlements"; then found=on; else found=off; fi
+  if grep -q "$gc_key" <<<"$signed_entitlements"; then found=on; else found=off; fi
+  if grep -q "$icloud_key" <<<"$signed_entitlements"; then found_icloud=on; else found_icloud=off; fi
+fi
+# CMake writes the entitlements file from the two options, so a file that is given must hold the entries of the state asked
+# for and no other: a mismatch means the build and the check were given different options.
+if [ -f "$entitlements" ]; then
+  plutil -lint "$entitlements" >/dev/null || fail "$entitlements is not a valid property list"
+  has_in_file() { /usr/libexec/PlistBuddy -c "Print :$1" "$entitlements" >/dev/null 2>&1; }
+  if [ "$game_center" = off ] && has_in_file "$gc_key"; then fail "Game Center was asked to be off, but $entitlements holds $gc_key"; fi
+  if [ "$icloud" = off ] && has_in_file "$icloud_key"; then fail "iCloud sync was asked to be off, but $entitlements holds $icloud_key"; fi
 fi
 if [ "$game_center" = on ]; then
   plutil -lint "$entitlements" >/dev/null || fail "$entitlements is not a valid property list"
@@ -124,14 +145,38 @@ else
   fi
 fi
 
+if [ "$icloud" = on ]; then
+  [ "$(/usr/libexec/PlistBuddy -c "Print :$icloud_key" "$entitlements" 2>/dev/null || true)" = '$(TeamIdentifierPrefix)$(CFBundleIdentifier)' ] \
+    || fail "$entitlements has no $icloud_key of the form team prefix and bundle identifier"
+  if $signed; then
+    [ "$found_icloud" = on ] || fail "the signature does not carry the iCloud key-value store entitlement: the App ID or the profile lacks the capability"
+    # Xcode has expanded the value: the team and the bundle identifier, as the profile of the App ID holds it.
+    signed_value="$(plutil -extract "$icloud_key" raw -o - - <<<"$signed_entitlements" 2>/dev/null || true)"
+    case "$signed_value" in
+      ?*."$bundle_id") ;;
+      *) fail "the signature carries $icloud_key = '$signed_value', not <team>.$bundle_id" ;;
+    esac
+    echo "    entitlements: iCloud sync ON, in the file and in the signature ($signed_value)"
+  else
+    echo "    entitlements: iCloud sync ON, in the file (an unsigned build embeds none)"
+  fi
+else
+  if $signed; then
+    [ "$found_icloud" = off ] || fail "iCloud sync was asked to be off, but the signature carries the entitlement"
+    echo "    entitlements: iCloud sync OFF, the signature carries no iCloud key-value store entitlement (the switch is not offered)"
+  else
+    echo "    entitlements: iCloud sync OFF (an unsigned build embeds none)"
+  fi
+fi
+
 frameworks="$(otool -L "$exe" | tail -n +2 | awk '{print $1}')"
 grep -q "/GameKit.framework/" <<<"$frameworks" || fail "the executable does not link GameKit (the Game Center score)"
 grep -q "/AVFoundation.framework/" <<<"$frameworks" \
   || fail "the executable does not link AVFoundation (the sound of the game: Qt Multimedia cannot link on iOS)"
-forbidden='AdSupport|AdServices|AppTrackingTransparency|StoreKit|CoreLocation|UserNotifications|PushKit|iAd|GoogleMobileAds|Firebase|Crashlytics'
+forbidden='AdSupport|AdServices|AppTrackingTransparency|StoreKit|CoreLocation|UserNotifications|PushKit|CloudKit|iAd|GoogleMobileAds|Firebase|Crashlytics'
 bad="$(grep -E "/($forbidden)\.framework/" <<<"$frameworks" || true)"
-[ -z "$bad" ] || fail "the executable links a framework v1 must never use (ads, tracking, purchases, location, notifications): $bad"
-echo "    executable: links GameKit and AVFoundation; no advertising, tracking, purchase, location or notification framework"
+[ -z "$bad" ] || fail "the executable links a framework v1 must never use (ads, tracking, purchases, location, notifications, CloudKit): $bad"
+echo "    executable: links GameKit and AVFoundation; no advertising, tracking, purchase, location, notification or CloudKit framework"
 
 # The sound files are compiled into the executable as Qt resources. Looking for each file's name in the UTF-16 name table
 # is the cheap proof that they were linked in (a static library's resources are dropped by the linker when nothing
@@ -182,6 +227,7 @@ if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
     echo "| | |"
     echo "|---|---|"
     echo "| Game Center entitlement | ${found:-$game_center} |"
+    echo "| iCloud key-value store entitlement | ${found_icloud:-$icloud} |"
     echo "| Bundle | ${bundle_kb} KiB |"
     echo "| Executable | ${exe_kb} KiB |"
     echo "| Network frameworks linked | ${network_frameworks:-none} |"

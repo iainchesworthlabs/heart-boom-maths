@@ -6,6 +6,7 @@
 #include "external_links.hpp"
 #include "heart_boom_maths/profile.hpp"
 #include "level_text.hpp"
+#include "services/cloud_sync.hpp"
 #include "services/notices.hpp"
 
 #include <QLoggingCategory>
@@ -87,7 +88,8 @@ GameOptions GameOptions::with_random_seed()
 }
 
 GameController::GameController(GameServices services, GameOptions options, QObject* parent)
-    : QObject(parent), m_Services(services), m_Tuning(options.tuning), m_Session(*options.tuning, options.session_seed),
+    : QObject(parent), m_Services(services), m_Cloud(services.cloud != nullptr ? services.cloud : &m_NullCloud),
+      m_Tuning(options.tuning), m_Session(*options.tuning, options.session_seed),
       m_SaveManager(*services.store, *options.tuning), m_Driver(options.tuning->ticks_per_second),
       m_TileGuardNs(options.tile_guard_ns), m_GateSeedSource(std::move(options.gate_seed_source)),
       m_IdSource(std::move(options.id_source)), m_BuildInfo(std::move(options.build_info))
@@ -141,6 +143,19 @@ GameController::GameController(GameServices services, GameOptions options, QObje
     m_Shown = m_Session.view();
     apply_settings();
     update_music();
+    // Start-up, after the save has loaded: listen for the other devices and take what they sent, if the switch is on.
+    m_CloudAvailableShown = m_Cloud->available();
+    apply_cloud_sync();
+    request_cloud_sync();
+}
+
+GameController::~GameController()
+{
+    // The store may outlive the controller, and a change it reports must not reach a controller that is gone.
+    if (m_CloudWatching)
+    {
+        m_Cloud->set_change_handler({});
+    }
 }
 
 // ---- Commands ----------------------------------------------------------------------------------------------------
@@ -341,6 +356,7 @@ void GameController::skipName()
     m_NameRank = 0;
     emit nameEntryChanged();
     emit playersChanged();
+    request_cloud_sync(); // the title may take a changed wallet now that no name is waiting
 }
 
 bool GameController::canSaveName(const QString& typed) const
@@ -501,6 +517,32 @@ void GameController::requestGameCenter(bool enabled)
     }
 }
 
+void GameController::requestCloudSync(bool enabled)
+{
+    if (!cloud_sync_available())
+    {
+        return;
+    }
+    if (!enabled)
+    {
+        // Off is immediate and needs no gate. The copy in the family's iCloud stays as it is.
+        if (m_Save.device.cloud_sync)
+        {
+            m_Save.device.cloud_sync = false;
+            m_CloudOwed = false;
+            apply_cloud_sync();
+            emit settingsChanged();
+            persist();
+        }
+        return;
+    }
+    // A save that came from a newer build is never written, so a switch could not be kept.
+    if (!m_Save.device.cloud_sync && !m_SaveBlocked)
+    {
+        begin_gate(GatePurpose::CloudSync);
+    }
+}
+
 bool GameController::requestLink(const QString& url)
 {
     if (!url.startsWith(QLatin1String(REQUIRED_LINK_PREFIX), Qt::CaseInsensitive))
@@ -542,6 +584,14 @@ bool GameController::submitGate(const QString& typed)
         emit settingsChanged();
         persist();
     }
+    else if (purpose == GatePurpose::CloudSync)
+    {
+        m_Save.device.cloud_sync = true;
+        apply_cloud_sync();
+        emit settingsChanged();
+        save_now();
+        request_cloud_sync(); // the switch being turned on is a trigger
+    }
     else if (purpose == GatePurpose::RemovePlayer)
     {
         remove_player_now(gated_player);
@@ -574,6 +624,10 @@ void GameController::on_application_state(bool active)
         m_Services.audio->resume();
         sync_driver(); // a paused run stays paused: the driver only runs while playing
         sync_haptics();
+        // A person may have signed in to or out of iCloud while the app was away, and the other devices may have moved
+        // on.
+        apply_cloud_sync();
+        request_cloud_sync();
         return;
     }
     // A grown-up's question does not wait for them to come back: whoever picks the device up next meets no open gate.
@@ -857,7 +911,9 @@ void GameController::finish_game(const Event& event)
         m_ScoreSubmitted = true;
         m_Services.scores->submit(m_FinalScore);
     }
-    persist();
+    // Saved without a sync here: the rank the screens are told below must be the rank in the list as it is now. The
+    // sync is the last thing this does.
+    save_now();
     emit topScoresChanged();
     emit playersChanged();
     emit nameEntryChanged();
@@ -866,6 +922,7 @@ void GameController::finish_game(const Event& event)
     {
         emit scoreSavedAtOnce(saved_rank);
     }
+    request_cloud_sync();
 }
 
 void GameController::sync_driver()
@@ -908,19 +965,33 @@ void GameController::update_music()
     }
 }
 
-void GameController::persist()
+void GameController::record_session_in_save()
 {
-    HBM_ZONE("controller.persist");
     const SessionView& v = m_Session.view();
     if (Player* player = current_player(m_Save); player != nullptr)
     {
-        // The wallet goes back to the player who played, as this device's earned or spent.
+        // The wallet goes back to the player who played, as this device's earned or spent. A fall counts as coins
+        // spent, so the session's wallet must never be older than the player's: a sync that changes the player's wallet
+        // runs only where the session can take it, and takes it at once (sync_with_cloud_now).
         if (!record_wallet(*player, m_Save.device.id, v.wallet))
         {
             qCWarning(lcGame) << "The wallet could not be recorded";
         }
         player->won_once = v.won_once;
     }
+}
+
+void GameController::persist()
+{
+    HBM_ZONE("controller.persist");
+    save_now();
+    request_cloud_sync(); // a save is a trigger: it runs the sync where the session can take a changed wallet
+}
+
+void GameController::save_now()
+{
+    HBM_ZONE("controller.save_now");
+    record_session_in_save();
     const SaveOutcome outcome = m_SaveManager.save(m_Save);
     switch (outcome)
     {
@@ -1063,6 +1134,131 @@ void GameController::assign_ids()
     {
         qCWarning(lcGame) << "There is no current player and none could be made";
     }
+}
+
+// ---- iCloud sync -------------------------------------------------------------------------------------------------
+
+bool GameController::cloud_sync_active() const
+{
+    // The switch is looked at first: with it off the store is not asked anything.
+    return m_Save.device.cloud_sync && !m_SaveBlocked && m_Cloud->available();
+}
+
+void GameController::apply_cloud_sync()
+{
+    const bool available = m_Cloud->available(); // a local check, never a read of the cloud copy
+    const bool wanted = m_Save.device.cloud_sync && !m_SaveBlocked && available;
+    if (wanted != m_CloudWatching)
+    {
+        m_CloudWatching = wanted;
+        if (wanted)
+        {
+            m_Cloud->set_change_handler([this] { request_cloud_sync(); });
+        }
+        else
+        {
+            m_Cloud->set_change_handler({});
+            m_CloudOwed = false;
+        }
+    }
+    if (available != m_CloudAvailableShown)
+    {
+        m_CloudAvailableShown = available;
+        emit settingsChanged();
+    }
+}
+
+bool GameController::can_take_synced_wallet() const
+{
+    // The session takes a wallet from the save only in these states (GameSession::set_wallet). The title also waits for
+    // a name that is still to be typed, because the top 10 must not move under the name screen.
+    switch (m_Session.view().state)
+    {
+    case SessionState::IDLE:
+    case SessionState::PAUSED:
+        return true;
+    case SessionState::GAME_OVER:
+        return m_NameRank == 0;
+    case SessionState::PLAYING:
+    case SessionState::LEVEL_CLEAR:
+    case SessionState::WON:
+        return false;
+    }
+    return false;
+}
+
+void GameController::request_cloud_sync()
+{
+    if (!cloud_sync_active())
+    {
+        return;
+    }
+    m_CloudOwed = true;
+    run_owed_cloud_sync();
+}
+
+void GameController::run_owed_cloud_sync()
+{
+    if (!m_CloudOwed || m_CloudSyncing || !can_take_synced_wallet())
+    {
+        return;
+    }
+    m_CloudOwed = false;
+    sync_with_cloud_now();
+}
+
+void GameController::announce_wallet()
+{
+    const std::int64_t wallet = m_Session.view().wallet;
+    if (wallet != m_Shown.wallet)
+    {
+        m_Shown.wallet = wallet;
+        emit walletChanged();
+    }
+}
+
+void GameController::sync_with_cloud_now()
+{
+    HBM_ZONE("controller.cloud_sync");
+    m_CloudSyncing = true;
+    // What this device earned since it last saved goes into the player first, so the merge sees it.
+    record_session_in_save();
+    const std::vector<ScoreEntry> top10_before = m_Save.shared.top10;
+    const CloudSyncResult result = sync_with_cloud(
+        *m_Cloud, m_Save, [this](const SharedData& merged) { return new_player_id(merged, m_IdSource()); }, *m_Tuning);
+    m_CloudSyncing = false;
+
+    if (result.outcome == CloudSyncOutcome::REFUSED)
+    {
+        qCWarning(lcGame) << "iCloud sync did nothing:"
+                          << QString::fromUtf8(result.reason.data(), static_cast<qsizetype>(result.reason.size()));
+    }
+    else if (result.outcome == CloudSyncOutcome::SKIPPED_NEWER)
+    {
+        qCWarning(lcGame) << "The iCloud copy comes from a newer version of the game; it is left alone";
+    }
+    if (result.write_failed)
+    {
+        qCWarning(lcGame) << "iCloud did not take the players and scores; the next sync tries again";
+    }
+    if (!result.local_changed())
+    {
+        return;
+    }
+
+    // The merge changed the player's coins and win mark (and maybe who the current player is). The session takes them
+    // now, here, at a moment it can: it must never hold an older wallet than the save, because the next save would book
+    // the difference as coins spent.
+    take_current_player_into_session();
+    save_now();
+    announce_wallet();
+    if (m_HighlightRank != 0 && m_Save.shared.top10 != top10_before)
+    {
+        m_HighlightRank = 0; // the entry it marked may have moved
+    }
+    emit topScoresChanged();
+    emit savedRunChanged();
+    emit playersChanged();
 }
 
 void GameController::begin_gate(GatePurpose purpose)
@@ -1498,6 +1694,16 @@ bool GameController::haptics_enabled() const
 bool GameController::haptics_available() const
 {
     return m_Services.haptics != nullptr && m_Services.haptics->available();
+}
+
+bool GameController::cloud_sync_enabled() const
+{
+    return cloud_sync_active();
+}
+
+bool GameController::cloud_sync_available() const
+{
+    return m_Cloud->available();
 }
 
 bool GameController::gate_active() const

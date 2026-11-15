@@ -59,6 +59,9 @@ ComicCard {
                 objectName: "settingHint"
                 width: parent.width
                 text: root.hint
+                // A note may take a second line for the words a grown-up needs; the board's one-line notes are unchanged.
+                wrapMode: Text.WordWrap
+                maximumLineCount: 2
                 elide: Text.ElideRight
                 color: Theme.ink
                 font.family: Theme.bodyFont

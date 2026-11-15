@@ -10,6 +10,7 @@
 #include "services/audio_service.hpp"
 #include "services/build_info.hpp"
 #include "services/clock.hpp"
+#include "services/cloud_store.hpp"
 #include "services/haptics_service.hpp"
 #include "services/link_opener.hpp"
 #include "services/save_quarantine.hpp"
@@ -51,6 +52,7 @@ struct GameServices
     HapticsService* haptics = nullptr; // optional: a null service is the same as a device that cannot
     LinkOpener* links = nullptr;
     Clock* clock = nullptr;
+    CloudStore* cloud = nullptr; // optional: none is the same as a device that cannot sync (NullCloudStore)
 };
 
 struct GameOptions
@@ -192,6 +194,12 @@ class GameController final : public QObject
     // then.
     Q_PROPERTY(bool hapticsEnabled READ haptics_enabled NOTIFY settingsChanged FINAL)
     Q_PROPERTY(bool hapticsAvailable READ haptics_available CONSTANT FINAL)
+    // iCloud sync of the players and the top 10 (SPEC, Sync between a family's devices). cloudSyncAvailable is true
+    // only on a device whose cloud store can sync and has an account signed in, and Settings shows the switch only
+    // then; it is read again when the app becomes active, because a person can sign in or out meanwhile.
+    // cloudSyncEnabled is the switch, and is false whenever sync cannot run.
+    Q_PROPERTY(bool cloudSyncEnabled READ cloud_sync_enabled NOTIFY settingsChanged FINAL)
+    Q_PROPERTY(bool cloudSyncAvailable READ cloud_sync_available NOTIFY settingsChanged FINAL)
 
     // The parental gate.
     Q_PROPERTY(bool gateActive READ gate_active NOTIFY gateChanged FINAL)
@@ -245,12 +253,14 @@ public:
         Link,
         GameCenter,
         RemovePlayer,
+        CloudSync,
     };
     Q_ENUM(GatePurpose)
 
     /// Reads the save at once: the wallet, the settings and the top 10 are in the properties from the first read.
     /// Every pointer in `services` except `quarantine` must be set.
     GameController(GameServices services, GameOptions options = {}, QObject* parent = nullptr);
+    ~GameController() override;
 
     // ---- Commands for QML ----------------------------------------------------------------------------------------
 
@@ -312,6 +322,10 @@ public:
     /// Turning Game Center off is immediate. Turning it on opens the parental gate. Ignored where the platform has no
     /// leaderboard.
     Q_INVOKABLE void requestGameCenter(bool enabled);
+
+    /// Turning iCloud sync off is immediate, and leaves the copy in the family's iCloud as it is. Turning it on opens
+    /// the parental gate, and the switch is set only when the gate is passed. Ignored where the device cannot sync.
+    Q_INVOKABLE void requestCloudSync(bool enabled);
 
     /// Opens the parental gate for a web address. Only an https address is accepted: returns false for anything else.
     /// The address opens (through LinkOpener) only when submitGate() gets the right number.
@@ -405,6 +419,8 @@ public:
     [[nodiscard]] bool game_center_available() const;
     [[nodiscard]] bool haptics_enabled() const;
     [[nodiscard]] bool haptics_available() const;
+    [[nodiscard]] bool cloud_sync_enabled() const;
+    [[nodiscard]] bool cloud_sync_available() const;
     [[nodiscard]] bool gate_active() const;
     [[nodiscard]] GatePurpose gate_purpose() const;
     [[nodiscard]] QString gate_words() const;
@@ -475,7 +491,16 @@ private:
     void finish_game(const Event& event);
     void sync_driver();
     void update_music();
+    void record_session_in_save();
+    void save_now();
     void persist();
+    void apply_cloud_sync();
+    void request_cloud_sync();
+    void run_owed_cloud_sync();
+    void sync_with_cloud_now();
+    void announce_wallet();
+    [[nodiscard]] bool cloud_sync_active() const;
+    [[nodiscard]] bool can_take_synced_wallet() const;
     void begin_gate(GatePurpose purpose);
     void end_gate();
     void apply_settings();
@@ -495,6 +520,8 @@ private:
     [[nodiscard]] static State to_state(SessionState state) noexcept;
 
     GameServices m_Services;
+    NullCloudStore m_NullCloud;
+    CloudStore* m_Cloud;
     const Tuning* m_Tuning;
     GameSession m_Session;
     SaveManager m_SaveManager;
@@ -507,6 +534,13 @@ private:
     QTimer m_Timer;
     bool m_Active = true;
     bool m_HapticsQuiet = false; // the service is suspended: the app is in the background or the game is paused
+
+    // iCloud sync. The store is listened to only while the switch is on and the store can sync. A trigger at a moment
+    // when the session could not take a changed wallet leaves a sync owed, which runs at the next moment that can.
+    bool m_CloudWatching = false;
+    bool m_CloudOwed = false;
+    bool m_CloudSyncing = false;
+    bool m_CloudAvailableShown = false;
 
     SessionView m_Shown;  // what the signals last reported
     SessionView m_Before; // the view before the command being processed: the question an answer was given to

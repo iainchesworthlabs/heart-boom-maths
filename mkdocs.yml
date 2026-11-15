@@ -22,7 +22,7 @@ nav:
       - Compliance: COMPLIANCE.md
       - Audio: audio.md
       - Haptics: haptics.md
-      - iOS and Game Center: ios.md
+      - iOS, Game Center and iCloud sync: ios.md
       - Browser build: web.md
   - Release:
       - Privacy policy: privacy-policy.md

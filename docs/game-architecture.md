@@ -253,10 +253,10 @@ QML screens driven by one view-model each. The QML is the same on every platform
 | Top 10 | CP12 | Rank, name and score per entry |
 | WHO'S PLAYING | none (P8) | The players with best score and coins, ADD PLAYER, NAME or RENAME, REMOVE behind the gate |
 | Game over | CP7 | Score, level reached, coins, best score |
-| Settings | CP14 | Sound and music switches, a Haptics switch where the device can, and a Game Center switch on Apple devices |
+| Settings | CP14 | Sound and music switches, a Haptics switch where the device can, a Game Center switch on Apple devices, and an iCloud sync switch on an Apple device with an iCloud account |
 | About | CP15 | Build information, font licences, notices |
 | Pause | CP16 | RESUME and QUIT |
-| Parental gate | CP17 | A number in words for a grown-up to type back, before a link opens or Game Center turns on |
+| Parental gate | CP17 | A number in words for a grown-up to type back, before a link opens, Game Center or iCloud sync turns on, or a player is removed |
 
 Navigation: PLAY AGAIN on Game over starts level 1 directly, HOME returns to Title. Top 10, Settings, About and WHO'S PLAYING open from Title, and Top 10 also opens from Game over. Pause opens from Play.
 
@@ -274,6 +274,7 @@ The platform layer holds everything that touches the operating system. Each serv
 | `ScoreService` | `GameCenterScoreService` on iOS and iPadOS, `NullScoreService` elsewhere | Submits a finished score. The local top 10 does not depend on it |
 | `AudioService` | `BackedAudioService` over Qt Multimedia, or over AVFoundation on iOS (`ClipAudioBackend`); `NullAudioService` for tests | Effects and music, with the two Settings switches |
 | `HapticsService` | `BackedHapticsService` over a `HapticBackend` per platform (UIKit generators on iOS, `performHapticFeedback` on Android, `navigator.vibrate` in a browser); `NullHapticsService` on the desktop and for tests | Touch feedback for answers and presses, with its own Settings switch. See [Haptics](haptics.md) |
+| `CloudStore` | The iCloud key-value store on iOS and iPadOS (`NSUbiquitousKeyValueStore`), `NullCloudStore` elsewhere | The family's own cloud copy of the shared save part, as one piece of text. Used only while the iCloud sync switch is on. See Cloud sync |
 | `LinkOpener` | System browser | Reached only through the parental gate |
 | `BuildInfo` | Generated at configure time | Version, build number, commit and Qt version |
 | Notices | Generated at build time | Third-party licence texts for the About screen |
@@ -310,7 +311,34 @@ public:
 
 The local top 10 is part of the save data and the core ranks it, so it works with the service absent. `GameController` calls `ScoreService::submit` once when a run ends, with the final score. The call returns nothing. A failure is logged and never shown to the child.
 
-`GameCenterScoreService` holds the rules in plain C++ over a small `GameCenterBackend`, and only the GameKit calls are Objective-C++, compiled only for the iOS target (`src/platform/ios/`); each platform directory returns its own service from `make_score_service()`. See [iOS and Game Center](ios.md). It sends the score and nothing else, and never reads the player's alias, friends or avatar. It stays idle until the Settings switch is on. The switch is off by default and sits behind the parental gate. The sign-in handler is installed only after the switch is turned on, so a default install never shows a Game Center sign-in sheet. If the player is not signed in, or Screen Time restricts Game Center, `submit` does nothing. Android uses `NullScoreService` in v1.
+`GameCenterScoreService` holds the rules in plain C++ over a small `GameCenterBackend`, and only the GameKit calls are Objective-C++, compiled only for the iOS target (`src/platform/ios/`); each platform directory returns its own service from `make_score_service()`. See [iOS, Game Center and iCloud sync](ios.md). It sends the score and nothing else, and never reads the player's alias, friends or avatar. It stays idle until the Settings switch is on. The switch is off by default and sits behind the parental gate. The sign-in handler is installed only after the switch is turned on, so a default install never shows a Game Center sign-in sheet. If the player is not signed in, or Screen Time restricts Game Center, `submit` does nothing. Android uses `NullScoreService` in v1.
+
+### Cloud sync
+
+The `shared` part of the save (the players and the top 10) can be kept in the family's own iCloud, so that every device
+signed in to one Apple Account has the same players and scores. The game has no account, sign-in or server of its own, and
+nothing reaches the developer. It is a Settings switch on Apple devices, off by default, behind the parental gate
+(`SPEC.md`, Sync between a family's devices).
+
+```cpp
+class CloudStore
+{
+public:
+    using ChangeHandler = std::function<void()>;
+    virtual ~CloudStore() = default;
+    virtual bool available() const = 0;
+    virtual std::optional<std::string> read() = 0;
+    virtual bool write(std::string_view text) = 0;
+    virtual void set_change_handler(ChangeHandler handler) = 0;
+};
+```
+
+The rules are plain C++ over that interface (`sync_with_cloud`, no Qt) and call the core's `serialise_shared`,
+`parse_shared`, `merge` and `adopt_shared`: the app never recomputes a merge. The controller decides when a sync may run
+and what the screens are told. Only the Apple calls are Objective-C++ (`src/platform/ios/cloud_platform.mm`), and each
+platform directory returns its own store from `make_cloud_store()`. A device with the switch off, or no store, never
+reads, writes or listens to anything. [iOS, Game Center and iCloud sync](ios.md) has the store, the entitlement rule and
+what is unconfirmed.
 
 ### Lifecycle and screen time
 
@@ -332,7 +360,7 @@ One table in the app layer maps core events to haptics (`event_haptics`), one ha
 
 ### Parental gate
 
-One screen in the app layer. `GameController::requestLink(url)` (QML-facing names are camelCase; only an https address is accepted) opens the gate, `submitGate(typed)` checks the number, and it calls `LinkOpener::open` only when it is passed. The gate also guards the Game Center switch. The only links v1 needs are the privacy policy and the source repository, both on About. The code base has exactly one call that opens a URL, and a CI check fails if another appears. The form is a number written in words that the adult types back. It is checked against the current Apple and Google rules for children's apps before release.
+One screen in the app layer. `GameController::requestLink(url)` (QML-facing names are camelCase; only an https address is accepted) opens the gate, `submitGate(typed)` checks the number, and it calls `LinkOpener::open` only when it is passed. The gate also guards the Game Center switch, the iCloud sync switch and removing a player. The only links v1 needs are the privacy policy and the source repository, both on About. The code base has exactly one call that opens a URL, and a CI check fails if another appears. The form is a number written in words that the adult types back. It is checked against the current Apple and Google rules for children's apps before release.
 
 ### Build information and notices
 
@@ -389,6 +417,17 @@ Deviations from the sketches above, all small:
 - The top 10 (SPEC, Leaderboard): a finished game that earns a place for a player with a name is saved by `finish_game` under that name, `scoreSavedAtOnce` follows `gameOver`, and no name screen shows. For a player with no name `saveName` names the player (`rename_player`) and saves the entry in one step, and SKIP drops the entry. Names are trimmed of spaces at both ends.
 - Best and NEW BEST! (P3): every finished game calls `record_best` for the current player, and `newBest` is true when the score is above 0 and above that player's best from before the game. SKIP no longer clears it, because the best counts whether or not the entry is kept.
 - Screens: the title's player card, `PlayersScreen` and `NameEntryScreen` in player mode (`docs/ui-components.md`); journeys in [User journeys](user-journeys.md), journey 6.
+
+### As built (sync)
+
+- `GameServices::cloud` is optional; none is a `NullCloudStore`. `main.cpp` makes the store from `make_cloud_store()` (a smoke test run gets the null one) and it outlives the controller, whose destructor removes the change handler.
+- The controller reads `cloudSyncEnabled` and `cloudSyncAvailable` (both notify with `settingsChanged`) and has `requestCloudSync(bool)`. `cloudSyncAvailable` asks the store, which reads no key; it is read again when the app becomes active, because a person can sign in or out meanwhile. `cloudSyncEnabled` is the switch and is false while sync cannot run (no account, no store, or a save from a newer build, which is never written). The save keeps the person's choice when iCloud goes away, and sync resumes when it returns.
+- Turning on opens the gate under the purpose `CloudSync`, whose prompt reads "To turn on iCloud sync, type this number:" and whose button says TURN ON. `device.cloud_sync` is set only when the gate is passed. Turning off is immediate and calls `set_change_handler({})`; the copy in iCloud is left as it is. With the switch off, the controller makes no `read`, `write` or handler call: the one call it makes is `available()`, which reads no key.
+- A sync runs only while the switch is on and the store is available, and only when `can_take_synced_wallet()`: the core idle, paused, or the game over with no name pending. These are the states `GameSession::set_wallet` accepts. The triggers are the switch being turned on, the constructor (start-up after the save loads), `on_application_state(true)`, the store's change handler, and `persist()` (every save except the one that ends a game, which runs the sync as its last step, so the rank the screens were told is the rank in the list). A trigger at another moment leaves a sync owed (`m_CloudOwed`), which the next trigger at an allowed moment runs; `skipName()` is one, because it frees the title.
+- A sync first records the session's wallet in the player (`record_session_in_save`), then runs `sync_with_cloud`. When the local data changed, the session takes the current player's wallet and win mark again (`take_current_player_into_session`), the save is written, and `walletChanged`, `topScoresChanged`, `savedRunChanged` and `playersChanged` are emitted. This is the rule behind the test "Coins earned on another device are never booked as spent here": `record_wallet` books a fall of the session's wallet as coins spent, so a wallet changed by a merge must be taken into the session before the next save.
+- When the current player was removed on another device, `adopt_shared` makes another player current and drops the run of the removed one; a paused game on screen then continues under the new current player's wallet. A merge that leaves nobody active makes up one player (the id comes from the controller's id source) and sends that player too, so the devices do not each make their own.
+- A refused sync, a payload of a later build and a write the store did not take are logged and never shown to the child. A payload that cannot be read is replaced and never damages the local save.
+- Screens: the `cloudSyncRow` of `SettingsScreen` (`docs/ui-components.md`) and journey 7 in [User journeys](user-journeys.md).
 
 ## Tests
 

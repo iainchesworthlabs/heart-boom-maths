@@ -3,6 +3,7 @@
 # `ios-game-release` preset), after the heart_boom_maths_game target exists. Qt's qt_add_executable already makes the target
 # a bundle on iOS; this file gives it the property list, the entitlements, the asset catalogue and the frameworks the game
 # links on its own (GameKit for the Game Center score, AVFoundation for sound, CoreHaptics for the Taptic Engine check).
+# iCloud sync needs no framework of its own: NSUbiquitousKeyValueStore is in Foundation.
 #
 # Unsigned by default: the build needs no Apple account. A signed build is the release workflow's, with the owner's
 # certificate and provisioning profile (docs/ios.md, docs/releasing.md).
@@ -20,6 +21,12 @@ set(HEART_BOOM_MATHS_IOS_SIGNING_PROFILE "" CACHE STRING "Name of the provisioni
 # gamekit, and the sign-in simply never succeeds, which GameCenterScoreService treats as a player who is not signed in.
 option(HEART_BOOM_MATHS_IOS_GAME_CENTER "Request the Game Center entitlement in the iOS bundle (the signing profile must carry it)" ON)
 
+# The same rule for iCloud sync: the iCloud key-value store entitlement (com.apple.developer.ubiquity-kvstore-identifier) goes
+# in only when the provisioning profile carries it, and the release workflow turns this ON only then. OFF leaves out the
+# entitlement and nothing else: the code stays, but Apple requires the entitlement to use the store, so the Settings switch
+# is not offered (the platform file reads HBM_ICLOUD_ENTITLED, set below). An unsigned build works with it OFF or ON.
+option(HEART_BOOM_MATHS_IOS_ICLOUD "Request the iCloud key-value store entitlement in the iOS bundle (the signing profile must carry it)" ON)
+
 if(HEART_BOOM_MATHS_IOS_BUILD_NUMBER)
     set(hbm_ios_build_number "${HEART_BOOM_MATHS_IOS_BUILD_NUMBER}")
 else()
@@ -27,7 +34,10 @@ else()
 endif()
 
 set(hbm_ios_assets "${CMAKE_CURRENT_SOURCE_DIR}/ios/Assets.xcassets")
-set(hbm_ios_entitlements "${CMAKE_CURRENT_SOURCE_DIR}/ios/heart-boom-maths.entitlements")
+# The entitlements file is written for the state of the two options above, at the root of the build directory, and is the file
+# Xcode signs with and verify_game_app.sh reads.
+set(hbm_ios_entitlements_template "${CMAKE_CURRENT_SOURCE_DIR}/ios/heart-boom-maths.entitlements.in")
+set(hbm_ios_entitlements "${CMAKE_BINARY_DIR}/heart-boom-maths.entitlements")
 set(hbm_ios_privacy_manifest "${CMAKE_CURRENT_SOURCE_DIR}/ios/PrivacyInfo.xcprivacy")
 
 # A source path ending in .xcassets is what tells the Xcode generator to compile the catalogue, not copy it.
@@ -51,13 +61,35 @@ set_target_properties(heart_boom_maths_game PROPERTIES
     # The icon set Info.plist.in's CFBundleIconName names.
     XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_APPICON_NAME "AppIcon")
 
-# The Game Center capability. Xcode embeds the file only into a signed build.
+# The capabilities. Xcode embeds the entitlements file only into a signed build. The keys follow the two options, and the file
+# is not given to Xcode at all when both are OFF. The value of the key-value store entry is Xcode's own: the team prefix and
+# the bundle identifier, which is what the profile of the App ID holds.
+set(HBM_ENTITLEMENT_ENTRIES "")
 if(HEART_BOOM_MATHS_IOS_GAME_CENTER)
+    string(APPEND HBM_ENTITLEMENT_ENTRIES "    <key>com.apple.developer.game-center</key>\n    <true/>\n")
+endif()
+if(HEART_BOOM_MATHS_IOS_ICLOUD)
+    string(APPEND HBM_ENTITLEMENT_ENTRIES "    <key>com.apple.developer.ubiquity-kvstore-identifier</key>\n    <string>$(TeamIdentifierPrefix)$(CFBundleIdentifier)</string>\n")
+    set(hbm_icloud_entitled 1)
+else()
+    set(hbm_icloud_entitled 0)
+endif()
+configure_file("${hbm_ios_entitlements_template}" "${hbm_ios_entitlements}" @ONLY)
+if(HEART_BOOM_MATHS_IOS_GAME_CENTER OR HEART_BOOM_MATHS_IOS_ICLOUD)
     set_target_properties(heart_boom_maths_game PROPERTIES XCODE_ATTRIBUTE_CODE_SIGN_ENTITLEMENTS "${hbm_ios_entitlements}")
+endif()
+if(HEART_BOOM_MATHS_IOS_GAME_CENTER)
     message(STATUS "iOS Game Center entitlement: ON (${hbm_ios_entitlements})")
 else()
     message(STATUS "iOS Game Center entitlement: OFF (the bundle is signed without it; sign-in to Game Center will fail)")
 endif()
+if(HEART_BOOM_MATHS_IOS_ICLOUD)
+    message(STATUS "iOS iCloud key-value store entitlement: ON (${hbm_ios_entitlements})")
+else()
+    message(STATUS "iOS iCloud key-value store entitlement: OFF (the bundle is signed without it; the iCloud sync switch is not offered)")
+endif()
+# Whether the bundle was built with the entitlement, for src/platform/ios/cloud_platform.mm: a value it reads, not a condition.
+target_compile_definitions(heart_boom_maths_game PRIVATE HBM_ICLOUD_ENTITLED=${hbm_icloud_entitled})
 
 # Objective-C++ with reference counting, like the platform sources of apps/ios. GameKit, AVFoundation and CoreHaptics are
 # the Apple frameworks the game links itself (src/platform/ios/score_platform.mm, avf_audio_backend.mm and

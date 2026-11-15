@@ -11,8 +11,9 @@ Effective date: owner to set at release.
 - The game collects no personal information.
 - It has no accounts, no ads, no purchases, no chat, no analytics and no crash reporting.
 - It does not use your location, camera, microphone, contacts or photos, and it does not send notifications.
-- Everything the game remembers stays in a small file on your own device.
+- Everything the game remembers stays in a small file on your own device, unless a grown-up turns on iCloud sync on an iPhone or iPad (see below).
 - The game makes no network requests of its own.
+- Nothing the game remembers ever reaches the people who made it.
 
 ## What the game saves on your device
 
@@ -23,7 +24,7 @@ The game keeps one small save file on the device, so a child can pick up where t
 - the top 10 scores, each with the name the child typed (up to 12 letters);
 - one interrupted game, so that CONTINUE can resume it once.
 
-The game never uploads or shares this file. The device's own backup (for example iCloud or Android backup) may include it, under the device's settings. The game never sends a name typed into the top 10 anywhere. We suggest a nickname rather than a real name.
+The game never uploads or shares this file itself. The device's own backup (for example iCloud or Android backup) may include it, under the device's settings. The game never sends a name typed into the game anywhere, except to the family's own iCloud account when a grown-up turns on iCloud sync (below). We suggest a nickname rather than a real name.
 
 To remove the saved data, delete the app, or clear the app's storage in the device settings. In the web version, clear the site's data in the browser.
 
@@ -40,6 +41,18 @@ On iPhone and iPad the game can send a finished score to Apple's Game Center lea
 When it is on, the game sends one number, the final score. It does not read the player's Game Center name, picture or friends, and it does not send the names typed into the game's own top 10. What Game Center does with the score, and what it shows to other players, is set by Apple and the device's parental controls. See Apple's Game Center privacy information.
 
 Game Center does not exist on Android, Windows, Linux or macOS builds of the game, and the game has no equivalent there.
+
+## iCloud sync (Apple devices only)
+
+On iPhone and iPad a grown-up can turn on iCloud sync in Settings, so that the players and the top 10 are the same on every device signed in to the same Apple Account. It is off by default. A grown-up must pass the parental gate to turn it on. While it is off, the game never reads, writes or listens to anything in iCloud.
+
+When it is on, the game puts one small piece of text in the iCloud of the Apple Account signed in on that device: the players (each player's name, coins, win bonus and best score) and the top 10 (names and scores). It does not store the sound, music, haptics or other Settings, the paused game, or which player is playing. The game has no account, sign-in or server of its own, and the text goes only between the devices of that one account, through Apple's iCloud. The people who made the game cannot see it. Apple handles it under Apple's own privacy policy and the person's iCloud settings.
+
+To turn it off, switch it off in the game's Settings (no gate is needed). Turning it off stops the game using iCloud, but it leaves the copy that is already in iCloud, and the other devices keep what they have. [To confirm on a device before publishing: to remove the copy, open Settings on the iPhone or iPad, tap your name, then iCloud, and look under the account's storage for Heart Boom Maths. It is not yet confirmed that the game is listed there, nor how to delete the copy if it is not.]
+
+Because a name typed into the game goes to iCloud when sync is on, we suggest a nickname rather than a real name.
+
+iCloud sync does not exist on Android, Windows, Linux, macOS or the web version of the game.
 
 ## The web version
 

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- What the game asks Apple for: the Game Center capability and the iCloud key-value store, and nothing else. CMake fills in
+     the entries below from HEART_BOOM_MATHS_IOS_GAME_CENTER and HEART_BOOM_MATHS_IOS_ICLOUD (ios/ios.cmake) and writes the
+     result to heart-boom-maths.entitlements in the build directory, which is the file Xcode signs with. Xcode refuses to
+     sign a bundle that asks for an entitlement its provisioning profile does not carry, so each entry is there only when
+     the profile has it (docs/ios.md, "The Game Center rule" and "iCloud sync"). The App ID needs the same capabilities
+     turned on in the Apple Developer account. An unsigned build does not embed this file; a signed one does. -->
+<plist version="1.0">
+<dict>
+@HBM_ENTITLEMENT_ENTRIES@</dict>
+</plist>

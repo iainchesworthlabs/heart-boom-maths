@@ -98,8 +98,12 @@ the bundle; it needs no secret. The signed build and the TestFlight upload are t
 
 `ios-game-build.yml` is the same kind of workflow for the whole game: it installs the macOS and iOS Qt kits, configures the
 `ios-game-release` preset, builds unsigned, and checks the bundle with `apps/game/ios/verify_game_app.sh` (orientations,
-capabilities, Game Center entitlement file, frameworks, size in the job summary). It keeps its logs for a week when it
-fails. See [iOS and Game Center](ios.md).
+capabilities, the entitlements file CMake writes for Game Center and iCloud sync, frameworks, size in the job summary). It
+keeps its logs for a week when it fails. The `ios` job of `release.yml` reads the provisioning profile and passes
+`HEART_BOOM_MATHS_IOS_GAME_CENTER` and `HEART_BOOM_MATHS_IOS_ICLOUD` as ON only when the profile carries the matching
+entitlement (the iCloud one with the value `TEAMID.<bundle id>`), then checks the signed IPA against the state it chose
+(`verify_game_app.sh --game-center ... --icloud ...`) and prints both in the job summary. No `uses:` changed. See
+[iOS, Game Center and iCloud sync](ios.md).
 `android-build.yml` is separate for the same reason: the Qt kits are a download of several gigabytes. It builds the
 `android-arm64-release` and `android-arm64-debug` presets on a Linux runner with the SDK, NDK and JDK that
 `.github/toolchain-versions.json` pins, and `apps/game/android/verify_package.sh` fails it when a package asks for any
