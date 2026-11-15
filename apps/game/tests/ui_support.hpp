@@ -71,8 +71,10 @@ public:
     QmlHarness(heart_boom_maths::game::GameController* game, const QString& component, QSize size,
                const QString& extra_name = {}, QObject* extra = nullptr);
 
-    /// A harness around QML written inline, for a component that needs no controller. It may import HeartBoomMaths.
-    static QmlHarness from_source(const QByteArray& qml, QSize size);
+    /// A harness around QML written inline. It may import HeartBoomMaths. A controller, when given, is the context
+    /// property `hostGame`, so the inline QML can hand it to a component (`AppRoot { game: hostGame }`).
+    static QmlHarness from_source(const QByteArray& qml, QSize size,
+                                  heart_boom_maths::game::GameController* game = nullptr);
 
     [[nodiscard]] QQuickItem* root() const;
     [[nodiscard]] QQuickView& view();
@@ -93,13 +95,26 @@ private:
     struct FromSource
     {
     };
-    QmlHarness(FromSource, const QByteArray& qml, QSize size);
+    QmlHarness(FromSource, const QByteArray& qml, QSize size, heart_boom_maths::game::GameController* game);
 
     void finish_loading(const QString& what);
 
     std::unique_ptr<QTemporaryDir> m_Dir; // holds inline QML
     std::unique_ptr<QQuickView> m_View;
 };
+
+/// What a phone's cut-out, rounded corners and home indicator keep clear, as the safe-area frame is told by tests.
+struct Margins
+{
+    int left = 0;
+    int top = 0;
+    int right = 0;
+    int bottom = 0;
+};
+
+/// The window as the application builds it (AppRoot: the shell inside the safe area, the alert layer over all of it) on
+/// a controller, with the safe-area margins a device would report simulated by `margins`.
+[[nodiscard]] QmlHarness app_root(heart_boom_maths::game::GameController* game, QSize size, Margins margins = {});
 
 /// The `ui` tests read a property of a QML object by name.
 [[nodiscard]] QVariant property_of(const QObject* object, const char* name);

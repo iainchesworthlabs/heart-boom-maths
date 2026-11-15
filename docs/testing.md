@@ -204,6 +204,8 @@ Screenshots for a design review: the hidden test `Screenshots of the title chip,
 (tag `[screenshots]`, in `test_ui_journeys.cpp`) writes PNG files of the players screens at the compact and the regular
 size when `HBM_SCREENSHOT_DIR` names a folder, and does nothing otherwise. Run it by hand:
 `HBM_SCREENSHOT_DIR=private/qa-compare/players heart_boom_maths_ui_tests "[screenshots]"`.
+The alert frame has its own: `Screenshots of the alert frame at the window edge` (`alert-edge-*.png`, in `test_ui_play.cpp`) puts the play
+screen in the alert with simulated phone safe-area margins.
 
 ## Performance tests
 

@@ -25,10 +25,13 @@ constexpr QSize DESKTOP{1280, 800};
 constexpr int SHORT_HOLD_MS = 40;
 constexpr int PAST_HOLD_MS = 160;
 
-/// The whole app shell on a controller, with the holds shortened so a test can wait them out.
+/// An iPhone's margins in portrait: the cut-out at the top, the home indicator at the bottom.
+constexpr Margins PHONE_MARGINS{0, 59, 0, 34};
+
+/// The whole application on a controller, with the holds shortened so a test can wait them out.
 struct Shell
 {
-    explicit Shell(QSize size, bool start = true) : h(&rig.controller, QStringLiteral("AppShell.qml"), size)
+    explicit Shell(QSize size, bool start = true, Margins margins = {}) : h(app_root(&rig.controller, size, margins))
     {
         feedback = h.find("answerFeedback");
         REQUIRE(feedback != nullptr);
@@ -379,6 +382,139 @@ TEST_CASE("The last ten seconds turn the play screen into the alert", "[ui][play
     CHECK(property_of(s.h.find("bombSeconds"), "text").toString() == "0:08");
 }
 
+namespace
+{
+
+/// The window-sized rectangle an item covers, in scene coordinates.
+QRectF scene_rect(const QQuickItem* item)
+{
+    return QRectF(item->mapToScene(QPointF(0, 0)), QSizeF(item->width(), item->height()));
+}
+
+} // namespace
+
+TEST_CASE("The alert frame and the streak flash cover the whole window while the play screen stays in the safe area",
+          "[ui][play][alert][safearea]")
+{
+    struct Case
+    {
+        const char* name;
+        QSize size;
+        Margins margins;
+    };
+    const Case c = GENERATE(Case{"phone, cut-out and home indicator", PHONE, PHONE_MARGINS},
+                            Case{"tablet on its side", QSize{1180, 820}, Margins{0, 24, 0, 20}},
+                            Case{"phone, all four sides", PHONE, Margins{8, 59, 12, 34}},
+                            Case{"no margins, phone size", PHONE, Margins{}},
+                            Case{"no margins, desktop window", DESKTOP, Margins{}});
+    CAPTURE(c.name);
+    Shell s(c.size, true, c.margins);
+    s.rig.play_for_ms(50000);
+    s.h.settle();
+    REQUIRE(s.rig.controller.alert());
+
+    const QRectF window(QPointF(0, 0), QSizeF(c.size));
+    const QRectF safe(
+        QPointF(c.margins.left, c.margins.top),
+        QSizeF(c.size.width() - c.margins.left - c.margins.right, c.size.height() - c.margins.top - c.margins.bottom));
+    QQuickItem* edge = s.h.find_item("alertEdge");
+    QQuickItem* flash = s.h.find_item("streakFlash");
+    QQuickItem* play = s.h.find_item("playScreen");
+    REQUIRE(edge != nullptr);
+    REQUIRE(flash != nullptr);
+    REQUIRE(play != nullptr);
+    CHECK(edge->isVisible());
+
+    // The frame and the flash are the window, edge to edge; the play screen is the safe area, as it always was.
+    CHECK(scene_rect(edge) == window);
+    CHECK(scene_rect(flash) == window);
+    CHECK(scene_rect(play) == safe);
+
+    // Each side of the frame is its 8 pixel line plus what the device keeps clear on that side, so it still reads at
+    // a rounded corner and beside a cut-out. With no margins it is the plain 8 pixel line.
+    const auto bar = [&](const char* name)
+    {
+        QQuickItem* item = s.h.find_item(QLatin1String(name));
+        REQUIRE(item != nullptr);
+        return scene_rect(item);
+    };
+    const QRectF top = bar("alertEdgeTop");
+    const QRectF bottom = bar("alertEdgeBottom");
+    const QRectF left = bar("alertEdgeLeft");
+    const QRectF right = bar("alertEdgeRight");
+    CHECK(top == QRectF(0, 0, c.size.width(), 8 + c.margins.top));
+    CHECK(bottom == QRectF(0, c.size.height() - 8 - c.margins.bottom, c.size.width(), 8 + c.margins.bottom));
+    CHECK(left == QRectF(0, top.bottom(), 8 + c.margins.left, bottom.top() - top.bottom()));
+    CHECK(right ==
+          QRectF(c.size.width() - 8 - c.margins.right, top.bottom(), 8 + c.margins.right, bottom.top() - top.bottom()));
+    // The line just inside the safe area is where the old frame was: nothing of the frame lies inside it.
+    CHECK(top.bottom() == safe.top() + 8);
+    CHECK(bottom.top() == safe.bottom() - 8);
+
+    // Neither takes a tap, a key or a screen reader's attention, and a tap through them reaches the tile below.
+    for (QQuickItem* item : {edge, flash})
+    {
+        CHECK_FALSE(item->isEnabled());
+        CHECK(item->acceptedMouseButtons() == Qt::NoButton);
+        CHECK_FALSE(item->acceptTouchEvents());
+        CHECK_FALSE(item->activeFocusOnTab());
+    }
+    const int before = s.rig.controller.question_number();
+    click(s.tile(s.rig.controller.session_view().question.correct_tile));
+    CHECK(s.rig.controller.question_number() == before + 1);
+}
+
+TEST_CASE("The alert frame shows with the alert and goes with it", "[ui][play][alert]")
+{
+    Shell s(PHONE, true, PHONE_MARGINS);
+    QQuickItem* edge = s.h.find_item("alertEdge");
+    REQUIRE(edge != nullptr);
+    CHECK_FALSE(edge->isVisible());
+
+    s.rig.play_for_ms(50000);
+    s.h.settle();
+    REQUIRE(s.rig.controller.alert());
+    CHECK(edge->isVisible());
+
+    // The frame pulses: its opacity moves while it shows.
+    const qreal first = edge->opacity();
+    QTest::qWait(200);
+    CHECK(edge->opacity() != first);
+
+    // Pausing ends it, as it ended the alert of the play screen; resuming brings it back.
+    s.rig.controller.pause();
+    s.h.settle();
+    CHECK_FALSE(edge->isVisible());
+    s.rig.controller.resume();
+    s.h.settle();
+    CHECK(edge->isVisible());
+
+    // The end of the game takes it away.
+    s.rig.play_for_ms(11000);
+    s.wait_out_holds();
+    CHECK_FALSE(s.visible("alertEdge"));
+}
+
+TEST_CASE("A multiplier step flashes the whole window white", "[ui][play][streak]")
+{
+    Shell s(PHONE, true, PHONE_MARGINS);
+    QQuickItem* flash = s.h.find_item("streakFlash");
+    REQUIRE(flash != nullptr);
+    CHECK(flash->opacity() == 0);
+    CHECK(scene_rect(flash) == QRectF(0, 0, PHONE.width(), PHONE.height()));
+
+    // Three right answers in a row lift the multiplier to 2: the third one flashes.
+    s.tap_right_and_wait();
+    s.tap_right_and_wait();
+    CHECK(flash->opacity() == 0);
+    click(s.tile(s.rig.controller.session_view().question.correct_tile));
+    QTest::qWait(100);
+    REQUIRE(s.rig.controller.multiplier() == 2);
+    CHECK(flash->opacity() > 0);
+    QTest::qWait(500);
+    CHECK(flash->opacity() == 0);
+}
+
 TEST_CASE("In the alert nothing of the play column overlaps another part, at every size", "[ui][play][alert]")
 {
     // From a 667 high phone (the shortest the column's minimum heights allow) to the tablets in portrait and the
@@ -725,5 +861,38 @@ TEST_CASE("Screenshots of the play screen for the hand check against the boards"
                 endless.h.settle();
             }
         }
+    }
+}
+
+// The play screen in the alert with a phone's margins, for the owner to look at: the frame at the window edge. Run by
+// hand with HBM_SCREENSHOT_DIR set to a folder; it does nothing otherwise and is hidden from the ordinary run.
+TEST_CASE("Screenshots of the alert frame at the window edge", "[.][screenshots]")
+{
+    const QString dir = qEnvironmentVariable("HBM_SCREENSHOT_DIR");
+    if (dir.isEmpty())
+    {
+        return;
+    }
+    struct Shot
+    {
+        const char* file;
+        QSize size;
+        Margins margins;
+    };
+    const Shot shots[] = {
+        {"alert-edge-390x844-phone-margins", PHONE, PHONE_MARGINS},
+        {"alert-edge-390x844-no-margins", PHONE, Margins{}},
+        {"alert-edge-820x1180-tablet-margins", TABLET, Margins{0, 24, 0, 20}},
+        {"alert-edge-1280x800-desktop", DESKTOP, Margins{}},
+    };
+    for (const Shot& shot : shots)
+    {
+        Shell s(shot.size, true, shot.margins);
+        s.rig.play_for_ms(50000);
+        s.h.settle();
+        REQUIRE(s.rig.controller.alert());
+        // The frame pulses; the shot is of it at full strength.
+        QTest::qWait(900);
+        CHECK(s.h.grab(QStringLiteral("%1/%2.png").arg(dir, QLatin1String(shot.file))));
     }
 }

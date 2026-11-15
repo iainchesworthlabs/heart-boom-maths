@@ -176,6 +176,8 @@ Tests: the `Lifecycle:` cases in `test_ui_journeys.cpp`, and `Leaving the foregr
 
 The ticking sound stops when the game pauses, when it leaves the alert zone and when the app leaves the foreground, and starts again on RESUME if the game is still in the alert zone.
 
+In the alert zone a red frame pulses round the window, and a white flash crosses it when the multiplier steps up. Both are drawn over the whole window, edge to edge under a phone's cut-out and home indicator (`AlertFrame`, laid over the safe area by `AppRoot`); the play screen's content stays inside the safe area. On a phone each side of the frame is its 8 pixel line plus the margin the device keeps clear there, so it still reads at the rounded corners. Pausing ends the frame. Tests: `The alert frame and the streak flash cover the whole window while the play screen stays in the safe area`.
+
 ## When the save is written
 
 | Moment | What |
