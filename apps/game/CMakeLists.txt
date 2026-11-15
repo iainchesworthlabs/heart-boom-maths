@@ -312,6 +312,7 @@ if(HEART_BOOM_MATHS_BUILD_TESTS)
     add_executable(heart_boom_maths_game_tests
         tests/test_main.cpp
         tests/test_build_info.cpp
+        tests/test_cloud_controller.cpp
         tests/test_cloud_sync.cpp
         tests/test_event_sounds.cpp
         tests/test_file_save_store.cpp
