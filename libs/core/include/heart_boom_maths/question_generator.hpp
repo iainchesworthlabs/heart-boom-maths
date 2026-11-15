@@ -13,6 +13,32 @@
 namespace heart_boom_maths
 {
 
+/// The kinds of number sentence the generator builds. The shape names in `Tuning` cover several kinds each (the
+/// two-term shape is both a + b and a - b), so the generator works with kinds.
+enum class QuestionKind
+{
+    ADD2,         // a + b
+    SUB2,         // a - b
+    MISSING,      // a + ? = c
+    ADD3,         // a + b + c
+    ADD_SUB3,     // a + b - c
+    ADD_ADD_SUB4, // a + b + c - d
+};
+
+/// Every question of one kind has exactly one index in [0, `question_kind_count`). The generator draws an index with
+/// equal chance, so every question of the kind is dealt with equal chance. A question here is what a level with these
+/// numbers can deal: every operand from `minimum` to `largest`, every running total from 0 to `largest`, and for
+/// a + ? = c a missing number of at least `minimum`. `largest` is capped at 16,383, the most a question key holds.
+/// The tiles of the returned question are not dealt (all zero).
+[[nodiscard]] std::int64_t question_kind_count(QuestionKind kind, int minimum, int largest) noexcept;
+
+/// The question at `index`, which must be in [0, `question_kind_count`).
+[[nodiscard]] Question question_kind_at(QuestionKind kind, int minimum, int largest, std::int64_t index) noexcept;
+
+/// Every question of the kind, by plain enumeration and in a fixed order. It is the reference the two functions above
+/// are checked against, and the generator lists a small level with it. Use it only for small ranges.
+[[nodiscard]] std::vector<Question> list_question_kind(QuestionKind kind, int minimum, int largest);
+
 /// Deals the questions of one level at a time (see "Question generator" in docs/game-architecture.md). It keeps what it
 /// needs to avoid repeats within a level, and that state is part of a saved run.
 class QuestionGenerator

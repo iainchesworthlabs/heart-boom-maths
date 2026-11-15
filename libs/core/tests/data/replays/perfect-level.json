@@ -6,16 +6,16 @@
   "recipe": "--seed 101 --clear-level 1 --auto perfect",
   "commands": [
     { "tick": 0, "do": "start_game" },
-    { "tick": 30, "do": "answer", "tile": 3 },
+    { "tick": 30, "do": "answer", "tile": 0 },
     { "tick": 60, "do": "answer", "tile": 2 },
-    { "tick": 90, "do": "answer", "tile": 3 },
+    { "tick": 90, "do": "answer", "tile": 0 },
     { "tick": 120, "do": "answer", "tile": 3 },
-    { "tick": 150, "do": "answer", "tile": 2 },
-    { "tick": 180, "do": "answer", "tile": 1 },
-    { "tick": 210, "do": "answer", "tile": 1 },
-    { "tick": 240, "do": "answer", "tile": 3 },
-    { "tick": 270, "do": "answer", "tile": 2 },
-    { "tick": 300, "do": "answer", "tile": 3 }
+    { "tick": 150, "do": "answer", "tile": 0 },
+    { "tick": 180, "do": "answer", "tile": 3 },
+    { "tick": 210, "do": "answer", "tile": 3 },
+    { "tick": 240, "do": "answer", "tile": 0 },
+    { "tick": 270, "do": "answer", "tile": 3 },
+    { "tick": 300, "do": "answer", "tile": 2 }
   ],
-  "expect": { "events_hash": "e99bd15969168519", "final_hash": "7b563d1a3f01e275", "score": 930 }
+  "expect": { "events_hash": "f60b35e414f1c9b9", "final_hash": "796bcb90182f8f5d", "score": 930 }
 }

@@ -35,20 +35,8 @@ constexpr int KEY_SHAPE_SHIFT = KEY_OPERATOR_SHIFT + 3;
 
 constexpr int SNAPSHOT_HEADER_SIZE = 3; // level, mode, count
 
-// The kinds of number sentence the generator can build. The shape names in `Tuning` cover several kinds each (the
-// two-term shape is both a + b and a - b), so the generator works with kinds.
-enum class Kind
-{
-    ADD2,         // a + b
-    SUB2,         // a - b
-    MISSING,      // a + ? = c
-    ADD3,         // a + b + c
-    ADD_SUB3,     // a + b - c
-    ADD_ADD_SUB4, // a + b + c - d
-};
-
-constexpr std::array<Kind, 6> ALL_KINDS{Kind::ADD2, Kind::SUB2,     Kind::MISSING,
-                                        Kind::ADD3, Kind::ADD_SUB3, Kind::ADD_ADD_SUB4};
+constexpr std::array<QuestionKind, 6> ALL_KINDS{QuestionKind::ADD2, QuestionKind::SUB2,     QuestionKind::MISSING,
+                                                QuestionKind::ADD3, QuestionKind::ADD_SUB3, QuestionKind::ADD_ADD_SUB4};
 
 struct KindTraits
 {
@@ -57,21 +45,21 @@ struct KindTraits
     std::array<Operator, 3> operators;
 };
 
-constexpr KindTraits traits_of(Kind kind) noexcept
+constexpr KindTraits traits_of(QuestionKind kind) noexcept
 {
     switch (kind)
     {
-    case Kind::ADD2:
+    case QuestionKind::ADD2:
         return {QuestionShape::TWO_TERM, 2, {Operator::ADD, Operator::ADD, Operator::ADD}};
-    case Kind::SUB2:
+    case QuestionKind::SUB2:
         return {QuestionShape::TWO_TERM, 2, {Operator::SUBTRACT, Operator::ADD, Operator::ADD}};
-    case Kind::MISSING:
+    case QuestionKind::MISSING:
         return {QuestionShape::MISSING_ADDEND, 2, {Operator::ADD, Operator::ADD, Operator::ADD}};
-    case Kind::ADD3:
+    case QuestionKind::ADD3:
         return {QuestionShape::THREE_TERM, 3, {Operator::ADD, Operator::ADD, Operator::ADD}};
-    case Kind::ADD_SUB3:
+    case QuestionKind::ADD_SUB3:
         return {QuestionShape::THREE_TERM, 3, {Operator::ADD, Operator::SUBTRACT, Operator::ADD}};
-    case Kind::ADD_ADD_SUB4:
+    case QuestionKind::ADD_ADD_SUB4:
         return {QuestionShape::FOUR_TERM, 4, {Operator::ADD, Operator::ADD, Operator::SUBTRACT}};
     }
     return {QuestionShape::TWO_TERM, 2, {Operator::ADD, Operator::ADD, Operator::ADD}};
@@ -84,7 +72,7 @@ struct LevelInfo
     int minimum = 1;
     bool endless = false;
     int multi_term_percent = 0; // endless only
-    std::array<Kind, 2> kinds{};
+    std::array<QuestionKind, 2> kinds{};
     int kind_count = 0;
 };
 
@@ -96,31 +84,32 @@ void set_kinds(LevelInfo& info, QuestionShape shape, Operations operations)
         switch (operations)
         {
         case Operations::ADD:
-            info.kinds = {Kind::ADD2, Kind::ADD2};
+            info.kinds = {QuestionKind::ADD2, QuestionKind::ADD2};
             info.kind_count = 1;
             break;
         case Operations::TAKE_AWAY:
-            info.kinds = {Kind::SUB2, Kind::SUB2};
+            info.kinds = {QuestionKind::SUB2, QuestionKind::SUB2};
             info.kind_count = 1;
             break;
         case Operations::MIXED:
-            info.kinds = {Kind::ADD2, Kind::SUB2};
+            info.kinds = {QuestionKind::ADD2, QuestionKind::SUB2};
             info.kind_count = 2;
             break;
         }
         break;
     case QuestionShape::MISSING_ADDEND:
-        info.kinds = {Kind::MISSING, Kind::MISSING};
+        info.kinds = {QuestionKind::MISSING, QuestionKind::MISSING};
         info.kind_count = 1;
         break;
     case QuestionShape::THREE_TERM:
         // The PRD has one three-term sentence for adding and one for mixed. A take-away three-term level does not
         // exist, so it is read as mixed.
-        info.kinds = {operations == Operations::ADD ? Kind::ADD3 : Kind::ADD_SUB3, Kind::ADD_SUB3};
+        info.kinds = {operations == Operations::ADD ? QuestionKind::ADD3 : QuestionKind::ADD_SUB3,
+                      QuestionKind::ADD_SUB3};
         info.kind_count = 1;
         break;
     case QuestionShape::FOUR_TERM:
-        info.kinds = {Kind::ADD_ADD_SUB4, Kind::ADD_ADD_SUB4};
+        info.kinds = {QuestionKind::ADD_ADD_SUB4, QuestionKind::ADD_ADD_SUB4};
         info.kind_count = 1;
         break;
     }
@@ -153,7 +142,7 @@ LevelInfo make_level_info(const Tuning& tuning, int level)
     return info;
 }
 
-[[nodiscard]] bool level_allows(const LevelInfo& info, Kind kind)
+[[nodiscard]] bool level_allows(const LevelInfo& info, QuestionKind kind)
 {
     if (info.endless)
     {
@@ -207,7 +196,7 @@ LevelInfo make_level_info(const Tuning& tuning, int level)
 [[nodiscard]] bool is_valid(const LevelInfo& info, const Question& q)
 {
     bool allowed = false;
-    for (const Kind kind : ALL_KINDS)
+    for (const QuestionKind kind : ALL_KINDS)
     {
         allowed = allowed || (level_allows(info, kind) && matches(q, traits_of(kind)));
     }
@@ -303,7 +292,7 @@ LevelInfo make_level_info(const Tuning& tuning, int level)
     return true;
 }
 
-[[nodiscard]] Question skeleton_of(Kind kind)
+[[nodiscard]] Question skeleton_of(QuestionKind kind)
 {
     const KindTraits traits = traits_of(kind);
     Question q;
@@ -339,10 +328,10 @@ void walk_terms(const LevelInfo& info, int depth, int running, Question& q, std:
     q.terms[static_cast<std::size_t>(depth)] = 0;
 }
 
-void list_kind(Kind kind, const LevelInfo& info, std::size_t cap, std::vector<Question>& out)
+void list_kind(QuestionKind kind, const LevelInfo& info, std::size_t cap, std::vector<Question>& out)
 {
     Question q = skeleton_of(kind);
-    if (kind == Kind::MISSING)
+    if (kind == QuestionKind::MISSING)
     {
         for (int c = 2 * info.minimum; c <= info.largest && out.size() < cap; ++c)
         {
@@ -366,7 +355,7 @@ void list_kind(Kind kind, const LevelInfo& info, std::size_t cap, std::vector<Qu
 [[nodiscard]] std::vector<Question> list_questions(const LevelInfo& info, std::size_t cap)
 {
     std::vector<Question> out;
-    for (const Kind kind : ALL_KINDS)
+    for (const QuestionKind kind : ALL_KINDS)
     {
         if (level_allows(info, kind) && out.size() < cap)
         {
@@ -376,84 +365,134 @@ void list_kind(Kind kind, const LevelInfo& info, std::size_t cap, std::vector<Qu
     return out;
 }
 
-// Splits `total` into `parts` numbers that are each at least `minimum`. `parts` is 2 or 3.
-void split(int total, int parts, int minimum, Rng& rng, std::span<int> out)
+// How a kind is counted and built. Every kind is a number of added parts (`parts`) that sum to a total and, for the
+// sentences with a take-away, one more number taken from that total. So a + b is two parts, a - b is one part (a) and
+// a take-away, a + ? = c is two parts that sum to c, and a + b + c - d is three parts and a take-away. The total is the
+// result for the sentences without a take-away and the sum before the take-away for the others.
+struct DealShape
 {
-    int left = total;
-    for (int i = 0; i < parts - 1; ++i)
-    {
-        const int remaining_parts = parts - 1 - i;
-        const auto slot = static_cast<std::size_t>(i);
-        out[slot] = rng.between(minimum, left - remaining_parts * minimum);
-        left -= out[slot];
-    }
-    out[static_cast<std::size_t>(parts - 1)] = left;
-}
+    int parts;
+    bool take_away;
+};
 
-// Builds a question from its result backwards: pick the result in range, then split it, so every number comes out in
-// range at the first try.
-[[nodiscard]] Question build(Kind kind, const LevelInfo& info, Rng& rng)
+constexpr DealShape deal_shape_of(QuestionKind kind) noexcept
 {
-    const int m = info.minimum;
-    const int largest = info.largest;
-    Question q = skeleton_of(kind);
-    std::array<int, 3> parts{};
-
     switch (kind)
     {
-    case Kind::ADD2:
-    {
-        const int result = rng.between(2 * m, largest);
-        split(result, 2, m, rng, parts);
-        q.terms = {parts[0], parts[1], 0, 0};
-        break;
+    case QuestionKind::ADD2:
+    case QuestionKind::MISSING:
+        return {2, false};
+    case QuestionKind::SUB2:
+        return {1, true};
+    case QuestionKind::ADD3:
+        return {3, false};
+    case QuestionKind::ADD_SUB3:
+        return {2, true};
+    case QuestionKind::ADD_ADD_SUB4:
+        return {3, true};
     }
-    case Kind::SUB2:
-    {
-        // a - b = r. Choose r, then b so that a = r + b stays within the largest number.
-        const int result = rng.between(0, largest - m);
-        const int b = rng.between(m, largest - result);
-        q.terms = {result + b, b, 0, 0};
-        break;
-    }
-    case Kind::MISSING:
-    {
-        // a + ? = c. The sum c is chosen first and the missing number is c - a.
-        const int sum = rng.between(2 * m, largest);
-        const int a = rng.between(m, sum - m);
-        q.terms = {a, sum, 0, 0};
-        break;
-    }
-    case Kind::ADD3:
-    {
-        const int result = rng.between(3 * m, largest);
-        split(result, 3, m, rng, parts);
-        q.terms = {parts[0], parts[1], parts[2], 0};
-        break;
-    }
-    case Kind::ADD_SUB3:
-    {
-        // a + b - c = r. The sum a + b = r + c must be at least 2m and at most the largest number.
-        const int result = rng.between(0, largest - m);
-        const int c = rng.between(std::max(m, 2 * m - result), largest - result);
-        split(result + c, 2, m, rng, parts);
-        q.terms = {parts[0], parts[1], c, 0};
-        break;
-    }
-    case Kind::ADD_ADD_SUB4:
-    {
-        const int result = rng.between(0, largest - m);
-        const int d = rng.between(std::max(m, 3 * m - result), largest - result);
-        split(result + d, 3, m, rng, parts);
-        q.terms = {parts[0], parts[1], parts[2], d};
-        break;
-    }
-    }
-    q.answer = evaluate(q);
-    return q;
+    return {2, false};
 }
 
-[[nodiscard]] Kind pick_kind(const LevelInfo& info, Rng& rng)
+// The binomial coefficient for k from 1 to 4, each written out so the divisor is a constant (a division by a variable
+// is too slow for a question dealt in under a microsecond). The product stays below 2^63 for n up to 16,386, the
+// largest the callers pass: 16,386^4 is about 7.2 * 10^16 against 9.2 * 10^18.
+[[nodiscard]] constexpr std::int64_t choose(std::int64_t n, int k) noexcept
+{
+    if (n < k)
+    {
+        return 0;
+    }
+    switch (k)
+    {
+    case 1:
+        return n;
+    case 2:
+        return n * (n - 1) / 2;
+    case 3:
+        return n * (n - 1) * (n - 2) / 6;
+    case 4:
+        return n * (n - 1) * (n - 2) * (n - 3) / 24;
+    default:
+        return 0;
+    }
+}
+
+// How many questions of a shape have a total of `at_most` or less. The number with one total does not depend on the
+// largest number, so this is also the count for a level whose largest number is `at_most`.
+//
+// A total of s split into p parts of at least m each has C(n + p - 1, p - 1) ways, where n = s - p * m, and a
+// take-away has s - m + 1 choices on top (any number from m up to the total). Adding over every total up to the limit
+// gives C(N + p, p) for the parts alone, by the hockey-stick identity. With the take-away, write s - m + 1 as n + K
+// with K = (p - 1) * m + 1 and use n * C(n + p - 1, p - 1) = p * C(n + p - 1, p), which gives
+// p * C(N + p, p + 1) + K * C(N + p, p). A test checks both against a plain enumeration.
+//
+// Size: the largest number is at most MAX_TERM = 16,383, so N + p is at most 16,386. The largest term here is
+// p * C(N + p, p + 1) for three parts, about 3 * 3 * 10^15, and K * C(N + p, p) is smaller. The count is therefore
+// below 10^16 and fits in 64 bits with room to spare. At the release largest number of 1,000 the four-term kind has
+// about 1.25 * 10^11 questions.
+[[nodiscard]] constexpr std::int64_t count_up_to(DealShape shape, int minimum, int at_most) noexcept
+{
+    const std::int64_t n = static_cast<std::int64_t>(at_most) - static_cast<std::int64_t>(shape.parts) * minimum;
+    if (n < 0)
+    {
+        return 0;
+    }
+    const std::int64_t ways = choose(n + shape.parts, shape.parts);
+    if (!shape.take_away)
+    {
+        return ways;
+    }
+    const std::int64_t k = static_cast<std::int64_t>(shape.parts - 1) * minimum + 1;
+    return shape.parts * choose(n + shape.parts, shape.parts + 1) + k * ways;
+}
+
+// The smallest value in [low, high] for which `reached` is true, given that it is true at `high` and, once true, stays
+// true. It replaces a walk over up to a thousand totals with about ten steps.
+template <typename Reached>
+[[nodiscard]] int first_reached(int low, int high, Reached reached)
+{
+    while (low < high)
+    {
+        const int middle = low + (high - low) / 2;
+        if (reached(middle))
+        {
+            high = middle;
+        }
+        else
+        {
+            low = middle + 1;
+        }
+    }
+    return low;
+}
+
+// Splits `total` into three parts of at least `minimum`. Every such split has one index: first parts in increasing
+// order and, for each first part, second parts in increasing order. So an even choice of index is an even choice among
+// all the splits, not first part then second.
+void split_three(int total, int minimum, std::int64_t index, std::array<int, 3>& parts)
+{
+    const std::int64_t spare = static_cast<std::int64_t>(total) - 3 * minimum;
+    const std::int64_t all = choose(spare + 2, 2);
+    // The splits with a first part of minimum + j - 1 or less number all - C(spare - j + 2, 2).
+    const auto before = [&](std::int64_t j) { return all - choose(spare - j + 2, 2); };
+    const int first = first_reached(0, static_cast<int>(spare), [&](int j) { return before(j + 1) > index; });
+    parts[0] = minimum + first;
+    parts[1] = minimum + static_cast<int>(index - before(first));
+    parts[2] = total - parts[0] - parts[1];
+}
+
+// Builds one question with every question of the kind equally likely: one draw picks an index among them all. That is
+// the same as choosing the total with a chance in proportion to the questions it leads to and then one of those with
+// equal chance. No retry is needed, because every index is a question in range.
+[[nodiscard]] Question build(QuestionKind kind, const LevelInfo& info, Rng& rng)
+{
+    const std::int64_t count = question_kind_count(kind, info.minimum, info.largest);
+    const auto index = static_cast<std::int64_t>(rng.below(static_cast<std::uint64_t>(count)));
+    return question_kind_at(kind, info.minimum, info.largest, index);
+}
+
+[[nodiscard]] QuestionKind pick_kind(const LevelInfo& info, Rng& rng)
 {
     if (!info.endless)
     {
@@ -467,15 +506,15 @@ void split(int total, int parts, int minimum, Rng& rng, std::span<int> out)
     {
         if (rng.below(2) == 0)
         {
-            return rng.below(2) == 0 ? Kind::ADD3 : Kind::ADD_SUB3;
+            return rng.below(2) == 0 ? QuestionKind::ADD3 : QuestionKind::ADD_SUB3;
         }
-        return Kind::ADD_ADD_SUB4;
+        return QuestionKind::ADD_ADD_SUB4;
     }
     if (rng.below(2) == 0)
     {
-        return Kind::MISSING;
+        return QuestionKind::MISSING;
     }
-    return rng.below(2) == 0 ? Kind::ADD2 : Kind::SUB2;
+    return rng.below(2) == 0 ? QuestionKind::ADD2 : QuestionKind::SUB2;
 }
 
 // 37 becomes 73 and 123 becomes 132: the last two digits change places, a mistake children really make.
@@ -490,25 +529,67 @@ void split(int total, int parts, int minimum, Rng& rng, std::span<int> out)
     return value - tens * 10 - units + units * 10 + tens;
 }
 
-// Fills in the four tiles: the answer and three near misses, in a random order.
+// A side of the answer: the near misses that lie on it, at most four (the three offsets and the digit swap).
+struct NearMisses
+{
+    std::array<int, 4> values{};
+    int count = 0;
+};
+
+// Chooses `need` wrong tiles on one side of the answer and writes them to `out`. Near misses come first, picked at
+// random when there are more than needed; a side with too few is topped up with the nearest unused numbers, which are
+// at distance 1, 2, 3 and so on. `step` is -1 for the side below the answer and 1 for the side above it.
+void deal_side(NearMisses& near, int need, int answer, int step, int largest, Rng& rng, std::span<int> out)
+{
+    if (near.count > need)
+    {
+        for (int i = 0; i < need; ++i)
+        {
+            const auto j = static_cast<int>(rng.below(static_cast<std::uint64_t>(near.count - i))) + i;
+            std::swap(near.values[static_cast<std::size_t>(i)], near.values[static_cast<std::size_t>(j)]);
+        }
+        near.count = need;
+    }
+    int filled = 0;
+    for (int i = 0; i < near.count; ++i)
+    {
+        out[static_cast<std::size_t>(filled++)] = near.values[static_cast<std::size_t>(i)];
+    }
+    for (int distance = 1; filled < need; ++distance)
+    {
+        const int value = answer + step * distance;
+        if (value < 0 || value > largest)
+        {
+            break; // the caller only asks for as many as the range holds, so this is not reached
+        }
+        const auto used = out.first(static_cast<std::size_t>(filled));
+        if (std::find(used.begin(), used.end(), value) == used.end())
+        {
+            out[static_cast<std::size_t>(filled++)] = value;
+        }
+    }
+}
+
+// Fills in the four tiles: the answer and three near misses, in a random order. First the number of wrong tiles below
+// the answer is chosen, with equal chance among the counts the range allows, so the answer is as likely to be the
+// smallest or the largest tile as a middle one. Choosing three near misses at random instead would, on small numbers,
+// nearly always give a mix of -2, -1, +1 and +2, and the answer would almost always be one of the two middle tiles.
 void deal_tiles(Question& q, const LevelInfo& info, Rng& rng)
 {
-    std::array<int, 7> candidates{};
-    int count = 0;
+    NearMisses below;
+    NearMisses above;
     const auto offer = [&](int value)
     {
         if (value < 0 || value > info.largest || value == q.answer)
         {
             return;
         }
-        for (int i = 0; i < count; ++i)
+        NearMisses& side = value < q.answer ? below : above;
+        const auto end = side.values.begin() + side.count;
+        if (std::find(side.values.begin(), end, value) == end)
         {
-            if (candidates[static_cast<std::size_t>(i)] == value)
-            {
-                return;
-            }
+            side.values[static_cast<std::size_t>(side.count++)] = value;
         }
-        candidates[static_cast<std::size_t>(count++)] = value;
     };
     offer(q.answer + 1);
     offer(q.answer - 1);
@@ -518,36 +599,107 @@ void deal_tiles(Question& q, const LevelInfo& info, Rng& rng)
     offer(q.answer - 10);
     offer(swap_last_two_digits(q.answer));
 
-    if (count > 3)
+    // A count of wrong tiles below is allowed when that many numbers exist below the answer and the rest exist above.
+    std::array<int, 4> allowed{};
+    int allowed_count = 0;
+    for (int count_below = 0; count_below <= 3; ++count_below)
     {
-        // Keep three of the near misses at random.
-        for (int i = 0; i < 3; ++i)
+        if (count_below <= q.answer && 3 - count_below <= info.largest - q.answer)
         {
-            const auto j = static_cast<int>(rng.below(static_cast<std::uint64_t>(count - i))) + i;
-            std::swap(candidates[static_cast<std::size_t>(i)], candidates[static_cast<std::size_t>(j)]);
+            allowed[static_cast<std::size_t>(allowed_count++)] = count_below;
         }
-        count = 3;
     }
-    // Too few near misses in range: take the nearest unused numbers, the lower one first.
-    // A while loop, because `offer` changes `count` through a reference and Clang cannot see that in a for header.
-    int distance = 1;
-    while (count < 3)
-    {
-        offer(q.answer - distance);
-        // cppcheck-suppress identicalInnerCondition ; offer() changes count through a reference
-        if (count < 3)
-        {
-            offer(q.answer + distance);
-        }
-        ++distance;
-    }
+    const int count_below =
+        allowed[static_cast<std::size_t>(rng.below(static_cast<std::uint64_t>(std::max(allowed_count, 1))))];
 
-    q.tiles = {q.answer, candidates[0], candidates[1], candidates[2]};
+    std::array<int, 3> wrong{};
+    const std::span<int> wrong_span(wrong);
+    deal_side(below, count_below, q.answer, -1, info.largest, rng,
+              wrong_span.first(static_cast<std::size_t>(count_below)));
+    deal_side(above, 3 - count_below, q.answer, 1, info.largest, rng,
+              wrong_span.subspan(static_cast<std::size_t>(count_below)));
+
+    q.tiles = {q.answer, wrong[0], wrong[1], wrong[2]};
     rng.shuffle(std::span<int>(q.tiles));
     q.correct_tile = static_cast<int>(std::find(q.tiles.begin(), q.tiles.end(), q.answer) - q.tiles.begin());
 }
 
 } // namespace
+
+std::int64_t question_kind_count(QuestionKind kind, int minimum, int largest) noexcept
+{
+    return count_up_to(deal_shape_of(kind), std::max(minimum, 1), std::min(largest, MAX_TERM));
+}
+
+Question question_kind_at(QuestionKind kind, int minimum, int largest, std::int64_t index) noexcept
+{
+    const DealShape shape = deal_shape_of(kind);
+    const int m = std::max(minimum, 1);
+    const int top = std::min(largest, MAX_TERM);
+    const int first_total = shape.parts * m;
+
+    // The total whose questions hold this index: the first one where the questions up to it outnumber the index.
+    const int total =
+        first_reached(first_total, std::max(top, first_total), [&](int s) { return count_up_to(shape, m, s) > index; });
+    std::int64_t rest = index - count_up_to(shape, m, total - 1);
+
+    int taken = 0;
+    if (shape.take_away)
+    {
+        const std::int64_t choices = static_cast<std::int64_t>(total) - m + 1;
+        taken = m + static_cast<int>(rest % choices);
+        rest /= choices;
+    }
+    std::array<int, 3> parts{};
+    switch (shape.parts)
+    {
+    case 1:
+        parts[0] = total;
+        break;
+    case 2:
+        parts[0] = m + static_cast<int>(rest);
+        parts[1] = total - parts[0];
+        break;
+    default:
+        split_three(total, m, rest, parts);
+        break;
+    }
+
+    Question q = skeleton_of(kind);
+    switch (kind)
+    {
+    case QuestionKind::ADD2:
+        q.terms = {parts[0], parts[1], 0, 0};
+        break;
+    case QuestionKind::SUB2:
+        q.terms = {total, taken, 0, 0};
+        break;
+    case QuestionKind::MISSING:
+        q.terms = {parts[0], total, 0, 0}; // a + ? = c, where the parts are a and the missing number
+        break;
+    case QuestionKind::ADD3:
+        q.terms = {parts[0], parts[1], parts[2], 0};
+        break;
+    case QuestionKind::ADD_SUB3:
+        q.terms = {parts[0], parts[1], taken, 0};
+        break;
+    case QuestionKind::ADD_ADD_SUB4:
+        q.terms = {parts[0], parts[1], parts[2], taken};
+        break;
+    }
+    q.answer = evaluate(q);
+    return q;
+}
+
+std::vector<Question> list_question_kind(QuestionKind kind, int minimum, int largest)
+{
+    LevelInfo info;
+    info.minimum = std::max(minimum, 1);
+    info.largest = std::min(largest, MAX_TERM);
+    std::vector<Question> out;
+    list_kind(kind, info, std::numeric_limits<std::size_t>::max(), out);
+    return out;
+}
 
 QuestionGenerator::QuestionGenerator(const Tuning& tuning) : m_Tuning(&tuning) {}
 
