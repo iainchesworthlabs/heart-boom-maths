@@ -69,9 +69,11 @@ From level 25 a right answer adds only what a wrong one removes, so every game e
 
 - Every operand is between 1 and the level's largest number. Every intermediate result and the answer is between 0 and the largest number. (The PRD allowed 0 as an operand. Decision 4 makes the minimum 1.)
 - Wrong tiles are near misses: answer ±1, ±2, ±10, or a digit swap. They are distinct, in range, and different from the answer.
+- The number of wrong tiles below the answer (none, one, two or three) is chosen with equal chance from the numbers the range allows, and the rest are above it. So the answer is as likely to be the smallest or the largest tile as a middle one. A side with too few near misses in range is topped up with the nearest unused numbers on that side.
 - The correct tile's position is random. No question repeats within a level.
 - Generation is seeded, so any level can be replayed exactly.
-- Build operands from the result backwards (choose the result in range, then split it) so no retry loop is needed.
+- Every possible question of a kind (a + b, a − b, a + ? = c and so on) has the same chance of being dealt. On a level that mixes kinds the choice between kinds is even, and endless keeps its own split.
+- Build operands from the result backwards so no retry loop is needed: choose the result with a chance in proportion to the number of ways to split it, then choose one of those ways with equal chance.
 - For a level with 50 or fewer possible questions, list them all, shuffle and deal 10. Level 1 has exactly 10 and level 2 has 15.
 
 ## Points and coins

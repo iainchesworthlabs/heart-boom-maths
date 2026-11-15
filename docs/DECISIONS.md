@@ -76,15 +76,17 @@ The mechanics of the party cat, the bonus animal and diamonds are new proposals:
 
 Still to do for decision 1, with the sync work: `COMPLIANCE.md`, the privacy policy and the store forms, and a check of how Apple's privacy answers treat data kept in the user's own iCloud.
 
-### Open: the questions feel too alike (15 Nov 2026)
+### The questions felt too alike (15 Nov 2026)
 
-The owner reported that the questions feel less random than they should. Two causes are in the generator, and neither is decided:
+The owner reported that the questions felt less random than they should. The generator had three causes. The owner decided to fix the dealing and the tiles, and to leave the small levels to stage 1.
 
-| Cause | Detail | Options |
+| Cause | Detail | Decided |
 |---|---|---|
-| Small levels | Levels 1 and 2 have 10 and 15 possible sums, so every game opens with the same 25 | Stage 1's start level lets a player skip them. Or widen the two levels in the PRD table |
-| Answer-first dealing | Larger levels choose the answer evenly and then split it, so sums with few splits come up far too often. On level 3, "1 + 1" is in about 4 games of 10, against 1 in 10 if every sum were equally likely | Deal every possible sum of a level with equal chance |
-| Tiles | The wrong tiles are mostly the answer ±1 and ±2, so the right answer is usually one of the middle values | Vary the wrong tiles so the answer's place in the order gives nothing away |
+| Small levels | Levels 1 and 2 have 10 and 15 possible sums, so every game opens with the same 25 | No change to the level table. Stage 1's start level lets a player skip them |
+| Answer-first dealing | Larger levels chose the answer evenly and then split it, so sums with few splits came up far too often. On level 3, "1 + 1" was in about 4 games of 10, against 1 in 10 if every sum were equally likely | Every possible question of a kind has the same chance. The choice between kinds on a mixed level stays even |
+| Tiles | The wrong tiles were mostly the answer ±1 and ±2, so the right answer was usually one of the middle values | How many wrong tiles sit below the answer is chosen evenly from what the range allows, so the answer's place in the order gives nothing away |
+
+The rules are in `SPEC.md`, Question generation. Every golden replay is regenerated with the change.
 
 ## Earlier decisions (7 and 14 Nov)
 
