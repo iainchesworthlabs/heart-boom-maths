@@ -203,10 +203,10 @@ ctest --preset linux-debug -L unit
 Screenshots for a design review: the hidden tests tagged `[screenshots]` write PNG files when `HBM_SCREENSHOT_DIR` names a
 folder, and do nothing otherwise: `Screenshots of WHO'S PLAYING and the name screen of a player` (compact and regular size)
 and `Screenshots of the title's player card` (`title-card-*.png`, in `test_ui_journeys.cpp`), `Screenshots of the alert
-frame at the window edge` (`alert-edge-*.png`, in `test_ui_play.cpp`, with simulated phone safe-area margins), and
-`Screenshots of Settings with the iCloud sync row` (`settings-icloud-compact.png` and `settings-icloud-regular.png`, in
-`test_ui_cloud.cpp`). Run them by
-hand: `HBM_SCREENSHOT_DIR=private/qa-compare/players heart_boom_maths_ui_tests "[screenshots]"`.
+frame at the window edge` (`alert-frame-*.png`, in `test_ui_play.cpp`, with simulated phone safe-area margins; the `masked`
+ones have black drawn outside a rounded rectangle, standing in for a phone's own corners), and `Screenshots of Settings
+with the iCloud sync row` (`settings-icloud-compact.png` and `settings-icloud-regular.png`, in `test_ui_cloud.cpp`). Run
+them by hand: `HBM_SCREENSHOT_DIR=private/qa-compare/players heart_boom_maths_ui_tests "[screenshots]"`.
 
 ## Performance tests
 

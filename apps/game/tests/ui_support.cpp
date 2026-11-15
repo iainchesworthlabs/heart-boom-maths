@@ -246,10 +246,15 @@ void QmlHarness::resize(QSize size)
     settle();
 }
 
-bool QmlHarness::grab(const QString& path)
+QImage QmlHarness::grab_image()
 {
     settle();
-    const QImage image = m_View->grabWindow();
+    return m_View->grabWindow();
+}
+
+bool QmlHarness::grab(const QString& path)
+{
+    const QImage image = grab_image();
     if (image.isNull())
     {
         return false;

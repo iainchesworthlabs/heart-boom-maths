@@ -6,8 +6,13 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
 #include <QByteArray>
+#include <QColor>
+#include <QImage>
+#include <QPainter>
+#include <QPainterPath>
 #include <QQuickItem>
 #include <QTest>
+#include <algorithm>
 #include <memory>
 #include <vector>
 
@@ -27,6 +32,40 @@ constexpr int PAST_HOLD_MS = 160;
 
 /// An iPhone's margins in portrait: the cut-out at the top, the home indicator at the bottom.
 constexpr Margins PHONE_MARGINS{0, 59, 0, 34};
+
+/// What the theme gives the alert frame, read from QML so the tests follow the theme and do not copy its numbers.
+struct AlertTheme
+{
+    int line = 0;
+    int line_rounded = 0;
+    int corner_compact = 0;
+    int corner_regular = 0;
+};
+
+AlertTheme alert_theme()
+{
+    auto h = QmlHarness::from_source(R"(
+import QtQuick
+import HeartBoomMaths
+Item {
+    objectName: "host"
+    property int line: Theme.alertLine
+    property int lineRounded: Theme.alertLineRounded
+    property int cornerCompact: Theme.alertCornerCompact
+    property int cornerRegular: Theme.alertCornerRegular
+}
+)",
+                                     QSize{10, 10});
+    QObject* host = h.root();
+    return {property_of(host, "line").toInt(), property_of(host, "lineRounded").toInt(),
+            property_of(host, "cornerCompact").toInt(), property_of(host, "cornerRegular").toInt()};
+}
+
+/// The width of a Rectangle's border.
+int border_width(const QObject* rectangle)
+{
+    return property_of(qvariant_cast<QObject*>(property_of(rectangle, "border")), "width").toInt();
+}
 
 /// The whole application on a controller, with the holds shortened so a test can wait them out.
 struct Shell
@@ -430,26 +469,49 @@ TEST_CASE("The alert frame and the streak flash cover the whole window while the
     CHECK(scene_rect(flash) == window);
     CHECK(scene_rect(play) == safe);
 
-    // Each side of the frame is its 8 pixel line plus what the device keeps clear on that side, so it still reads at
-    // a rounded corner and beside a cut-out. With no margins it is the plain 8 pixel line.
-    const auto bar = [&](const char* name)
+    // The frame is one thin line whose outer edge is the window's, the same width on every side: the margins do not
+    // thicken it. With no bottom margin its corners are square and the line is the 8 pixel one of board CP3; with a
+    // bottom margin (the home indicator of a screen with rounded corners) the corners are rounded as the theme says.
+    const AlertTheme theme = alert_theme();
+    const bool rounded = c.margins.bottom > 0;
+    const int line = rounded ? theme.line_rounded : theme.line;
+    const bool compact = std::min(c.size.width(), c.size.height()) < 600;
+    const qreal radius = rounded ? (compact ? theme.corner_compact : theme.corner_regular) : 0;
+    CHECK(property_of(edge, "radius").toReal() == radius);
+    CHECK(border_width(edge) == line);
+    CHECK(property_of(edge, "color").value<QColor>().alpha() == 0);
+    if (!rounded)
     {
-        QQuickItem* item = s.h.find_item(QLatin1String(name));
-        REQUIRE(item != nullptr);
-        return scene_rect(item);
+        CHECK(line == 8);
+    }
+
+    // What is drawn: red the line's width in from the window edge at the middle of every side, and not beyond it. At
+    // the corner the line follows the radius: red on a square one, the page showing outside the arc on a rounded one.
+    const QImage image = s.h.grab_image();
+    REQUIRE_FALSE(image.isNull());
+    const auto reddish = [&](int x, int y)
+    {
+        const QColor pixel(image.pixel(x, y));
+        return pixel.red() > 180 && pixel.green() < 180;
     };
-    const QRectF top = bar("alertEdgeTop");
-    const QRectF bottom = bar("alertEdgeBottom");
-    const QRectF left = bar("alertEdgeLeft");
-    const QRectF right = bar("alertEdgeRight");
-    CHECK(top == QRectF(0, 0, c.size.width(), 8 + c.margins.top));
-    CHECK(bottom == QRectF(0, c.size.height() - 8 - c.margins.bottom, c.size.width(), 8 + c.margins.bottom));
-    CHECK(left == QRectF(0, top.bottom(), 8 + c.margins.left, bottom.top() - top.bottom()));
-    CHECK(right ==
-          QRectF(c.size.width() - 8 - c.margins.right, top.bottom(), 8 + c.margins.right, bottom.top() - top.bottom()));
-    // The line just inside the safe area is where the old frame was: nothing of the frame lies inside it.
-    CHECK(top.bottom() == safe.top() + 8);
-    CHECK(bottom.top() == safe.bottom() - 8);
+    const int mid_x = c.size.width() / 2;
+    const int mid_y = c.size.height() / 2;
+    const int last_x = c.size.width() - 1;
+    const int last_y = c.size.height() - 1;
+    CHECK(reddish(mid_x, 0));
+    CHECK(reddish(mid_x, line - 1));
+    CHECK_FALSE(reddish(mid_x, line + 3));
+    CHECK(reddish(mid_x, last_y));
+    CHECK(reddish(mid_x, last_y - line + 1));
+    CHECK_FALSE(reddish(mid_x, last_y - line - 3));
+    CHECK(reddish(0, mid_y));
+    CHECK(reddish(line - 1, mid_y));
+    CHECK_FALSE(reddish(line + 3, mid_y));
+    CHECK(reddish(last_x, mid_y));
+    CHECK(reddish(last_x - line + 1, mid_y));
+    CHECK_FALSE(reddish(last_x - line - 3, mid_y));
+    CHECK(reddish(0, 0) == !rounded);
+    CHECK(reddish(last_x, last_y) == !rounded);
 
     // Neither takes a tap, a key or a screen reader's attention, and a tap through them reaches the tile below.
     for (QQuickItem* item : {edge, flash})
@@ -866,6 +928,8 @@ TEST_CASE("Screenshots of the play screen for the hand check against the boards"
 
 // The play screen in the alert with a phone's margins, for the owner to look at: the frame at the window edge. Run by
 // hand with HBM_SCREENSHOT_DIR set to a folder; it does nothing otherwise and is hidden from the ordinary run.
+// The "masked" shots draw black over everything outside a rounded rectangle at the window edge, which is roughly what a
+// phone's own corners leave visible (iPhones run from about 39 to 62 points); the mask is made here, never in the app.
 TEST_CASE("Screenshots of the alert frame at the window edge", "[.][screenshots]")
 {
     const QString dir = qEnvironmentVariable("HBM_SCREENSHOT_DIR");
@@ -878,12 +942,14 @@ TEST_CASE("Screenshots of the alert frame at the window edge", "[.][screenshots]
         const char* file;
         QSize size;
         Margins margins;
+        int mask_radius; // 0: no mask
     };
     const Shot shots[] = {
-        {"alert-edge-390x844-phone-margins", PHONE, PHONE_MARGINS},
-        {"alert-edge-390x844-no-margins", PHONE, Margins{}},
-        {"alert-edge-820x1180-tablet-margins", TABLET, Margins{0, 24, 0, 20}},
-        {"alert-edge-1280x800-desktop", DESKTOP, Margins{}},
+        {"alert-frame-390x844-phone-margins", PHONE, PHONE_MARGINS, 0},
+        {"alert-frame-390x844-masked-r47", PHONE, PHONE_MARGINS, 47},
+        {"alert-frame-390x844-masked-r55", PHONE, PHONE_MARGINS, 55},
+        {"alert-frame-820x1180-tablet-margins", TABLET, Margins{0, 24, 0, 20}, 0},
+        {"alert-frame-1280x800-desktop", DESKTOP, Margins{}, 0},
     };
     for (const Shot& shot : shots)
     {
@@ -893,6 +959,19 @@ TEST_CASE("Screenshots of the alert frame at the window edge", "[.][screenshots]
         REQUIRE(s.rig.controller.alert());
         // The frame pulses; the shot is of it at full strength.
         QTest::qWait(900);
-        CHECK(s.h.grab(QStringLiteral("%1/%2.png").arg(dir, QLatin1String(shot.file))));
+        QImage image = s.h.grab_image();
+        REQUIRE_FALSE(image.isNull());
+        if (shot.mask_radius > 0)
+        {
+            const QRectF bounds(QPointF(0, 0), QSizeF(image.size()));
+            QPainterPath window;
+            window.addRect(bounds);
+            QPainterPath screen;
+            screen.addRoundedRect(bounds, shot.mask_radius, shot.mask_radius);
+            QPainter painter(&image);
+            painter.setRenderHint(QPainter::Antialiasing);
+            painter.fillPath(window.subtracted(screen), Qt::black);
+        }
+        CHECK(image.save(QStringLiteral("%1/%2.png").arg(dir, QLatin1String(shot.file))));
     }
 }

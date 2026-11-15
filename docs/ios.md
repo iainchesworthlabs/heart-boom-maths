@@ -131,8 +131,11 @@ are then removed.
   `SafeArea.margins` and lays the application shell out inside them; the yellow halftone page runs under the unsafe edges,
   with its dots in step with the page inside. Desktop windows report zero margins. The tests stand in for a phone's
   margins with `SafeArea.additionalMargins`. The red alert frame and the white streak flash are not inset: `AlertFrame.qml`
-  covers the whole window from `AppRoot.qml`, with each side of the frame as wide as its 8 pixel line plus the margin on
-  that side, so it reads at the rounded corners and beside the cut-out. Seeing that needs a device.
+  covers the whole window from `AppRoot.qml`. The frame is one thin line at the window edge, the same width all the way
+  round, so the status bar and the home indicator stay readable inside it. Qt does not report the screen's corner radius,
+  so a bottom safe-area margin above zero (the home indicator) is taken to mean a rounded screen and the frame's outer
+  corners are rounded (`Theme.alertCornerCompact`, 48, tuned between real corners of about 39 and 62 points); with no
+  bottom margin the corners are square. Seeing that needs a device.
 - **The halftone page** is a repeated picture of one dot (`apps/game/images/halftone/`, drawn by
   `tools/assets/make_halftone_tiles.py`), not a Canvas. A Canvas fills in after the screen appears, and on a phone that was
   a flash of black on every screen change.

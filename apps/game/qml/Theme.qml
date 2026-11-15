@@ -29,6 +29,10 @@ QtObject {
     // ---- Shape (compact; a screen scales these up for the regular size class) --------------------------------------
     readonly property int outlineSmall: 4 // small controls
     readonly property int outlineLarge: 5 // cards and large buttons
+    readonly property int alertLine: 8 // the red alert frame at the edge of a window with square corners (board CP3)
+    readonly property int alertLineRounded: 11 // the same frame on a screen with rounded corners: wide enough to survive the cut
+    readonly property int alertCornerCompact: 48 // its outer corner radius on a phone; real screens run from about 39 to 62
+    readonly property int alertCornerRegular: 24 // and on a tablet, whose screens are about 18
     readonly property int radiusSmall: 12
     readonly property int radiusLarge: 22
     readonly property int shadowSmall: 6
