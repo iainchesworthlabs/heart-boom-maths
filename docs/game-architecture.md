@@ -186,7 +186,7 @@ Version 2 (decided 15 Nov 2026, see `SPEC.md`, Players and Sync) splits the docu
 | Field | Holds |
 |---|---|
 | `device.id` | 16 lowercase hex digits, made once from the system's random source by the app (the core has none). Empty until then |
-| `device.next_seq` | The next number this device gives a top 10 entry. With `device`, it makes an entry's identity, so a merge can drop duplicates |
+| `device.next_seq` | The next number this device gives a top 10 entry. With `device`, it makes an entry's identity, so a merge can drop duplicates. Adopting a merge keeps it past this device's own entries (see `adopt_shared`) |
 | `device.run`, `device.run_player` | The saved run and the player who paused it. Both absent when there is none |
 | `players[].id` | `first` for the player every save starts with, so two devices' first players merge into one. Later players get 16 hex digits from the app |
 | `players[].name_rev` | Counts name changes. The higher one wins a merge. On a tie the name that sorts first wins |
@@ -212,7 +212,7 @@ As built (`save_data.hpp`, `save_codec.hpp`):
 - Two top 10 entries with one `device` and `seq` are one entry. Should they differ (a damaged file), the higher score is kept, then the name that sorts first. A name tie on `name_rev` goes to the name that sorts first.
 - More than `max_players` active players is kept (P6). A result over `MAX_SAVED_PLAYERS`, or over `MAX_SAVED_COIN_ENTRIES` for one player, is a `MergeError`: nothing is cut, because a cut would make the result depend on the order of merging.
 - `serialise_shared` and `parse_shared` (`save_codec.hpp`) are the sync payload: `{"version": 2, "shared": {...}}`, where `shared` is byte for byte what `serialise` writes in a save, checked by the same `validate`. A payload of a later version reads as NEWER and is left alone (P7); one below 2 is DAMAGED.
-- `adopt_shared` puts a merged part in the local save and repairs the device part: `ensure_current_player` when the current player is gone or removed, and `run` with `run_player` dropped when that player is gone or removed. No other device field changes, and a refusal leaves the save as it was. When to push, pull and adopt is the sync layer's business.
+- `adopt_shared` puts a merged part in the local save and repairs the device part: `ensure_current_player` when the current player is gone or removed, and `run` with `run_player` dropped when that player is gone or removed. `next_seq` is raised to one past the largest `seq` of this device's own entries in the merged top 10 when that is larger (a device restored from an older backup would otherwise reuse a number, and its next score would be dropped as a duplicate), and a refusal, including a `next_seq` that would pass `MAX_SAVED_COUNTER`, leaves the save as it was. No other device field changes. When to push, pull and adopt is the sync layer's business.
 
 ```cpp
 class SaveStore
