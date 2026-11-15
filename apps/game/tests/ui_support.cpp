@@ -11,6 +11,7 @@
 #include <QJSValue>
 #include <QMetaProperty>
 #include <QPointF>
+#include <QQmlContext>
 #include <QQmlEngine>
 #include <QTemporaryDir>
 #include <QTest>
@@ -129,9 +130,14 @@ QmlHarness::QmlHarness(GameController* game, const QString& component, QSize siz
     finish_loading(component);
 }
 
-QmlHarness::QmlHarness(FromSource, const QByteArray& qml, QSize size) : m_View(std::make_unique<QQuickView>())
+QmlHarness::QmlHarness(FromSource, const QByteArray& qml, QSize size, GameController* game)
+    : m_View(std::make_unique<QQuickView>())
 {
     m_View->setResizeMode(QQuickView::SizeRootObjectToView);
+    if (game != nullptr)
+    {
+        m_View->rootContext()->setContextProperty(QStringLiteral("hostGame"), game);
+    }
     m_View->resize(size);
     // Written to a file in a temporary directory; the module is found through the resource import path like any screen.
     m_Dir = std::make_unique<QTemporaryDir>();
@@ -144,9 +150,9 @@ QmlHarness::QmlHarness(FromSource, const QByteArray& qml, QSize size) : m_View(s
     finish_loading(QStringLiteral("inline QML"));
 }
 
-QmlHarness QmlHarness::from_source(const QByteArray& qml, QSize size)
+QmlHarness QmlHarness::from_source(const QByteArray& qml, QSize size, GameController* game)
 {
-    return QmlHarness(FromSource{}, qml, size);
+    return QmlHarness(FromSource{}, qml, size, game);
 }
 
 void QmlHarness::finish_loading(const QString& what)
@@ -241,6 +247,29 @@ bool QmlHarness::grab(const QString& path)
     }
     QDir().mkpath(QFileInfo(path).absolutePath());
     return image.save(path);
+}
+
+QmlHarness app_root(GameController* game, QSize size, Margins margins)
+{
+    const QByteArray source = QByteArrayLiteral(R"(
+import QtQuick
+import HeartBoomMaths
+Item {
+    AppRoot {
+        anchors.fill: parent
+        game: hostGame
+        SafeArea.additionalMargins.left: %1
+        SafeArea.additionalMargins.top: %2
+        SafeArea.additionalMargins.right: %3
+        SafeArea.additionalMargins.bottom: %4
+    }
+}
+)")
+                                  .replace("%1", QByteArray::number(margins.left))
+                                  .replace("%2", QByteArray::number(margins.top))
+                                  .replace("%3", QByteArray::number(margins.right))
+                                  .replace("%4", QByteArray::number(margins.bottom));
+    return QmlHarness::from_source(source, size, game);
 }
 
 QVariant property_of(const QObject* object, const char* name)

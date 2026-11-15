@@ -36,7 +36,7 @@ Every state of the core has exactly one screen, and every screen can be left by 
 
 | Screen | Shown when | Leaves by |
 |---|---|---|
-| Title | state Idle, or GameOver after HOME | PLAY or NEW GAME (starts level 1), CONTINUE (restores the saved run to Paused, only while it is the current player's), TOP 10, the gear and the player chip (pages) |
+| Title | state Idle, or GameOver after HOME | PLAY or NEW GAME (starts level 1), CONTINUE (restores the saved run to Paused, only while it is the current player's), TOP 10, the gear and the player card (pages) |
 | Play | Playing, Paused (with the pause overlay), and for a hold after the last answer of a level or the bomb | the pause button, the last answer (level clear, win), the bomb (game over) |
 | Pause overlay | Paused | RESUME, QUIT, the gear (Settings page) |
 | Level clear | LevelClear, once the hold of the last answer has ended | NEXT LEVEL |
@@ -46,7 +46,7 @@ Every state of the core has exactly one screen, and every screen can be left by 
 | Top 10 (page) | opened from Title, the game-over card, or SAVE | the back arrow, PLAY or PLAY AGAIN or NEW GAME |
 | Settings (page) | from the title's gear or the pause overlay's gear | the back arrow; ABOUT |
 | About (page) | from Settings | the back arrow (to Settings); the licence and notices texts open over it and close with their own back arrow |
-| WHO'S PLAYING (page) | from the player chip on the title | the back arrow; a player's card (makes that player current); NAME or RENAME (the player's name screen); ADD PLAYER (the name screen of the new player); REMOVE (the gate) |
+| WHO'S PLAYING (page) | from the player card on the title | the back arrow; a player's card (makes that player current); NAME or RENAME (the player's name screen); ADD PLAYER (the name screen of the new player); REMOVE (the gate) |
 | Player name (page) | from WHO'S PLAYING | SAVE (gives the name), SKIP for a player just added or CANCEL for a rename, Escape and the back key (the same as SKIP or CANCEL); each goes back to WHO'S PLAYING |
 | Parental gate | the controller has one open: About's two links, the Game Center switch, REMOVE on WHO'S PLAYING | CANCEL, the back arrow, or the right number |
 
@@ -146,13 +146,13 @@ Test: `Journey: Settings switches, the gate for Game Center and for a link, and 
 
 Tests: `Journey: the chip on the title opens WHO'S PLAYING; add, switch, rename and remove players`, `Journey: the title, its CONTINUE and its numbers follow the player who is chosen`, `Journey: a named player's high score goes straight to the Top 10 page` and the `players` cases of `test_game_controller.cpp`.
 
-1. The title shows a chip with the player's name (PLAYER 1 for a player with no name, by place in the list). It opens WHO'S PLAYING.
+1. The title shows one card across the top: the player's name (PLAYER 1 for a player with no name, by place in the list) with a down chevron, and under it their best score and their coins. The whole card is a button and opens WHO'S PLAYING.
 2. The page lists the players with the best score and the coins. The one playing has a tick and PLAYING. With one player there is no REMOVE; with four there is no ADD PLAYER.
 3. ADD PLAYER makes a new player current at once and opens the name screen: SAVE names them, SKIP leaves them unnamed. A card makes that player current; the wallet is recorded for the old player first, and the title's best score, coins and CONTINUE are the new player's.
 4. NAME or RENAME opens the same name screen with the name they have. CANCEL leaves it.
 5. REMOVE asks a grown-up (the gate: ASK A GROWN-UP, the number in words, REMOVE). A wrong number or CANCEL removes no one. The player and any run that player paused go.
 6. The saved run stays with the player who paused it. CONTINUE and its caption show only for that player. Another player's new game, or game over, leaves it; their own pause replaces it (D8).
-7. Players are switched from the title only. While a game is played, paused, on a card, on the win screen or waiting for a name, the controller refuses; the chip is not on those screens.
+7. Players are switched from the title only. While a game is played, paused, on a card, on the win screen or waiting for a name, the controller refuses; the card is not on those screens.
 8. A player with a name who earns a place in the top 10 sees no name screen: the entry is saved at once under their name and the Top 10 page opens with it marked, then the game-over card. A player with no name is asked once, and SAVE names the player. Every finished game counts towards the player's best, so NEW BEST! on the card means a better score than that player's own best.
 
 ## Leaving the foreground
@@ -175,6 +175,8 @@ Tests: the `Lifecycle:` cases in `test_ui_journeys.cpp`, and `Leaving the foregr
 | The bomb's hold | GameOver | the name screen or the card, after the hold | wallet |
 
 The ticking sound stops when the game pauses, when it leaves the alert zone and when the app leaves the foreground, and starts again on RESUME if the game is still in the alert zone.
+
+In the alert zone a red frame pulses round the window, and a white flash crosses it when the multiplier steps up. Both are drawn over the whole window, edge to edge under a phone's cut-out and home indicator (`AlertFrame`, laid over the safe area by `AppRoot`); the play screen's content stays inside the safe area. On a phone each side of the frame is its 8 pixel line plus the margin the device keeps clear there, so it still reads at the rounded corners. Pausing ends the frame. Tests: `The alert frame and the streak flash cover the whole window while the play screen stays in the safe area`.
 
 ## When the save is written
 

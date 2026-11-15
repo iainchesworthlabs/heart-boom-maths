@@ -46,6 +46,13 @@ Item {
     // The screen on show: "title", "play", "levelClear", "won", "nameEntry" or "gameOver", or "top10" while that page is open.
     readonly property string screen: page === "top10" ? "top10" : screenFor(game.state, answerFeedback.active, overlay, game.nameEntryPending)
 
+    // What the play screen asks of the layer over the whole window (AppRoot lays AlertFrame there, outside the safe area):
+    // `alertShown` while the red frame is wanted, `streakStepped` for the flash. The play screen sets the first while it is
+    // on show, and the value goes back to false when it goes.
+    property bool alertShown: false
+
+    signal streakStepped
+
     // The pages opened over the screen, the last one on top: "settings", "about", "top10", "players" or "playerName".
     property var pages: []
     // The player the "playerName" page is for, and whether the player has just been added.
@@ -217,11 +224,20 @@ Item {
 
         Item {
             PlayScreen {
+                id: play
+
                 objectName: "playScreen"
                 anchors.fill: parent
                 game: root.game
                 feedback: answerFeedback
                 enabled: root.game.state !== GameController.Paused
+                onStreakStepped: root.streakStepped()
+            }
+
+            Binding {
+                target: root
+                property: "alertShown"
+                value: play.visible && play.alertShown
             }
 
             PauseOverlay {

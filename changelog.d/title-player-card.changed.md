@@ -1,0 +1,1 @@
+**The title shows who is playing on one card.** The BEST pill, the coin pill and the player chip give way to one card across the top: the player's name and a down chevron, and under it their best score and their coins. The whole card opens WHO'S PLAYING. The heart bomb and everything under it stay where they were.
