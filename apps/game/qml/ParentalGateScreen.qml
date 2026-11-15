@@ -4,8 +4,9 @@ import QtQuick
 import QtQuick.Layouts
 
 // The parental gate (board CP17): a number written in words, which a grown-up types back with the keypad (or a keyboard)
-// before a web address opens or Game Center turns on. OPEN stays grey until the number typed is the number asked for.
-// The controller owns the number and the check; this screen only shows the words and passes the digits on.
+// before a web address opens, Game Center turns on or a player is removed. OPEN (TURN ON, REMOVE) stays grey until the number
+// typed is the number asked for. The controller owns the number and the check; this screen only shows the words and passes
+// the digits on.
 //
 // A wrong number is a wrong answer as soon as three digits are typed, or Return is pressed with the wrong number: the
 // screen says so in words, with a mark, and the controller deals a new number. Nothing opens and nothing is kept.
@@ -20,9 +21,13 @@ ScreenFrame {
 
     readonly property bool complete: root.game.gateMatches(root.typed)
     readonly property bool forGameCenter: root.game.gatePurpose === GameController.GameCenter
+    readonly property bool forRemovingPlayer: root.game.gatePurpose === GameController.RemovePlayer
     readonly property string prompt: {
         if (root.forGameCenter) {
             return qsTr("To turn on Game Center, type this number:");
+        }
+        if (root.forRemovingPlayer) {
+            return qsTr("To remove %1, type this number:").arg(root.game.gatePlayerName);
         }
         if (root.game.gateUrl === root.game.privacyPolicyUrl) {
             return qsTr("To open the privacy policy, type this number:");
@@ -303,7 +308,7 @@ ScreenFrame {
             fillColor: enabled ? variantFill : Theme.switchOff
             textColor: enabled ? variantText : Theme.lockedText
             variant: "primary"
-            text: root.forGameCenter ? qsTr("TURN ON") : qsTr("OPEN")
+            text: root.forGameCenter ? qsTr("TURN ON") : (root.forRemovingPlayer ? qsTr("REMOVE") : qsTr("OPEN"))
             pixelSize: 36 * root.unit
             letterSpacing: 3
             borderWidth: Theme.outlineLarge

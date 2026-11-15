@@ -245,19 +245,20 @@ QML screens driven by one view-model each. The QML is the same on every platform
 
 | Screen | Board | Shows |
 |---|---|---|
-| Title | CP1, CP18 | Best score, coins, CONTINUE when a run is saved |
+| Title | CP1, CP18 | Best score, coins, the player chip, CONTINUE when the current player has a saved run |
 | Play | CP2 to CP5, CP13 | Question, four tiles, timer, multiplier, streak, hint button |
 | Level clear | CP6 | Points breakdown, coins earned, wallet |
 | Win | CP8 | The 1,000-coin bonus, KEEP GOING (endless) or FINISH |
 | Name entry | CP11 | Rank, score, name field, SAVE and SKIP |
 | Top 10 | CP12 | Rank, name and score per entry |
+| WHO'S PLAYING | none (P8) | The players with best score and coins, ADD PLAYER, NAME or RENAME, REMOVE behind the gate |
 | Game over | CP7 | Score, level reached, coins, best score |
 | Settings | CP14 | Sound and music switches, a Haptics switch where the device can, and a Game Center switch on Apple devices |
 | About | CP15 | Build information, font licences, notices |
 | Pause | CP16 | RESUME and QUIT |
 | Parental gate | CP17 | A number in words for a grown-up to type back, before a link opens or Game Center turns on |
 
-Navigation: PLAY AGAIN on Game over starts level 1 directly, HOME returns to Title. Top 10, Settings and About open from Title, and Top 10 also opens from Game over. Pause opens from Play.
+Navigation: PLAY AGAIN on Game over starts level 1 directly, HOME returns to Title. Top 10, Settings, About and WHO'S PLAYING open from Title, and Top 10 also opens from Game over. Pause opens from Play.
 
 - Two size classes: compact (phone portrait) and regular (tablets, desktop windows), matching CP9 and CP10. Phones are locked to portrait.
 - Bangers and Lilita One ship as application resources and load with `FontLoader`, never from the network.
@@ -377,6 +378,17 @@ Deviations from the sketches above, all small:
 - `continueGame()` restores a saved run on a scratch session first and resumes it only when it is a running or paused level. Anything else the core would restore (a level-clear card, a win, a finished game) counts as a run that cannot be restored: it is spent and `continueFailed` is emitted.
 - `on_application_state(false)` also closes the parental gate. `AnswerFeedback` ends its hold on any game over that is not the bomb.
 - The back key is handled in `AppShell.qml` (a `Back` shortcut) for the screens that have no back button, and by `ScreenFrame` for the pages and the gate. About is a focus scope so the key reaches its frame or its text viewer.
+
+### As built (players)
+
+- Core: `set_current_player` (the last of the player helpers in `save_data.hpp`) makes an active player current and refuses a missing or removed one. `GameSession::set_wallet` and `set_won_once` are also accepted in the PAUSED state, so a restored run can take the player's wallet as it is now; the snapshot layout and the golden replays did not change.
+- The controller reads `players` (id, name, displayName, named, best, coins, current), `playerName`, `playerId`, `maxPlayers` (the tuning's), `canChangePlayers`, `canAddPlayer`, `canRemovePlayer` and `gatePlayerName`, and has the commands `selectPlayer`, `addPlayer`, `renamePlayer` and `requestRemovePlayer`, with `playersChanged` and `scoreSavedAtOnce`. A player with no name shows as PLAYER and its place among the active players (P1); the controller builds that text, the core has no such rule.
+- `canChangePlayers` is true only in the Idle and GameOver states, and not while a name is waiting for the score that ended the game. A switch, add or remove is refused otherwise (P5). `renamePlayer` works in any state. Adding retries a few times when the id source repeats itself; it is also refused when the list (removed players included) is full.
+- A switch calls `persist()` first (the wallet goes to the old player), changes the current player, then gives the session the new player's wallet and win-bonus mark and signals the properties that follow the player (wallet, best, saved run). Removing the current player does the same for the first player left. The gate has a fourth purpose, `RemovePlayer`, which uses the existing challenge, retry and cancel rules; the gate closes when the app leaves the foreground, so nothing is removed then.
+- The saved run (P4): `hasSavedRun`, `savedRun` and `continueGame()` need `device.run_player` to be the current player. A new game and a resume drop the run only when it is the current player's; a pause saves a run for the current player and replaces whoever's it was; a game over spends the player's own run; removing a player drops that player's run; a run whose player is not active when the save loads is dropped. `continueGame()` gives the session the player's wallet and mark after the restore.
+- The top 10 (SPEC, Leaderboard): a finished game that earns a place for a player with a name is saved by `finish_game` under that name, `scoreSavedAtOnce` follows `gameOver`, and no name screen shows. For a player with no name `saveName` names the player (`rename_player`) and saves the entry in one step, and SKIP drops the entry. Names are trimmed of spaces at both ends.
+- Best and NEW BEST! (P3): every finished game calls `record_best` for the current player, and `newBest` is true when the score is above 0 and above that player's best from before the game. SKIP no longer clears it, because the best counts whether or not the entry is kept.
+- Screens: the title chip, `PlayersScreen` and `NameEntryScreen` in player mode (`docs/ui-components.md`); journeys in [User journeys](user-journeys.md), journey 6.
 
 ## Tests
 

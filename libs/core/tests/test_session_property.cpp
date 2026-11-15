@@ -76,7 +76,8 @@ void apply_and_check(GameSession& s, const Command& cmd, Coverage& cover)
         accepted = before.state == SessionState::IDLE || before.state == SessionState::GAME_OVER;
         break;
     case Cmd::SET_WALLET:
-        accepted = before.state == SessionState::IDLE || before.state == SessionState::GAME_OVER;
+        accepted = before.state == SessionState::IDLE || before.state == SessionState::GAME_OVER ||
+                   before.state == SessionState::PAUSED;
         break;
     }
 

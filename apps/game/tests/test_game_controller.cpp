@@ -53,7 +53,8 @@ struct Rig
         options.session_seed = 20261114;
         options.tile_guard_ns = guard_ns; // most tests tap straight after a level starts; the guard has its own tests
         options.gate_seed_source = [this] { return gate_seeds_used++ == 0 ? FIRST_GATE_SEED : SECOND_GATE_SEED; };
-        options.id_source = [this] { return id_draws++ == 0 ? FIRST_ID_BITS : SECOND_ID_BITS; };
+        // The first draw is the device's id; every later one is another id, so a test can add several players.
+        options.id_source = [this] { return id_draws++ == 0 ? FIRST_ID_BITS : SECOND_ID_BITS + (id_draws - 2); };
         return options;
     }
 
@@ -938,15 +939,41 @@ TEST_CASE("The controller registers its types and properties with Qt", "[integra
                              "firstLevelQuestions",
                              "firstLevelSeconds",
                              "hapticsEnabled",
-                             "hapticsAvailable"})
+                             "hapticsAvailable",
+                             "players",
+                             "playerName",
+                             "playerId",
+                             "maxPlayers",
+                             "canChangePlayers",
+                             "canAddPlayer",
+                             "canRemovePlayer",
+                             "gatePlayerName"})
     {
         INFO(name);
         CHECK(meta.indexOfProperty(name) >= 0);
     }
-    for (const char* name :
-         {"startGame()", "continueGame()", "answer(int)", "useHint()", "pause()", "resume()", "quit()", "nextLevel()",
-          "keepGoing()", "finish()", "requestLink(QString)", "submitGate(QString)", "saveName(QString)", "skipName()",
-          "gateMatches(QString)", "cancelGate()", "setHapticsEnabled(bool)", "tap()"})
+    for (const char* name : {"startGame()",
+                             "continueGame()",
+                             "answer(int)",
+                             "useHint()",
+                             "pause()",
+                             "resume()",
+                             "quit()",
+                             "nextLevel()",
+                             "keepGoing()",
+                             "finish()",
+                             "requestLink(QString)",
+                             "submitGate(QString)",
+                             "saveName(QString)",
+                             "skipName()",
+                             "gateMatches(QString)",
+                             "cancelGate()",
+                             "setHapticsEnabled(bool)",
+                             "tap()",
+                             "selectPlayer(QString)",
+                             "addPlayer()",
+                             "renamePlayer(QString,QString)",
+                             "requestRemovePlayer(QString)"})
     {
         INFO(name);
         CHECK(meta.indexOfMethod(name) >= 0);
@@ -1189,7 +1216,7 @@ TEST_CASE("Coins earned counts what the game paid, not what a hint cost", "[inte
     }
 }
 
-TEST_CASE("SAVE needs a letter and SKIP takes the best-score mark away", "[integration][controller]")
+TEST_CASE("SAVE needs a letter and SKIP drops the entry but keeps the player's best", "[integration][controller]")
 {
     MemorySaveStore memory;
     Rig rig(memory);
@@ -1210,9 +1237,12 @@ TEST_CASE("SAVE needs a letter and SKIP takes the best-score mark away", "[integ
     CHECK(c.new_best());
     QSignalSpy entry_spy(&c, &GameController::nameEntryChanged);
     c.skipName();
-    CHECK_FALSE(c.new_best());
+    // The entry is not in the list, but every finished game counts towards the player's best, so the score is still a
+    // new best (SPEC, Players).
+    CHECK(c.new_best());
     CHECK(entry_spy.count() == 1);
-    CHECK(c.best_score() == 0);
+    CHECK(c.best_score() == 10);
+    CHECK(c.top10().isEmpty());
 }
 
 // Journeys and lifecycle: what the controller does when the app is interrupted or the save is odd
@@ -1934,4 +1964,811 @@ TEST_CASE("The best score on the title is the current player's", "[integration][
     Rig rig(memory);
     CHECK(rig.controller.best_score() == 700);
     CHECK(rig.controller.top10().size() == 1);
+}
+
+// ---- WHO'S PLAYING: players on the title, the saved run, the top 10 and the best score of each player
+// ----------------------------------------------------------------------------------------------------
+
+namespace
+{
+
+constexpr std::string_view PLAYER_B = "00000000000000b2";
+constexpr std::string_view PLAYER_C = "00000000000000c3";
+constexpr std::string_view PLAYER_D = "00000000000000d4";
+
+/// A family of two: `first` has no name, 40 coins, a best of 700 and the win bonus; BEN has 7 coins and a best of 300.
+SaveData family_save()
+{
+    SaveData data;
+    REQUIRE(add_player(data.shared, std::string(PLAYER_B)).has_value());
+    REQUIRE(rename_player(data.shared, PLAYER_B, "BEN").has_value());
+    Player& first = data.shared.players[0];
+    Player& ben = data.shared.players[1];
+    REQUIRE(record_wallet(first, "", 40).has_value());
+    REQUIRE(record_wallet(ben, "", 7).has_value());
+    first.best = 700;
+    first.won_once = true;
+    ben.best = 300;
+    return data;
+}
+
+/// The challenge the gate asked for last. The rig deals the first number from one seed and every later one from
+/// another.
+GateChallenge latest_gate(const Rig& rig)
+{
+    return make_gate_challenge(rig.gate_seeds_used <= 1 ? FIRST_GATE_SEED : SECOND_GATE_SEED);
+}
+
+/// Removes a player the way a grown-up does: the gate, and the right number. False when the gate would not open.
+bool remove_through_gate(Rig& rig, const QString& id)
+{
+    if (!rig.controller.requestRemovePlayer(id))
+    {
+        return false;
+    }
+    return rig.controller.submitGate(QString::number(latest_gate(rig).number));
+}
+
+/// A game of `rights` right answers that the player ends with QUIT. Leaves the controller in the game-over state.
+void play_and_quit(Rig& rig, int rights)
+{
+    rig.controller.startGame();
+    for (int i = 0; i < rights; ++i)
+    {
+        rig.answer_right();
+    }
+    rig.controller.pause();
+    rig.controller.quit();
+}
+
+QString id_of(const QVariantList& list, int index)
+{
+    return list.at(index).toMap().value(QStringLiteral("id")).toString();
+}
+
+const Player& player_on_disk(const SaveData& data, std::string_view id)
+{
+    const Player* player = find_player(data.shared, id);
+    REQUIRE(player != nullptr);
+    return *player;
+}
+
+} // namespace
+
+TEST_CASE("The players are listed by place, and an unnamed one is called PLAYER and its place",
+          "[integration][controller][players]")
+{
+    SaveData data = family_save();
+    REQUIRE(add_player(data.shared, std::string(PLAYER_C)).has_value());
+    REQUIRE(add_player(data.shared, std::string(PLAYER_D)).has_value());
+    REQUIRE(remove_player(data.shared, PLAYER_C).has_value()); // gone: it takes no place
+    MemorySaveStore memory(*serialise(data));
+    Rig rig(memory);
+    const GameController& c = rig.controller;
+
+    const QVariantList list = c.players();
+    REQUIRE(list.size() == 3);
+    const QVariantMap first = list[0].toMap();
+    CHECK(first.value("id").toString() == QStringLiteral("first"));
+    CHECK(first.value("name").toString().isEmpty());
+    CHECK(first.value("displayName").toString() == QStringLiteral("PLAYER 1"));
+    CHECK_FALSE(first.value("named").toBool());
+    CHECK(first.value("best").toLongLong() == 700);
+    CHECK(first.value("coins").toLongLong() == 40);
+    CHECK(first.value("current").toBool());
+    const QVariantMap ben = list[1].toMap();
+    CHECK(ben.value("displayName").toString() == QStringLiteral("BEN"));
+    CHECK(ben.value("named").toBool());
+    CHECK(ben.value("coins").toLongLong() == 7);
+    CHECK_FALSE(ben.value("current").toBool());
+    CHECK(list[2].toMap().value("displayName").toString() == QStringLiteral("PLAYER 3")); // the third active player
+
+    CHECK(c.player_name() == QStringLiteral("PLAYER 1"));
+    CHECK(c.player_id() == QStringLiteral("first"));
+    CHECK(c.max_players() == Tuning::defaults().max_players);
+    CHECK(c.can_change_players());
+    CHECK(c.can_add_player()); // three of four
+    CHECK(c.can_remove_player());
+}
+
+TEST_CASE("Switching players records the old wallet and gives the session the new player's",
+          "[integration][controller][players]")
+{
+    MemorySaveStore memory(*serialise(family_save()));
+    Rig rig(memory);
+    GameController& c = rig.controller;
+    REQUIRE(c.wallet() == 40);
+    REQUIRE(c.session_view().won_once);
+    REQUIRE(c.best_score() == 700);
+    QSignalSpy wallet_spy(&c, &GameController::walletChanged);
+    QSignalSpy best_spy(&c, &GameController::topScoresChanged);
+    QSignalSpy players_spy(&c, &GameController::playersChanged);
+
+    REQUIRE(c.selectPlayer(QString::fromLatin1(PLAYER_B)));
+    CHECK(c.player_id() == QString::fromLatin1(PLAYER_B));
+    CHECK(c.player_name() == QStringLiteral("BEN"));
+    CHECK(c.wallet() == 7);
+    CHECK_FALSE(c.session_view().won_once); // the win-bonus mark is the player's too
+    CHECK(c.best_score() == 300);
+    CHECK(wallet_spy.count() == 1);
+    CHECK(best_spy.count() >= 1);
+    CHECK(players_spy.count() >= 1);
+    SaveData on_disk = saved(memory);
+    CHECK(on_disk.device.current_player == PLAYER_B);
+    CHECK(player_wallet(player_on_disk(on_disk, "first")) == 40);
+    CHECK(player_wallet(player_on_disk(on_disk, PLAYER_B)) == 7);
+    CHECK(player_on_disk(on_disk, "first").won_once);
+
+    const int changes = players_spy.count();
+    CHECK(c.selectPlayer(QString::fromLatin1(PLAYER_B))); // already playing: true, and nothing happens
+    CHECK(players_spy.count() == changes);
+    CHECK_FALSE(c.selectPlayer(QStringLiteral("nobody")));
+    CHECK_FALSE(c.selectPlayer(QString()));
+    CHECK(c.player_id() == QString::fromLatin1(PLAYER_B));
+
+    // BEN plays and earns, and a switch back leaves those coins with BEN.
+    play_and_quit(rig, 2);
+    CHECK(c.wallet() == 9);
+    REQUIRE(c.selectPlayer(QStringLiteral("first")));
+    CHECK(c.wallet() == 40);
+    CHECK(c.session_view().won_once);
+    CHECK(c.best_score() == 700);
+    on_disk = saved(memory);
+    CHECK(player_wallet(player_on_disk(on_disk, PLAYER_B)) == 9);
+    CHECK(player_wallet(player_on_disk(on_disk, "first")) == 40);
+    CHECK(on_disk.device.current_player == "first");
+
+    // The game that follows is the first player's: it starts from 40 coins.
+    c.startGame();
+    rig.answer_right();
+    CHECK(c.wallet() == 41);
+}
+
+TEST_CASE("Switching, adding and removing are refused while a game is played, paused, on a card or won",
+          "[integration][controller][players]")
+{
+    MemorySaveStore memory(*serialise(family_save()));
+    Rig rig(memory);
+    GameController& c = rig.controller;
+    const QString ben = QString::fromLatin1(PLAYER_B);
+    const auto check_refused = [&](const char* where)
+    {
+        INFO(where);
+        CHECK_FALSE(c.can_change_players());
+        CHECK_FALSE(c.selectPlayer(ben));
+        CHECK(c.addPlayer().isEmpty());
+        CHECK_FALSE(c.requestRemovePlayer(ben));
+        CHECK_FALSE(c.gate_active());
+        CHECK(c.player_id() == QStringLiteral("first"));
+        CHECK(c.players().size() == 2);
+    };
+
+    CHECK(c.can_change_players()); // the title
+    c.startGame();
+    check_refused("playing");
+    c.pause();
+    check_refused("paused");
+    c.resume();
+    rig.play_level_right();
+    REQUIRE(c.state() == State::LevelClear);
+    check_refused("a level-clear card");
+    for (int level = 2; level <= 12; ++level)
+    {
+        c.nextLevel();
+        rig.play_level_right();
+    }
+    REQUIRE(c.state() == State::Won);
+    check_refused("won");
+    c.finish();
+    REQUIRE(c.state() == State::GameOver);
+    // The score belongs to the player who played it and is waiting for its name: not yet.
+    REQUIRE(c.name_entry_pending());
+    check_refused("the name screen");
+
+    CHECK(c.saveName(QStringLiteral("ada")) == 1);
+    CHECK(c.can_change_players()); // the game-over card, and the title after HOME
+    CHECK(c.selectPlayer(ben));
+    CHECK(c.player_id() == ben);
+}
+
+TEST_CASE("A new player is unnamed and current, and adding stops at the limit", "[integration][controller][players]")
+{
+    MemorySaveStore memory;
+    Rig rig(memory);
+    GameController& c = rig.controller;
+    CHECK(c.max_players() == 4);
+    QSignalSpy players_spy(&c, &GameController::playersChanged);
+
+    const QString second = c.addPlayer();
+    REQUIRE_FALSE(second.isEmpty());
+    CHECK(c.player_id() == second);
+    CHECK(c.player_name() == QStringLiteral("PLAYER 2"));
+    CHECK(c.wallet() == 0);
+    CHECK(c.best_score() == 0);
+    CHECK_FALSE(c.session_view().won_once);
+    CHECK(c.players().size() == 2);
+    CHECK(players_spy.count() >= 1);
+
+    const QString third = c.addPlayer();
+    const QString fourth = c.addPlayer();
+    REQUIRE_FALSE(third.isEmpty());
+    REQUIRE_FALSE(fourth.isEmpty());
+    CHECK(c.players().size() == 4);
+    CHECK_FALSE(c.can_add_player());
+    CHECK(c.addPlayer().isEmpty());
+    CHECK(c.players().size() == 4);
+    CHECK(c.player_id() == fourth); // the refused add changed nothing
+
+    SaveData on_disk = saved(memory);
+    REQUIRE(on_disk.shared.players.size() == 4);
+    CHECK(on_disk.device.current_player == fourth.toStdString());
+    CHECK(second != third);
+    CHECK(third != fourth);
+    CHECK(second != QStringLiteral("first"));
+    for (const Player& player : on_disk.shared.players)
+    {
+        CHECK(player.name.empty());
+        CHECK_FALSE(player.removed);
+    }
+
+    // A removed player leaves room again.
+    REQUIRE(remove_through_gate(rig, third));
+    CHECK(c.players().size() == 3);
+    CHECK(c.can_add_player());
+    CHECK_FALSE(c.addPlayer().isEmpty());
+    CHECK(c.players().size() == 4);
+}
+
+TEST_CASE("A player is named and renamed on the name screen's rules, in any state",
+          "[integration][controller][players]")
+{
+    MemorySaveStore memory(*serialise(family_save()));
+    Rig rig(memory);
+    GameController& c = rig.controller;
+
+    CHECK(c.renamePlayer(QStringLiteral("first"), QStringLiteral("  ada lovelace 7! ")));
+    CHECK(c.player_name() == QStringLiteral("ADA LOVELA")); // twelve characters at most, counted before the spaces go
+    SaveData on_disk = saved(memory);
+    CHECK(player_on_disk(on_disk, "first").name == "ADA LOVELA");
+    CHECK(player_on_disk(on_disk, "first").name_rev == 1);
+
+    CHECK(c.renamePlayer(QString::fromLatin1(PLAYER_B), QStringLiteral("ben the great")));
+    CHECK(c.players()[1].toMap().value("displayName").toString() == QStringLiteral("BEN THE GREA"));
+
+    // The same name again is nothing to change, and nothing to count.
+    CHECK(c.renamePlayer(QStringLiteral("first"), QStringLiteral("Ada Lovela")));
+    CHECK(player_on_disk(saved(memory), "first").name_rev == 1);
+
+    // No letter, an unknown player, or a player who is gone: refused, and the names are as they were.
+    CHECK_FALSE(c.renamePlayer(QStringLiteral("first"), QString()));
+    CHECK_FALSE(c.renamePlayer(QStringLiteral("first"), QStringLiteral("   ")));
+    CHECK_FALSE(c.renamePlayer(QStringLiteral("first"), QStringLiteral("123 !?")));
+    CHECK_FALSE(c.renamePlayer(QStringLiteral("nobody"), QStringLiteral("ZED")));
+    CHECK(c.player_name() == QStringLiteral("ADA LOVELA"));
+
+    // Renaming is not a switch: it works while a game is played.
+    c.startGame();
+    CHECK(c.renamePlayer(QStringLiteral("first"), QStringLiteral("ada")));
+    CHECK(c.player_name() == QStringLiteral("ADA"));
+    CHECK(c.state() == State::Playing);
+}
+
+TEST_CASE("Removing a player needs the gate, and is refused for the last one", "[integration][controller][players]")
+{
+    MemorySaveStore memory(*serialise(family_save()));
+    Rig rig(memory);
+    GameController& c = rig.controller;
+    const QString ben = QString::fromLatin1(PLAYER_B);
+    QSignalSpy passed_spy(&c, &GameController::gatePassed);
+
+    CHECK_FALSE(c.requestRemovePlayer(QStringLiteral("nobody")));
+    CHECK_FALSE(c.requestRemovePlayer(QString()));
+    CHECK_FALSE(c.gate_active());
+
+    REQUIRE(c.requestRemovePlayer(ben));
+    CHECK(c.gate_active());
+    CHECK(c.gate_purpose() == GameController::GatePurpose::RemovePlayer);
+    CHECK(c.gate_player_name() == QStringLiteral("BEN"));
+    CHECK(c.players().size() == 2);
+
+    // A wrong number removes no one and deals a new one; CANCEL ends it and removes no one.
+    CHECK_FALSE(c.submitGate(QString::number(latest_gate(rig).number + 1)));
+    CHECK(c.gate_active());
+    CHECK(c.gate_player_name() == QStringLiteral("BEN"));
+    CHECK(c.players().size() == 2);
+    c.cancelGate();
+    CHECK_FALSE(c.gate_active());
+    CHECK(c.gate_player_name().isEmpty());
+    CHECK(c.players().size() == 2);
+    CHECK(passed_spy.count() == 0);
+
+    // Another gate is open: no second one over it.
+    REQUIRE(c.requestLink(QStringLiteral("https://example.org")));
+    CHECK_FALSE(c.requestRemovePlayer(ben));
+    c.cancelGate();
+
+    // The app leaving the foreground closes the gate with nobody removed.
+    REQUIRE(c.requestRemovePlayer(ben));
+    c.on_application_state(false);
+    CHECK_FALSE(c.gate_active());
+    CHECK(c.players().size() == 2);
+    c.on_application_state(true);
+
+    REQUIRE(c.requestRemovePlayer(ben));
+    CHECK(c.submitGate(QString::number(latest_gate(rig).number)));
+    CHECK_FALSE(c.gate_active());
+    REQUIRE(passed_spy.count() == 1);
+    CHECK(passed_spy.at(0).at(0).value<GameController::GatePurpose>() == GameController::GatePurpose::RemovePlayer);
+    CHECK(c.players().size() == 1);
+    CHECK(c.player_id() == QStringLiteral("first")); // BEN was not the player
+    const SaveData on_disk = saved(memory);
+    CHECK(player_on_disk(on_disk, PLAYER_B).removed);
+    CHECK_FALSE(player_on_disk(on_disk, "first").removed);
+
+    // One player is left, and the last one cannot go.
+    CHECK_FALSE(c.can_remove_player());
+    CHECK_FALSE(c.requestRemovePlayer(QStringLiteral("first")));
+    CHECK_FALSE(c.gate_active());
+}
+
+TEST_CASE("Removing the player who is playing makes the first one left current, with their wallet",
+          "[integration][controller][players]")
+{
+    MemorySaveStore memory(*serialise(family_save()));
+    Rig rig(memory);
+    GameController& c = rig.controller;
+    REQUIRE(c.selectPlayer(QString::fromLatin1(PLAYER_B)));
+    REQUIRE(c.wallet() == 7);
+
+    REQUIRE(remove_through_gate(rig, QString::fromLatin1(PLAYER_B)));
+    CHECK(c.player_id() == QStringLiteral("first"));
+    CHECK(c.wallet() == 40);
+    CHECK(c.session_view().won_once);
+    CHECK(c.best_score() == 700);
+    const SaveData on_disk = saved(memory);
+    CHECK(on_disk.device.current_player == "first");
+    CHECK(player_wallet(player_on_disk(on_disk, "first")) == 40); // BEN's 7 did not land on the first player
+    CHECK(player_on_disk(on_disk, PLAYER_B).removed);
+}
+
+TEST_CASE("The saved run stays with the player who paused it", "[integration][controller][players]")
+{
+    MemorySaveStore memory(*serialise(family_save()));
+    {
+        Rig paused(memory);
+        paused.controller.startGame();
+        paused.answer_right();
+        paused.controller.pause();
+    }
+    Rig rig(memory);
+    GameController& c = rig.controller;
+    REQUIRE(c.has_saved_run());
+    CHECK(c.saved_run().value("level").toInt() == 1);
+    QSignalSpy run_spy(&c, &GameController::savedRunChanged);
+
+    // BEN is playing now: no CONTINUE and no caption, though the run is still on the device.
+    REQUIRE(c.selectPlayer(QString::fromLatin1(PLAYER_B)));
+    CHECK_FALSE(c.has_saved_run());
+    CHECK(c.saved_run().isEmpty());
+    CHECK(run_spy.count() >= 1);
+    CHECK_FALSE(c.continueGame());
+    CHECK(c.state() == State::Idle);
+    SaveData on_disk = saved(memory);
+    REQUIRE(on_disk.device.run.has_value());
+    CHECK(on_disk.device.run_player == "first");
+
+    // BEN's new game, to the bomb, leaves it alone.
+    c.startGame();
+    rig.answer_right();
+    rig.play_for_ms(61'000);
+    REQUIRE(c.state() == State::GameOver);
+    on_disk = saved(memory);
+    REQUIRE(on_disk.device.run.has_value());
+    CHECK(on_disk.device.run_player == "first");
+
+    // Back to the first player, and CONTINUE is offered and works, with that player's own wallet.
+    REQUIRE(c.selectPlayer(QStringLiteral("first")));
+    CHECK(c.has_saved_run());
+    CHECK(c.saved_run().value("level").toInt() == 1);
+    REQUIRE(c.continueGame());
+    CHECK(c.state() == State::Paused);
+    CHECK(c.wallet() == 41);                           // 40 and the one right answer before the pause
+    CHECK_FALSE(saved(memory).device.run.has_value()); // it resumes once
+}
+
+TEST_CASE("A new game as the player who owns the run drops it, and another player's pause replaces it",
+          "[integration][controller][players]")
+{
+    MemorySaveStore memory(*serialise(family_save()));
+    {
+        Rig paused(memory);
+        paused.controller.startGame();
+        paused.controller.pause();
+    }
+
+    SECTION("a new game by the owner drops the run")
+    {
+        Rig rig(memory);
+        REQUIRE(rig.controller.has_saved_run());
+        rig.controller.startGame();
+        CHECK_FALSE(rig.controller.has_saved_run());
+        CHECK_FALSE(saved(memory).device.run.has_value());
+        CHECK(saved(memory).device.run_player.empty());
+    }
+
+    SECTION("pausing as another player replaces it")
+    {
+        {
+            Rig rig(memory);
+            REQUIRE(rig.controller.selectPlayer(QString::fromLatin1(PLAYER_B)));
+            rig.controller.startGame();
+            CHECK(saved(memory).device.run_player == "first"); // still the first player's while BEN plays
+            rig.controller.pause();
+            CHECK(rig.controller.has_saved_run());
+            const SaveData on_disk = saved(memory);
+            REQUIRE(on_disk.device.run.has_value());
+            CHECK(on_disk.device.run_player == PLAYER_B);
+        }
+        Rig restarted(memory);
+        CHECK(restarted.controller.player_id() == QString::fromLatin1(PLAYER_B)); // the choice is kept on the device
+        CHECK(restarted.controller.has_saved_run());
+        REQUIRE(restarted.controller.selectPlayer(QStringLiteral("first")));
+        CHECK_FALSE(restarted.controller.has_saved_run()); // the first player's run is gone
+    }
+
+    SECTION("leaving the foreground as another player replaces it too")
+    {
+        Rig rig(memory);
+        REQUIRE(rig.controller.selectPlayer(QString::fromLatin1(PLAYER_B)));
+        rig.controller.startGame();
+        rig.controller.on_application_state(false);
+        const SaveData on_disk = saved(memory);
+        REQUIRE(on_disk.device.run.has_value());
+        CHECK(on_disk.device.run_player == PLAYER_B);
+    }
+
+    SECTION("QUIT is reached by pausing, so it replaces another player's run and then spends its own")
+    {
+        Rig rig(memory);
+        REQUIRE(rig.controller.selectPlayer(QString::fromLatin1(PLAYER_B)));
+        rig.controller.startGame();
+        rig.controller.pause();
+        CHECK(saved(memory).device.run_player == PLAYER_B);
+        rig.controller.quit();
+        CHECK_FALSE(saved(memory).device.run.has_value());
+        REQUIRE(rig.controller.selectPlayer(QStringLiteral("first")));
+        CHECK_FALSE(rig.controller.has_saved_run());
+    }
+
+    SECTION("another player's game over leaves the run, and the owner's new game drops it")
+    {
+        Rig rig(memory);
+        REQUIRE(rig.controller.has_saved_run());
+        REQUIRE(rig.controller.selectPlayer(QString::fromLatin1(PLAYER_B)));
+        // To the bomb: QUIT is reached through the pause screen, and pausing saves a run for BEN, which replaces it.
+        rig.controller.startGame();
+        rig.answer_right();
+        rig.play_for_ms(61'000);
+        REQUIRE(rig.controller.state() == State::GameOver);
+        CHECK(saved(memory).device.run.has_value());
+        CHECK(saved(memory).device.run_player == "first");
+        REQUIRE(rig.controller.selectPlayer(QStringLiteral("first")));
+        rig.controller.startGame(); // the owner's new game drops it
+        CHECK_FALSE(saved(memory).device.run.has_value());
+    }
+}
+
+TEST_CASE("Removing a player drops that player's saved run and no one else's", "[integration][controller][players]")
+{
+    MemorySaveStore memory(*serialise(family_save()));
+    {
+        Rig paused(memory);
+        paused.controller.startGame();
+        paused.controller.pause();
+    }
+
+    SECTION("the run's player is removed")
+    {
+        Rig rig(memory);
+        REQUIRE(rig.controller.selectPlayer(QString::fromLatin1(PLAYER_B)));
+        QSignalSpy run_spy(&rig.controller, &GameController::savedRunChanged);
+        REQUIRE(remove_through_gate(rig, QStringLiteral("first")));
+        const SaveData on_disk = saved(memory);
+        CHECK_FALSE(on_disk.device.run.has_value());
+        CHECK(on_disk.device.run_player.empty());
+        CHECK(run_spy.count() >= 1);
+        CHECK_FALSE(rig.controller.has_saved_run());
+    }
+
+    SECTION("another player is removed")
+    {
+        Rig rig(memory);
+        REQUIRE(remove_through_gate(rig, QString::fromLatin1(PLAYER_B)));
+        CHECK(rig.controller.has_saved_run());
+        const SaveData on_disk = saved(memory);
+        REQUIRE(on_disk.device.run.has_value());
+        CHECK(on_disk.device.run_player == "first");
+    }
+}
+
+TEST_CASE("A saved run whose player is gone is not offered", "[integration][controller][players]")
+{
+    SaveData data = family_save();
+    REQUIRE(remove_player(data.shared, PLAYER_B).has_value());
+    give_run(data, {1, 2, 3});
+    data.device.run_player = std::string(PLAYER_B); // removed on another device and synced here
+    MemorySaveStore memory(*serialise(data));
+    Rig rig(memory);
+    CHECK_FALSE(rig.controller.has_saved_run());
+    rig.controller.setSoundEnabled(false); // any save
+    const SaveData on_disk = saved(memory);
+    CHECK_FALSE(on_disk.device.run.has_value());
+    CHECK(on_disk.device.run_player.empty());
+}
+
+TEST_CASE("A resumed run takes the player's wallet as it is now, not as it was at the pause",
+          "[integration][controller][players]")
+{
+    MemorySaveStore paused_memory;
+    {
+        Rig first(paused_memory);
+        first.controller.startGame();
+        for (int i = 0; i < 3; ++i)
+        {
+            first.answer_right();
+        }
+        first.controller.pause();
+        REQUIRE(first.controller.wallet() == 3);
+    }
+
+    // While the run waited, the player's coins changed (earned on another device and synced, or spent there).
+    const auto resumed_with = [&](std::int64_t wallet_now, bool won_once_now)
+    {
+        SaveData data = saved(paused_memory);
+        Player* player = current_player(data);
+        REQUIRE(player != nullptr);
+        REQUIRE(record_wallet(*player, data.device.id, wallet_now).has_value());
+        player->won_once = won_once_now;
+        return std::make_unique<MemorySaveStore>(*serialise(data));
+    };
+
+    SECTION("more coins")
+    {
+        const auto memory = resumed_with(50, true);
+        Rig rig(*memory);
+        GameController& c = rig.controller;
+        CHECK(c.wallet() == 50); // the title already shows the player's wallet
+        REQUIRE(c.continueGame());
+        CHECK(c.state() == State::Paused);
+        CHECK(c.wallet() == 50);
+        CHECK(c.session_view().wallet == 50);
+        CHECK(c.session_view().won_once);
+        c.resume();
+        c.useHint();
+        CHECK(c.wallet() == 48);
+        c.pause();
+        CHECK(wallet_of(saved(*memory)) == 48);
+    }
+
+    SECTION("fewer coins")
+    {
+        const auto memory = resumed_with(1, false);
+        Rig rig(*memory);
+        GameController& c = rig.controller;
+        REQUIRE(c.continueGame());
+        CHECK(c.wallet() == 1);
+        c.resume();
+        CHECK_FALSE(c.hint_available()); // one coin is short of a hint
+        c.pause();
+        CHECK(wallet_of(saved(*memory)) == 1);
+    }
+
+    SECTION("the same coins, and the rest of the run is as paused")
+    {
+        Rig rig(paused_memory);
+        GameController& c = rig.controller;
+        REQUIRE(c.continueGame());
+        CHECK(c.wallet() == 3);
+        CHECK(c.question_number() == 4);
+        CHECK(c.level() == 1);
+    }
+}
+
+TEST_CASE("A player with a name has a score saved at once, under that name, with no name screen",
+          "[integration][controller][players]")
+{
+    MemorySaveStore memory(*serialise(family_save()));
+    Rig rig(memory);
+    GameController& c = rig.controller;
+    REQUIRE(c.selectPlayer(QString::fromLatin1(PLAYER_B)));
+    QSignalSpy over_spy(&c, &GameController::gameOver);
+    QSignalSpy at_once_spy(&c, &GameController::scoreSavedAtOnce);
+    QSignalSpy top_spy(&c, &GameController::topScoresChanged);
+
+    play_and_quit(rig, 1);
+    CHECK(c.state() == State::GameOver);
+    CHECK_FALSE(c.name_entry_pending());
+    CHECK(c.name_entry_rank() == 0);
+    CHECK(c.highlight_rank() == 1);
+    REQUIRE(c.top10().size() == 1);
+    CHECK(c.top10().first().toMap().value("name").toString() == QStringLiteral("BEN"));
+    CHECK(c.top10().first().toMap().value("score").toLongLong() == c.final_score());
+    REQUIRE(at_once_spy.count() == 1);
+    CHECK(at_once_spy.at(0).at(0).toInt() == 1);
+    REQUIRE(over_spy.count() == 1);
+    CHECK(over_spy.at(0).at(3).toInt() == 1); // the rank it took
+    CHECK(top_spy.count() >= 1);
+
+    // The flow after it is the one after SAVE: the best of the player, the card's NEW BEST!, a list on disk.
+    CHECK(c.best_score() == 300); // 10 points: not a best for a player whose best is 300
+    CHECK_FALSE(c.new_best());
+    const SaveData on_disk = saved(memory);
+    REQUIRE(on_disk.shared.top10.size() == 1);
+    CHECK(on_disk.shared.top10[0].name == "BEN");
+    CHECK(on_disk.shared.top10[0].seq == 1);
+    CHECK(on_disk.device.next_seq == 2);
+    CHECK(c.saveName(QStringLiteral("again")) == 0); // nothing is waiting
+
+    // The next game clears the mark, and the next score takes its place in the list under the same name.
+    c.startGame();
+    CHECK(c.highlight_rank() == 0);
+    rig.answer_right();
+    rig.answer_right();
+    c.pause();
+    c.quit();
+    CHECK(c.top10().size() == 2);
+    CHECK(c.top10()[0].toMap().value("name").toString() == QStringLiteral("BEN"));
+    CHECK(c.top10()[1].toMap().value("name").toString() == QStringLiteral("BEN"));
+}
+
+TEST_CASE("A score that does not earn a place gives a named player no name screen and no entry",
+          "[integration][controller][players]")
+{
+    SaveData data = family_save();
+    std::vector<ScoreEntry> entries;
+    for (int i = 0; i < 10; ++i)
+    {
+        entries.push_back({"TOP", 1000 - 10 * i});
+    }
+    give_top10(data, std::move(entries));
+    MemorySaveStore memory(*serialise(data));
+    Rig rig(memory);
+    GameController& c = rig.controller;
+    REQUIRE(c.selectPlayer(QString::fromLatin1(PLAYER_B)));
+    QSignalSpy at_once_spy(&c, &GameController::scoreSavedAtOnce);
+
+    play_and_quit(rig, 1);
+    CHECK_FALSE(c.name_entry_pending());
+    CHECK(c.highlight_rank() == 0);
+    CHECK(at_once_spy.count() == 0);
+    CHECK(c.top10().size() == 10);
+    CHECK(c.top10()[9].toMap().value("score").toLongLong() == 910);
+}
+
+TEST_CASE("A player with no name gets the name screen: SAVE names the player, SKIP leaves them unnamed",
+          "[integration][controller][players]")
+{
+    SECTION("SAVE")
+    {
+        MemorySaveStore memory;
+        Rig rig(memory);
+        GameController& c = rig.controller;
+        QSignalSpy at_once_spy(&c, &GameController::scoreSavedAtOnce);
+        play_and_quit(rig, 1);
+        REQUIRE(c.name_entry_pending());
+        CHECK(c.player_name() == QStringLiteral("PLAYER 1"));
+        CHECK(c.saveName(QStringLiteral("  rocket ")) == 1);
+        CHECK(at_once_spy.count() == 0); // the name screen's own flow
+        CHECK(c.player_name() == QStringLiteral("ROCKET"));
+        CHECK(c.top10().first().toMap().value("name").toString() == QStringLiteral("ROCKET"));
+        SaveData on_disk = saved(memory);
+        CHECK(player_on_disk(on_disk, "first").name == "ROCKET");
+        CHECK(player_on_disk(on_disk, "first").name_rev == 1);
+        CHECK(on_disk.shared.top10[0].name == "ROCKET");
+
+        // The name is theirs from now on: the next game needs no name screen.
+        play_and_quit(rig, 2);
+        CHECK_FALSE(c.name_entry_pending());
+        CHECK(c.highlight_rank() >= 1);
+        CHECK(at_once_spy.count() == 1);
+        CHECK(c.top10().size() == 2);
+        CHECK(c.top10()[0].toMap().value("name").toString() == QStringLiteral("ROCKET"));
+    }
+
+    SECTION("SKIP")
+    {
+        MemorySaveStore memory;
+        Rig rig(memory);
+        GameController& c = rig.controller;
+        play_and_quit(rig, 1);
+        REQUIRE(c.name_entry_pending());
+        c.skipName();
+        CHECK_FALSE(c.name_entry_pending());
+        CHECK(c.top10().isEmpty());
+        CHECK(c.player_name() == QStringLiteral("PLAYER 1"));
+        CHECK(player_on_disk(saved(memory), "first").name.empty());
+        CHECK(player_on_disk(saved(memory), "first").name_rev == 0);
+
+        // Still unnamed, so the next score asks again.
+        play_and_quit(rig, 1);
+        CHECK(c.name_entry_pending());
+    }
+
+    SECTION("a name that has no letter does not save")
+    {
+        MemorySaveStore memory;
+        Rig rig(memory);
+        GameController& c = rig.controller;
+        play_and_quit(rig, 1);
+        REQUIRE(c.name_entry_pending());
+        CHECK(c.saveName(QStringLiteral("   ")) == 0);
+        CHECK(c.saveName(QStringLiteral("12!")) == 0);
+        CHECK(c.name_entry_pending());
+        CHECK(player_on_disk(saved(memory), "first").name.empty());
+    }
+}
+
+TEST_CASE("Every finished game counts towards the player's best, and NEW BEST! is that player's own",
+          "[integration][controller][players]")
+{
+    // The list is full of other players' scores, all higher than anything this player will make; another player's best
+    // is higher still. None of that is this player's best.
+    SaveData data = family_save();
+    std::vector<ScoreEntry> entries;
+    for (int i = 0; i < 10; ++i)
+    {
+        entries.push_back({"BEN", 9000 - 100 * i});
+    }
+    give_top10(data, std::move(entries));
+    data.shared.players[0].best = 0;
+    data.shared.players[0].won_once = false;
+    data.shared.players[1].best = 99'999;
+    MemorySaveStore memory(*serialise(data));
+    Rig rig(memory);
+    GameController& c = rig.controller;
+    REQUIRE(c.best_score() == 0);
+
+    play_and_quit(rig, 1);
+    const std::int64_t first_score = c.final_score();
+    REQUIRE(first_score > 0);
+    CHECK_FALSE(c.name_entry_pending()); // it does not earn a place in the list...
+    CHECK(c.top10().size() == 10);
+    CHECK(c.new_best()); // ...but it is this player's best
+    CHECK(c.best_score() == first_score);
+    CHECK(player_on_disk(saved(memory), "first").best == first_score);
+
+    // The same score again is not a new best; a lower one never is.
+    play_and_quit(rig, 1);
+    CHECK(c.final_score() == first_score);
+    CHECK_FALSE(c.new_best());
+    CHECK(c.best_score() == first_score);
+
+    // A higher one is.
+    play_and_quit(rig, 4);
+    const std::int64_t higher = c.final_score();
+    REQUIRE(higher > first_score);
+    CHECK(c.new_best());
+    CHECK(c.best_score() == higher);
+
+    // A score of 0 is never a new best, and takes nothing away.
+    play_and_quit(rig, 0);
+    CHECK(c.final_score() == 0);
+    CHECK_FALSE(c.new_best());
+    CHECK(c.best_score() == higher);
+
+    // The other player's best is theirs.
+    REQUIRE(c.selectPlayer(QString::fromLatin1(PLAYER_B)));
+    CHECK(c.best_score() == 99'999);
+}
+
+TEST_CASE("A score of 0 is never a new best, even for a player with no best at all",
+          "[integration][controller][players]")
+{
+    MemorySaveStore memory;
+    Rig rig(memory);
+    play_and_quit(rig, 0);
+    CHECK(rig.controller.final_score() == 0);
+    CHECK_FALSE(rig.controller.new_best());
+    CHECK_FALSE(rig.controller.name_entry_pending());
+    CHECK(rig.controller.best_score() == 0);
 }

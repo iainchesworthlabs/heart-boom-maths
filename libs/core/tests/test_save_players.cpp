@@ -648,3 +648,43 @@ TEST_CASE("a family's save survives text and the helpers together", "[unit][save
     REQUIRE(player_wallet(back.data.shared.players[0]) == 80);
     REQUIRE(back.data.shared.players[0].coins == std::vector<CoinEntry>{{std::string(DEVICE_A), 120, 40}});
 }
+
+TEST_CASE("set_current_player picks an active player and refuses a missing or removed one", "[unit][save][players]")
+{
+    SaveData data = family(); // `first` (current), PLAYER_2, and PLAYER_3 removed
+    REQUIRE(data.device.current_player == "first");
+
+    REQUIRE(set_current_player(data, PLAYER_2).has_value());
+    REQUIRE(data.device.current_player == PLAYER_2);
+    REQUIRE(current_player(data) == find_player(data.shared, PLAYER_2));
+
+    // Choosing the current player again is not an error.
+    REQUIRE(set_current_player(data, PLAYER_2).has_value());
+    REQUIRE(data.device.current_player == PLAYER_2);
+
+    const SaveData before = data;
+    const auto removed = set_current_player(data, PLAYER_3);
+    REQUIRE_FALSE(removed.has_value());
+    REQUIRE(removed.error() == PlayerError::NOT_FOUND);
+    const auto missing = set_current_player(data, PLAYER_4);
+    REQUIRE_FALSE(missing.has_value());
+    REQUIRE(missing.error() == PlayerError::NOT_FOUND);
+    const auto empty = set_current_player(data, "");
+    REQUIRE_FALSE(empty.has_value());
+    REQUIRE(empty.error() == PlayerError::NOT_FOUND);
+    REQUIRE(data == before);
+}
+
+TEST_CASE("set_current_player changes nothing but the choice", "[unit][save][players]")
+{
+    SaveData data = family();
+    data.shared.players[0].best = 700;
+    REQUIRE(record_wallet(data.shared.players[0], DEVICE_A, 30).has_value());
+    data.device.run = std::vector<std::int64_t>{1, 2, 3};
+    data.device.run_player = "first";
+    SaveData expected = data;
+    expected.device.current_player = std::string(PLAYER_2);
+
+    REQUIRE(set_current_player(data, PLAYER_2).has_value());
+    REQUIRE(data == expected);
+}

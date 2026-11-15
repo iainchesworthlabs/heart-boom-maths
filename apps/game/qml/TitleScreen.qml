@@ -9,6 +9,9 @@ import QtQuick.Layouts
 //
 // A CONTINUE that fails (the controller says so and stays here, the saved run gone) shows a short calm line where the
 // saved-game line was. Nothing starts by itself.
+//
+// The player chip (not on board CP1) names who is playing and says WHO'S PLAYING by `playersRequested`. CONTINUE and its
+// caption are the current player's: the controller shows them only while the saved run is theirs.
 Item {
     id: root
 
@@ -27,6 +30,7 @@ Item {
 
     signal top10Requested
     signal settingsRequested
+    signal playersRequested
 
     Connections {
         target: root.game
@@ -134,6 +138,57 @@ Item {
                 size: 150 * root.unit
                 showSeconds: false
                 face: true
+            }
+
+            // Who is playing. It stands in the top left corner of the hero, under BEST: that is the one place on the board
+            // with room for it that moves nothing else (the column has no spare height at 390 by 844). It overlaps only the
+            // tips of the burst, and its outline and shadow keep it readable there. A tap opens WHO'S PLAYING.
+            ComicButton {
+                id: chip
+
+                readonly property real sidePadding: 12 * root.unit
+                readonly property real chevronSize: 16 * root.unit
+                readonly property real nameRoom: 168 * root.unit - 2 * sidePadding - 2 * borderWidth - chevronSize - chipRow.spacing
+
+                objectName: "playerChip"
+                x: 0
+                y: 2 * root.unit
+                width: Math.min(168 * root.unit, chipName.implicitWidth + chevronSize + chipRow.spacing + 2 * sidePadding + 2 * borderWidth)
+                height: Math.max(44, 48 * root.unit)
+                variant: "secondary"
+                accessibleName: qsTr("Playing as %1. Choose who is playing").arg(root.game.playerName)
+                borderWidth: Theme.outlineSmall
+                radius: 16
+                shadowOffset: 4 * root.unit
+                onClicked: root.playersRequested()
+
+                Row {
+                    id: chipRow
+
+                    anchors.centerIn: parent
+                    spacing: 8 * root.unit
+
+                    Text {
+                        id: chipName
+
+                        objectName: "playerChipName"
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Math.min(implicitWidth, chip.nameRoom)
+                        text: root.game.playerName
+                        elide: Text.ElideRight
+                        color: Theme.ink
+                        font.family: Theme.displayFont
+                        font.pixelSize: 24 * root.unit
+                        font.letterSpacing: 1 * root.unit
+                    }
+                    // The back chevron turned to point down: it says a choice opens.
+                    ChevronIcon {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: chip.chevronSize
+                        height: chip.chevronSize
+                        rotation: -90
+                    }
+                }
             }
         }
 

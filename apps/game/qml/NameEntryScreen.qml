@@ -12,10 +12,23 @@ import QtQuick.Layouts
 //
 // SAVE needs at least one letter. SKIP drops the entry. Both leave the screen by changing the controller, which the shell
 // follows.
+//
+// The same screen names a player (`forPlayer`, from WHO'S PLAYING): there is no score to show, the field starts with the
+// name the player has (`initialName`), SAVE gives the name to `playerId` through the controller, and the second button
+// (`skipText`: SKIP for a player just added, CANCEL for a rename) leaves the name as it was. Either way the screen says
+// `finished` and the shell goes back. Escape does the same as the second button.
 Item {
     id: root
 
     required property GameController game
+
+    // True when the screen names a player and not a score.
+    property bool forPlayer: false
+    // For a player: who it is, the name they have now (empty for a new one), the burst's words and the second button's.
+    property string playerId: ""
+    property string initialName: ""
+    property string burstText: qsTr("TOP 10!")
+    property string skipText: qsTr("SKIP")
 
     // The name as typed so far: capitals, A to Z and spaces, at most game.nameMaxLength.
     property string name: ""
@@ -34,6 +47,8 @@ Item {
     // Emitted just before the name is saved, so the shell can set up the Top 10 screen before the controller leaves the name
     // entry state.
     signal saveStarted
+    // A player's name has been dealt with, by SAVE or by the second button.
+    signal finished
 
     function type_text(text) {
         root.name = root.game.normaliseName(root.name + text);
@@ -47,16 +62,35 @@ Item {
         if (!root.canSave) {
             return;
         }
+        if (root.forPlayer) {
+            if (root.game.renamePlayer(root.playerId, root.name.trim())) {
+                root.finished();
+            }
+            return;
+        }
         root.saveStarted();
         root.game.saveName(root.name.trim());
     }
 
     function skip() {
+        if (root.forPlayer) {
+            root.finished();
+            return;
+        }
         root.game.skipName();
     }
 
     focus: true
-    Component.onCompleted: forceActiveFocus()
+    Component.onCompleted: {
+        root.name = root.game.normaliseName(root.initialName);
+        forceActiveFocus();
+    }
+
+    Shortcut {
+        sequence: "Esc"
+        enabled: root.forPlayer && root.visible
+        onActivated: root.skip()
+    }
 
     Keys.onPressed: event => {
         if (event.key === Qt.Key_Backspace) {
@@ -86,7 +120,8 @@ Item {
         id: page
 
         anchors.fill: parent
-        designHeight: 460
+        // Without the score card the content is a good deal shorter.
+        designHeight: root.forPlayer ? 330 : 460
         columnSpacing: 12
         topMax: 44
         pinTop: true
@@ -98,13 +133,14 @@ Item {
             Layout.preferredWidth: page.columnWidth
             Layout.preferredHeight: 130 * page.unit
             outerColor: Theme.orange
-            text: qsTr("TOP 10!")
+            text: root.burstText
             textSize: 50 * page.unit
             letterSpacing: 3 * page.unit
         }
 
         ComicCard {
             objectName: "entryCard"
+            visible: !root.forPlayer
             Layout.fillWidth: true
             Layout.preferredHeight: rows.implicitHeight + 2 * (10 * page.unit) + 2 * borderWidth
             borderWidth: Theme.outlineLarge * page.unit
@@ -267,7 +303,7 @@ Item {
                 width: buttons.width - x
                 height: parent.height
                 variant: "secondary"
-                text: qsTr("SKIP")
+                text: root.skipText
                 pixelSize: 34 * page.unit
                 letterSpacing: 2 * page.unit
                 borderWidth: Theme.outlineLarge * page.unit

@@ -551,8 +551,10 @@ TEST_CASE("SKIP drops the entry and lands on the game-over card; the top 10 stay
     s.tap("skipButton");
     CHECK(s.screen() == "gameOver");
     CHECK(s.c().top10().isEmpty());
-    CHECK_FALSE(s.visible("newBestBadge"));
-    CHECK(s.value_of("bestScoreRow") == "0");
+    // The entry is dropped, but the game still counts towards the player's best (SPEC, Players): NEW BEST! is about the
+    // player's own best and not about the list.
+    CHECK(s.visible("newBestBadge"));
+    CHECK(s.value_of("bestScoreRow") == "40");
 
     // The top 10 opens from the card, says it is empty, and backs out to the card again.
     s.tap("top10Button");

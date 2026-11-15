@@ -492,4 +492,15 @@ std::expected<int, ScoreError> record_score(SaveData& data, std::string_view pla
     return rank;
 }
 
+std::expected<void, PlayerError> set_current_player(SaveData& data, std::string_view id)
+{
+    const Player* player = find_player(data.shared, id);
+    if (player == nullptr || player->removed)
+    {
+        return std::unexpected(PlayerError::NOT_FOUND);
+    }
+    data.device.current_player = std::string(id);
+    return {};
+}
+
 } // namespace heart_boom_maths
