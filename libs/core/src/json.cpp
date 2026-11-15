@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <charconv>
+#include <iterator>
 #include <limits>
 
 namespace heart_boom_maths::json
@@ -15,6 +16,13 @@ namespace
 {
 
 constexpr std::string_view REPLACEMENT_CHARACTER = "\xEF\xBF\xBD";
+
+// How many items or members the parser makes room for on its first array or object: more than a save holds at once,
+// so a save is read without the stack growing. It is only the start; a larger document grows it as a vector does.
+constexpr std::size_t STACK_START = 48;
+
+// How many items or members one array or object keeps on that stack before it moves to a vector of its own.
+constexpr std::size_t SPILL_AT = 128;
 
 // The number of bytes of the strictly valid UTF-8 sequence that starts at `pos`, or 0 when there is none. Overlong
 // forms, surrogates and anything above U+10FFFF are refused, so a string that passes can be handed to any text API.
@@ -81,6 +89,66 @@ bool key_less(const Value::Member& a, const Value::Member& b) noexcept
 {
     return a.first < b.first;
 }
+
+// A character that stands for itself in a string and needs no decoding, escaping or checking: printable ASCII except
+// the quote and the backslash.
+bool is_plain(char c) noexcept
+{
+    const auto byte = static_cast<unsigned char>(c);
+    return byte >= 0x20 && byte < 0x80 && c != '"' && c != '\\';
+}
+
+// The items or members of one array or object while it is being read. They wait on a stack the whole parse shares and
+// move into a vector of exactly their number at the end, so a small array costs one allocation and not one for each
+// time it would have grown. Past SPILL_AT they move to a vector of their own, which grows as a vector does: for a very
+// long array the stack would only add a second pass of moves. An error ends the parse, so the stack is not tidied on
+// the way out.
+template <typename Vector>
+class Pending
+{
+public:
+    explicit Pending(Vector& stack) : m_Stack(stack), m_Base(stack.size()) {}
+
+    template <typename... Args>
+    void add(Args&&... args)
+    {
+        if (m_Spilled)
+        {
+            m_Own.emplace_back(std::forward<Args>(args)...);
+            return;
+        }
+        if (m_Stack.capacity() == 0)
+        {
+            m_Stack.reserve(STACK_START); // a save fits, so the stack grows no more
+        }
+        m_Stack.emplace_back(std::forward<Args>(args)...);
+        if (m_Stack.size() - m_Base >= SPILL_AT)
+        {
+            const auto first = m_Stack.begin() + static_cast<std::ptrdiff_t>(m_Base);
+            m_Own.assign(std::make_move_iterator(first), std::make_move_iterator(m_Stack.end()));
+            m_Stack.erase(first, m_Stack.end());
+            m_Spilled = true;
+        }
+    }
+
+    [[nodiscard]] Vector take()
+    {
+        if (m_Spilled)
+        {
+            return std::move(m_Own);
+        }
+        const auto first = m_Stack.begin() + static_cast<std::ptrdiff_t>(m_Base);
+        Vector result(std::make_move_iterator(first), std::make_move_iterator(m_Stack.end()));
+        m_Stack.erase(first, m_Stack.end());
+        return result;
+    }
+
+private:
+    Vector& m_Stack;
+    std::size_t m_Base;
+    Vector m_Own;
+    bool m_Spilled = false;
+};
 
 class Parser
 {
@@ -347,6 +415,34 @@ private:
         std::string out;
         for (;;)
         {
+            // A run of plain characters is taken in one piece. The limit is checked as it was one character at a time:
+            // the error is at the character that makes the string one byte too long, and the scan never goes past it,
+            // so a string of a quarter of a megabyte costs a kilobyte.
+            const std::size_t run_start = m_Pos;
+            const std::size_t room = m_Limits.max_string_bytes - out.size();
+            const std::size_t available = m_Text.size() - run_start;
+            const std::size_t scan_end = run_start + (room < available ? room + 1 : available);
+            std::size_t run_end = run_start;
+            while (run_end < scan_end && is_plain(m_Text[run_end]))
+            {
+                ++run_end;
+            }
+            if (run_end > run_start)
+            {
+                if (run_end - run_start > room)
+                {
+                    m_Pos = run_start + room + 1;
+                    return fail(ErrorCode::STRING_TOO_LONG);
+                }
+                m_Pos = run_end;
+                if (out.empty() && !at_end() && peek() == '"')
+                {
+                    ++m_Pos; // the common case, a string with nothing to decode: one copy, no appending
+                    return std::string(m_Text.substr(run_start, run_end - run_start));
+                }
+                out.append(m_Text.substr(run_start, run_end - run_start));
+            }
+
             if (at_end())
             {
                 return fail(ErrorCode::UNEXPECTED_END);
@@ -392,13 +488,13 @@ private:
             return fail(ErrorCode::TOO_DEEP);
         }
         ++m_Pos; // [
-        Value::Array items;
         skip_whitespace();
         if (!at_end() && peek() == ']')
         {
             ++m_Pos;
-            return Value::array(std::move(items));
+            return Value::array();
         }
+        Pending<Value::Array> items(m_Items);
         for (;;)
         {
             auto item = parse_value(depth);
@@ -406,7 +502,7 @@ private:
             {
                 return item;
             }
-            items.push_back(std::move(*item));
+            items.add(std::move(*item));
             skip_whitespace();
             if (at_end())
             {
@@ -416,7 +512,7 @@ private:
             ++m_Pos;
             if (c == ']')
             {
-                return Value::array(std::move(items));
+                break;
             }
             if (c != ',')
             {
@@ -424,6 +520,7 @@ private:
                 return fail(ErrorCode::UNEXPECTED_CHARACTER);
             }
         }
+        return Value::array(items.take());
     }
 
     std::expected<Value, Error> parse_object(int depth)
@@ -433,13 +530,13 @@ private:
             return fail(ErrorCode::TOO_DEEP);
         }
         ++m_Pos; // {
-        Value::Object members;
         skip_whitespace();
         if (!at_end() && peek() == '}')
         {
             ++m_Pos;
             return Value::object();
         }
+        Pending<Value::Object> members(m_Members);
         for (;;)
         {
             skip_whitespace();
@@ -471,7 +568,7 @@ private:
             {
                 return value;
             }
-            members.emplace_back(std::move(*key), std::move(*value));
+            members.add(std::move(*key), std::move(*value));
             skip_whitespace();
             if (at_end())
             {
@@ -489,7 +586,7 @@ private:
                 return fail(ErrorCode::UNEXPECTED_CHARACTER);
             }
         }
-        auto object = Value::object_from(std::move(members));
+        auto object = Value::object_from(members.take());
         if (!object)
         {
             return fail(ErrorCode::DUPLICATE_KEY);
@@ -500,14 +597,30 @@ private:
     std::string_view m_Text;
     Limits m_Limits;
     std::size_t m_Pos = 0;
+    Value::Array m_Items;    // the items of the arrays being read, innermost last
+    Value::Object m_Members; // the same for the members of the objects
 };
 
-void write_string(std::string& out, std::string_view text)
+} // namespace
+
+void append_string(std::string& out, std::string_view text)
 {
     static constexpr std::string_view HEX = "0123456789abcdef";
     out.push_back('"');
     for (std::size_t i = 0; i < text.size();)
     {
+        // Plain characters are copied in one piece.
+        const std::size_t run_start = i;
+        while (i < text.size() && is_plain(text[i]))
+        {
+            ++i;
+        }
+        out.append(text.data() + run_start, i - run_start);
+        if (i == text.size())
+        {
+            break;
+        }
+
         const char c = text[i];
         const auto byte = static_cast<unsigned char>(c);
         if (c == '"')
@@ -544,10 +657,6 @@ void write_string(std::string& out, std::string_view text)
             out.push_back(HEX[byte >> 4]);
             out.push_back(HEX[byte & 0x0F]);
         }
-        else if (byte < 0x80)
-        {
-            out.push_back(c);
-        }
         else
         {
             const std::size_t length = utf8_sequence_length(text, i);
@@ -566,6 +675,16 @@ void write_string(std::string& out, std::string_view text)
     out.push_back('"');
 }
 
+void append_integer(std::string& out, std::int64_t value)
+{
+    std::array<char, 24> buffer{};
+    const auto result = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value);
+    out.append(buffer.data(), result.ptr);
+}
+
+namespace
+{
+
 void write_value(std::string& out, const Value& value)
 {
     switch (value.kind())
@@ -574,14 +693,10 @@ void write_value(std::string& out, const Value& value)
         out.append(*value.get_boolean() ? "true" : "false");
         break;
     case Kind::INTEGER:
-    {
-        std::array<char, 24> buffer{};
-        const auto result = std::to_chars(buffer.data(), buffer.data() + buffer.size(), *value.get_integer());
-        out.append(buffer.data(), result.ptr);
+        append_integer(out, *value.get_integer());
         break;
-    }
     case Kind::STRING:
-        write_string(out, *value.get_string());
+        append_string(out, *value.get_string());
         break;
     case Kind::ARRAY:
     {
@@ -610,7 +725,7 @@ void write_value(std::string& out, const Value& value)
                 out.push_back(',');
             }
             first = false;
-            write_string(out, key);
+            append_string(out, key);
             out.push_back(':');
             write_value(out, member);
         }
@@ -659,12 +774,18 @@ Value Value::object()
 
 std::optional<Value> Value::object_from(Object members)
 {
-    std::stable_sort(members.begin(), members.end(), key_less);
-    const auto repeat = std::adjacent_find(members.begin(), members.end(),
-                                           [](const Member& a, const Member& b) { return a.first == b.first; });
-    if (repeat != members.end())
+    // Members that already ascend, which is how the writer puts them, have no repeat and need no sort.
+    const bool ascending = std::adjacent_find(members.begin(), members.end(), [](const Member& a, const Member& b)
+                                              { return !key_less(a, b); }) == members.end();
+    if (!ascending)
     {
-        return std::nullopt;
+        std::stable_sort(members.begin(), members.end(), key_less);
+        const auto repeat = std::adjacent_find(members.begin(), members.end(),
+                                               [](const Member& a, const Member& b) { return a.first == b.first; });
+        if (repeat != members.end())
+        {
+            return std::nullopt;
+        }
     }
     Value result;
     result.m_Data = std::move(members);
@@ -765,6 +886,7 @@ std::string write(const Value& value)
 {
     HBM_ZONE("json.write");
     std::string out;
+    out.reserve(1024); // a save is a kilobyte or so; this skips the dozen small growths on the way there
     write_value(out, value);
     return out;
 }

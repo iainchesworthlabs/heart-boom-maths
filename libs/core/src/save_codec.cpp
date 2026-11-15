@@ -48,7 +48,8 @@ std::expected<std::int64_t, SaveError> read_integer(const Value& object, std::st
     return *value;
 }
 
-std::expected<std::string, SaveError> read_string(const Value& object, std::string_view key)
+// The string stays in the document, so the caller copies it once, into the place it is going to.
+std::expected<const std::string*, SaveError> read_string(const Value& object, std::string_view key)
 {
     const Value* field = object.find(key);
     if (field == nullptr)
@@ -60,7 +61,7 @@ std::expected<std::string, SaveError> read_string(const Value& object, std::stri
     {
         return std::unexpected(SaveError::WRONG_TYPE);
     }
-    return *value;
+    return value;
 }
 
 std::expected<const Value::Array*, SaveError> read_array(const Value& object, std::string_view key)
@@ -112,27 +113,28 @@ std::expected<std::vector<ScoreEntry>, SaveError> read_top10(const Value& shared
         {
             return std::unexpected(SaveError::WRONG_TYPE);
         }
-        auto name = read_string(item, "name");
-        auto score = read_integer(item, "score");
-        auto device = read_string(item, "device");
-        auto seq = read_integer(item, "seq");
+        // Each field is checked as it is read, in this order, so the first one at fault is the one reported.
+        const auto name = read_string(item, "name");
         if (!name)
         {
             return std::unexpected(name.error());
         }
+        const auto score = read_integer(item, "score");
         if (!score)
         {
             return std::unexpected(score.error());
         }
+        const auto device = read_string(item, "device");
         if (!device)
         {
             return std::unexpected(device.error());
         }
+        const auto seq = read_integer(item, "seq");
         if (!seq)
         {
             return std::unexpected(seq.error());
         }
-        entries.push_back(ScoreEntry{std::move(*name), *score, std::move(*device), *seq});
+        entries.push_back(ScoreEntry{**name, *score, **device, *seq});
     }
     return entries;
 }
@@ -156,22 +158,22 @@ std::expected<std::vector<CoinEntry>, SaveError> read_coins(const Value& player)
         {
             return std::unexpected(SaveError::WRONG_TYPE);
         }
-        auto device = read_string(item, "device");
-        auto earned = read_integer(item, "earned");
-        auto spent = read_integer(item, "spent");
+        const auto device = read_string(item, "device");
         if (!device)
         {
             return std::unexpected(device.error());
         }
+        const auto earned = read_integer(item, "earned");
         if (!earned)
         {
             return std::unexpected(earned.error());
         }
+        const auto spent = read_integer(item, "spent");
         if (!spent)
         {
             return std::unexpected(spent.error());
         }
-        entries.push_back(CoinEntry{std::move(*device), *earned, *spent});
+        entries.push_back(CoinEntry{**device, *earned, *spent});
     }
     return entries;
 }
@@ -182,42 +184,42 @@ std::expected<Player, SaveError> read_player(const Value& item)
     {
         return std::unexpected(SaveError::WRONG_TYPE);
     }
-    auto id = read_string(item, "id");
-    auto name = read_string(item, "name");
-    auto name_rev = read_integer(item, "name_rev");
-    auto removed = read_bool(item, "removed", std::nullopt);
-    auto won_once = read_bool(item, "won_once", std::nullopt);
-    auto best = read_integer(item, "best");
-    auto coins = read_coins(item);
+    const auto id = read_string(item, "id");
     if (!id)
     {
         return std::unexpected(id.error());
     }
+    const auto name = read_string(item, "name");
     if (!name)
     {
         return std::unexpected(name.error());
     }
+    const auto name_rev = read_integer(item, "name_rev");
     if (!name_rev)
     {
         return std::unexpected(name_rev.error());
     }
+    const auto removed = read_bool(item, "removed", std::nullopt);
     if (!removed)
     {
         return std::unexpected(removed.error());
     }
+    const auto won_once = read_bool(item, "won_once", std::nullopt);
     if (!won_once)
     {
         return std::unexpected(won_once.error());
     }
+    const auto best = read_integer(item, "best");
     if (!best)
     {
         return std::unexpected(best.error());
     }
+    auto coins = read_coins(item);
     if (!coins)
     {
         return std::unexpected(coins.error());
     }
-    return Player{std::move(*id), std::move(*name), *name_rev, *removed, *won_once, *best, std::move(*coins)};
+    return Player{**id, **name, *name_rev, *removed, *won_once, *best, std::move(*coins)};
 }
 
 std::expected<SharedData, SaveError> read_shared(const Value& root, const Tuning& tuning)
@@ -236,8 +238,8 @@ std::expected<SharedData, SaveError> read_shared(const Value& root, const Tuning
     {
         return std::unexpected(SaveError::PLAYERS_TOO_MANY);
     }
-    SharedData data;
-    data.players.clear(); // the default holds the first player; a file says which players there are
+    // Built empty: the default holds the first player, and a file says which players there are.
+    SharedData data{std::vector<Player>{}, std::vector<ScoreEntry>{}};
     data.players.reserve((*items)->size());
     for (const Value& item : **items)
     {
@@ -296,57 +298,58 @@ std::expected<DeviceData, SaveError> read_device(const Value& root)
     }
     const Value& device = **field;
 
+    // As in read_player: each field is checked as it is read, so the first one at fault is the one reported.
     const auto id = read_string(device, "id");
-    const auto sound = read_bool(device, "sound", std::nullopt);
-    const auto music = read_bool(device, "music", std::nullopt);
-    // The switches added after the first release are the ones with a stated default, so a file that predates one still
-    // loads: game_center is off, haptics is on as a new player has it, and cloud_sync is off.
-    const auto game_center = read_bool(device, "game_center", false);
-    const auto haptics = read_bool(device, "haptics", true);
-    const auto cloud_sync = read_bool(device, "cloud_sync", false);
-    const auto current = read_string(device, "current_player");
-    const auto next_seq = read_integer(device, "next_seq");
     if (!id)
     {
         return std::unexpected(id.error());
     }
+    const auto sound = read_bool(device, "sound", std::nullopt);
     if (!sound)
     {
         return std::unexpected(sound.error());
     }
+    const auto music = read_bool(device, "music", std::nullopt);
     if (!music)
     {
         return std::unexpected(music.error());
     }
+    // The switches added after the first release are the ones with a stated default, so a file that predates one still
+    // loads: game_center is off, haptics is on as a new player has it, and cloud_sync is off.
+    const auto game_center = read_bool(device, "game_center", false);
     if (!game_center)
     {
         return std::unexpected(game_center.error());
     }
+    const auto haptics = read_bool(device, "haptics", true);
     if (!haptics)
     {
         return std::unexpected(haptics.error());
     }
+    const auto cloud_sync = read_bool(device, "cloud_sync", false);
     if (!cloud_sync)
     {
         return std::unexpected(cloud_sync.error());
     }
+    const auto current = read_string(device, "current_player");
     if (!current)
     {
         return std::unexpected(current.error());
     }
+    const auto next_seq = read_integer(device, "next_seq");
     if (!next_seq)
     {
         return std::unexpected(next_seq.error());
     }
 
     DeviceData data;
-    data.id = std::move(*id);
+    data.id = **id;
     data.sound = *sound;
     data.music = *music;
     data.game_center = *game_center;
     data.haptics = *haptics;
     data.cloud_sync = *cloud_sync;
-    data.current_player = std::move(*current);
+    data.current_player = **current;
     data.next_seq = *next_seq;
 
     auto run = read_run(device);
@@ -357,12 +360,12 @@ std::expected<DeviceData, SaveError> read_device(const Value& root)
     data.run = std::move(*run);
     if (device.find("run_player") != nullptr)
     {
-        auto run_player = read_string(device, "run_player");
+        const auto run_player = read_string(device, "run_player");
         if (!run_player)
         {
             return std::unexpected(run_player.error());
         }
-        data.run_player = std::move(*run_player);
+        data.run_player = **run_player;
     }
     return data;
 }
@@ -370,23 +373,17 @@ std::expected<DeviceData, SaveError> read_device(const Value& root)
 // Reads the fields of a document that is already at the current version.
 std::expected<SaveData, SaveError> read_fields(const Value& root, const Tuning& tuning, int version)
 {
-    SaveData data;
-    data.version = version;
-
     auto device = read_device(root);
     if (!device)
     {
         return std::unexpected(device.error());
     }
-    data.device = std::move(*device);
-
     auto shared = read_shared(root, tuning);
     if (!shared)
     {
         return std::unexpected(shared.error());
     }
-    data.shared = std::move(*shared);
-    return data;
+    return SaveData{version, std::move(*device), std::move(*shared)};
 }
 
 ParseResult damaged(SaveError reason, std::optional<std::int64_t> file_version = std::nullopt)
@@ -398,87 +395,131 @@ ParseResult damaged(SaveError reason, std::optional<std::int64_t> file_version =
     return result;
 }
 
-Value write_coins(const std::vector<CoinEntry>& coins)
+// The writers put the text of the save straight into one string, with no `json::Value` tree between, because a tree
+// costs an allocation or two for every member and every string. They write what `json::write` would write for the same
+// document: objects with their keys in ascending order, no spaces. A test reads the text back and writes it again to
+// hold them to that, so a key put out of order fails there.
+
+void append_bool(std::string& out, bool value)
 {
-    Value::Array entries;
-    entries.reserve(coins.size());
-    for (const CoinEntry& coin : coins)
+    out.append(value ? "true" : "false");
+}
+
+void append_coins(std::string& out, const std::vector<CoinEntry>& coins)
+{
+    out.push_back('[');
+    for (std::size_t i = 0; i < coins.size(); ++i)
     {
-        Value item = Value::object();
-        item.set("device", Value::string(coin.device));
-        item.set("earned", Value::integer(coin.earned));
-        item.set("spent", Value::integer(coin.spent));
-        entries.push_back(std::move(item));
+        const CoinEntry& coin = coins[i];
+        out.append(i == 0 ? "{\"device\":" : ",{\"device\":");
+        json::append_string(out, coin.device);
+        out.append(",\"earned\":");
+        json::append_integer(out, coin.earned);
+        out.append(",\"spent\":");
+        json::append_integer(out, coin.spent);
+        out.push_back('}');
     }
-    return Value::array(std::move(entries));
+    out.push_back(']');
 }
 
-Value write_players(const std::vector<Player>& players)
+void append_players(std::string& out, const std::vector<Player>& players)
 {
-    Value::Array items;
-    items.reserve(players.size());
-    for (const Player& player : players)
+    out.push_back('[');
+    for (std::size_t i = 0; i < players.size(); ++i)
     {
-        Value item = Value::object();
-        item.set("id", Value::string(player.id));
-        item.set("name", Value::string(player.name));
-        item.set("name_rev", Value::integer(player.name_rev));
-        item.set("removed", Value::boolean(player.removed));
-        item.set("won_once", Value::boolean(player.won_once));
-        item.set("best", Value::integer(player.best));
-        item.set("coins", write_coins(player.coins));
-        items.push_back(std::move(item));
+        const Player& player = players[i];
+        out.append(i == 0 ? "{\"best\":" : ",{\"best\":");
+        json::append_integer(out, player.best);
+        out.append(",\"coins\":");
+        append_coins(out, player.coins);
+        out.append(",\"id\":");
+        json::append_string(out, player.id);
+        out.append(",\"name\":");
+        json::append_string(out, player.name);
+        out.append(",\"name_rev\":");
+        json::append_integer(out, player.name_rev);
+        out.append(",\"removed\":");
+        append_bool(out, player.removed);
+        out.append(",\"won_once\":");
+        append_bool(out, player.won_once);
+        out.push_back('}');
     }
-    return Value::array(std::move(items));
+    out.push_back(']');
 }
 
-Value write_top10(const std::vector<ScoreEntry>& top10)
+void append_top10(std::string& out, const std::vector<ScoreEntry>& top10)
 {
-    Value::Array entries;
-    entries.reserve(top10.size());
-    for (const ScoreEntry& entry : top10)
+    out.push_back('[');
+    for (std::size_t i = 0; i < top10.size(); ++i)
     {
-        Value item = Value::object();
-        item.set("name", Value::string(entry.name));
-        item.set("score", Value::integer(entry.score));
-        item.set("device", Value::string(entry.device));
-        item.set("seq", Value::integer(entry.seq));
-        entries.push_back(std::move(item));
+        const ScoreEntry& entry = top10[i];
+        out.append(i == 0 ? "{\"device\":" : ",{\"device\":");
+        json::append_string(out, entry.device);
+        out.append(",\"name\":");
+        json::append_string(out, entry.name);
+        out.append(",\"score\":");
+        json::append_integer(out, entry.score);
+        out.append(",\"seq\":");
+        json::append_integer(out, entry.seq);
+        out.push_back('}');
     }
-    return Value::array(std::move(entries));
+    out.push_back(']');
 }
 
-Value write_shared(const SharedData& data)
+void append_shared(std::string& out, const SharedData& data)
 {
-    Value shared = Value::object();
-    shared.set("players", write_players(data.players));
-    shared.set("top10", write_top10(data.top10));
-    return shared;
+    out.append("{\"players\":");
+    append_players(out, data.players);
+    out.append(",\"top10\":");
+    append_top10(out, data.top10);
+    out.push_back('}');
 }
 
-Value write_device(const DeviceData& device)
+void append_device(std::string& out, const DeviceData& device)
 {
-    Value out = Value::object();
-    out.set("id", Value::string(device.id));
-    out.set("sound", Value::boolean(device.sound));
-    out.set("music", Value::boolean(device.music));
-    out.set("game_center", Value::boolean(device.game_center));
-    out.set("haptics", Value::boolean(device.haptics));
-    out.set("cloud_sync", Value::boolean(device.cloud_sync));
-    out.set("current_player", Value::string(device.current_player));
-    out.set("next_seq", Value::integer(device.next_seq));
+    out.append("{\"cloud_sync\":");
+    append_bool(out, device.cloud_sync);
+    out.append(",\"current_player\":");
+    json::append_string(out, device.current_player);
+    out.append(",\"game_center\":");
+    append_bool(out, device.game_center);
+    out.append(",\"haptics\":");
+    append_bool(out, device.haptics);
+    out.append(",\"id\":");
+    json::append_string(out, device.id);
+    out.append(",\"music\":");
+    append_bool(out, device.music);
+    out.append(",\"next_seq\":");
+    json::append_integer(out, device.next_seq);
     if (device.run)
     {
-        Value::Array values;
-        values.reserve(device.run->size());
-        for (const std::int64_t value : *device.run)
+        out.append(",\"run\":[");
+        for (std::size_t i = 0; i < device.run->size(); ++i)
         {
-            values.push_back(Value::integer(value));
+            if (i > 0)
+            {
+                out.push_back(',');
+            }
+            json::append_integer(out, (*device.run)[i]);
         }
-        out.set("run", Value::array(std::move(values)));
-        out.set("run_player", Value::string(device.run_player));
+        out.append("],\"run_player\":");
+        json::append_string(out, device.run_player);
     }
-    return out;
+    out.append(",\"sound\":");
+    append_bool(out, device.sound);
+    out.push_back('}');
+}
+
+// Room for a typical save, so the text does not grow by halves on the way: about 80 bytes for a top 10 entry, 130 and
+// 70 for a player and each of its coin entries, up to 20 for a number of the run.
+std::size_t estimated_size(const SharedData& shared)
+{
+    std::size_t size = 64 + shared.top10.size() * 80;
+    for (const Player& player : shared.players)
+    {
+        size += 130 + player.coins.size() * 70;
+    }
+    return size;
 }
 
 // The step from version 1: see the declaration. Everything is moved by value, with no check of its type.
@@ -591,11 +632,16 @@ std::expected<std::string, SaveError> serialise(const SaveData& data, const Tuni
         return std::unexpected(valid.error());
     }
 
-    Value root = Value::object();
-    root.set("version", Value::integer(data.version));
-    root.set("device", write_device(data.device));
-    root.set("shared", write_shared(data.shared));
-    return json::write(root);
+    std::string text;
+    text.reserve(estimated_size(data.shared) + 160 + (data.device.run ? data.device.run->size() * 12 : 0));
+    text.append("{\"device\":");
+    append_device(text, data.device);
+    text.append(",\"shared\":");
+    append_shared(text, data.shared);
+    text.append(",\"version\":");
+    json::append_integer(text, data.version);
+    text.push_back('}');
+    return text;
 }
 
 ParseResult parse_save(std::string_view text, const Tuning& tuning, const SaveSchema& schema)
@@ -661,11 +707,9 @@ ParseResult parse_save(std::string_view text, const Tuning& tuning, const SaveSc
         return damaged(valid.error(), file_version);
     }
 
-    ParseResult result;
-    result.status = LoadStatus::OK;
-    result.data = std::move(*data);
-    result.file_version = file_version;
-    return result;
+    // Built in one go, so the default save a ParseResult would hold first is never made.
+    return ParseResult{
+        .status = LoadStatus::OK, .data = std::move(*data), .damage = std::nullopt, .file_version = file_version};
 }
 
 std::expected<std::string, SaveError> serialise_shared(const SharedData& data, const Tuning& tuning,
@@ -679,10 +723,14 @@ std::expected<std::string, SaveError> serialise_shared(const SharedData& data, c
         return std::unexpected(valid.error());
     }
 
-    Value root = Value::object();
-    root.set("version", Value::integer(schema.current_version));
-    root.set("shared", write_shared(data));
-    return json::write(root);
+    std::string text;
+    text.reserve(estimated_size(data) + 32);
+    text.append("{\"shared\":");
+    append_shared(text, data);
+    text.append(",\"version\":");
+    json::append_integer(text, schema.current_version);
+    text.push_back('}');
+    return text;
 }
 
 SharedParseResult parse_shared(std::string_view text, const Tuning& tuning, const SaveSchema& schema)
