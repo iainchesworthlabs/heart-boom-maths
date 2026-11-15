@@ -111,4 +111,14 @@ private:
 /// output is always valid JSON and `parse` accepts it.
 [[nodiscard]] std::string write(const Value& value);
 
+/// The two pieces `write` is made of, for a caller that holds typed data and can write the text straight, without
+/// building a `Value` first. The caller keeps the object's keys in ascending order, as `write` does, and then the text
+/// is the one `write` would give.
+///
+/// A string with its quotes, escaped as `write` escapes one (an invalid byte becomes U+FFFD).
+void append_string(std::string& out, std::string_view text);
+
+/// A 64-bit integer in decimal.
+void append_integer(std::string& out, std::int64_t value);
+
 } // namespace heart_boom_maths::json
