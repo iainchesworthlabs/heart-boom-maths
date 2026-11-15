@@ -693,3 +693,62 @@ TEST_CASE("Event::append_to lists every field in a fixed order", "[unit][session
     REQUIRE(out[1] == 3);
     REQUIRE(out[20] == 99);
 }
+
+TEST_CASE("A paused session takes the wallet and the win mark the save holds now", "[unit][session]")
+{
+    GameSession s(tuning(), 14);
+    s.set_wallet(10);
+    s.start_game();
+    answer_right(s);
+    answer_right(s);
+    s.pause();
+    REQUIRE(s.view().wallet == 12);
+
+    // A restore brings back the wallet of the pause; the player's wallet has moved on since.
+    GameSession resumed(tuning(), 1);
+    REQUIRE(resumed.restore(s.snapshot()));
+    REQUIRE(resumed.view().state == SessionState::PAUSED);
+    REQUIRE(resumed.view().wallet == 12);
+    resumed.set_wallet(40);
+    resumed.set_won_once(true);
+    REQUIRE(resumed.view().state == SessionState::PAUSED);
+    REQUIRE(resumed.view().wallet == 40);
+    REQUIRE(resumed.view().won_once);
+    resumed.set_wallet(-3); // a negative wallet becomes 0, as before a game
+    REQUIRE(resumed.view().wallet == 0);
+    resumed.set_wallet(40);
+
+    // Nothing else changed, and play goes on from the new wallet. A hint costs 2.
+    REQUIRE(resumed.view().points == s.view().points);
+    REQUIRE(resumed.view().ticks_left == s.view().ticks_left);
+    resumed.resume();
+    resumed.use_hint();
+    REQUIRE(resumed.view().wallet == 38);
+}
+
+TEST_CASE("The wallet is still ignored while a game is played, on a card and on the win screen", "[unit][session]")
+{
+    GameSession s(tuning(), 15);
+    s.set_wallet(5);
+    s.start_game();
+    s.set_wallet(99);
+    s.set_won_once(true);
+    REQUIRE(s.view().wallet == 5);
+    REQUIRE_FALSE(s.view().won_once);
+
+    play_level_right(s);
+    REQUIRE(s.view().state == SessionState::LEVEL_CLEAR);
+    const std::uint64_t on_card = s.state_hash();
+    s.set_wallet(99);
+    s.set_won_once(true);
+    REQUIRE(s.state_hash() == on_card);
+
+    GameSession won(tuning(), 16);
+    reach_level(won, tuning().campaign_levels);
+    play_level_right(won);
+    REQUIRE(won.view().state == SessionState::WON);
+    const std::uint64_t on_win = won.state_hash();
+    won.set_wallet(99);
+    won.set_won_once(false);
+    REQUIRE(won.state_hash() == on_win);
+}

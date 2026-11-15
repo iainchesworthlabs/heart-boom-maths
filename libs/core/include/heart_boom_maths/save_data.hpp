@@ -251,4 +251,9 @@ void record_best(Player& player, std::int64_t score) noexcept;
                                                           std::int64_t score,
                                                           const Tuning& tuning = Tuning::defaults());
 
+/// Makes an active player the current one: the choice WHO'S PLAYING offers. Refused with NOT_FOUND when no active player
+/// has that id (a removed player counts as none), and the data is then left as it was. Changes nothing else, so the
+/// caller records the old player's wallet first and gives the session the new one's.
+[[nodiscard]] std::expected<void, PlayerError> set_current_player(SaveData& data, std::string_view id);
+
 } // namespace heart_boom_maths
