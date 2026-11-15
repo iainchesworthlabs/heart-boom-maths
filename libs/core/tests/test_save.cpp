@@ -215,6 +215,38 @@ TEST_CASE("the serialised form is stable", "[unit][save]")
             R"("top10":[{"device":"9f1c2a7b3d4e5f60","name":"ROCKET","score":1640,"seq":2}]},"version":2})");
 }
 
+TEST_CASE("the text of a save is what the JSON writer gives for the document it holds", "[unit][save]")
+{
+    // The save is written without a tree of values in between, so this holds it to the writer's form: members in key
+    // order, no spaces. A member written out of place would come back in its place when the text is read and written.
+    SaveData extremes = sample_data();
+    extremes.device.next_seq = MAX_SAVED_COUNTER;
+    extremes.device.run = std::vector<std::int64_t>{INT64_MIN_VALUE, INT64_MAX_VALUE, 0, -1};
+    extremes.shared.players[0].coins = {{std::string(THIS_DEVICE), MAX_SAVED_COINS, MAX_SAVED_COINS}};
+    extremes.shared.top10 = {{"A", INT64_MAX_VALUE, std::string(THIS_DEVICE), MAX_SAVED_COUNTER}, {"B", 1, "", 0}};
+    SaveData empty_run = sample_data();
+    empty_run.device.run = std::vector<std::int64_t>{};
+    SaveData no_players;
+    no_players.shared.players.clear();
+    no_players.device.run.reset();
+    no_players.device.run_player.clear();
+
+    for (const SaveData* data : {&extremes, &empty_run, &no_players})
+    {
+        const auto text = serialise(*data);
+        REQUIRE(text.has_value());
+        const auto document = json::parse(*text);
+        REQUIRE(document.has_value());
+        REQUIRE(json::write(*document) == *text);
+
+        const auto payload = serialise_shared(data->shared);
+        REQUIRE(payload.has_value());
+        const auto payload_document = json::parse(*payload);
+        REQUIRE(payload_document.has_value());
+        REQUIRE(json::write(*payload_document) == *payload);
+    }
+}
+
 TEST_CASE("a save holds 64-bit extremes and counters at their bounds", "[unit][save]")
 {
     SaveData data = sample_data();
