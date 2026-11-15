@@ -217,7 +217,8 @@ enum class PlayerError
 
 /// Adds an unnamed player with the id the caller made (`hex_id`). Refused when the active count is already
 /// `max_players` (a removed player does not count), when the id is not 16 lowercase hex digits or is already in the
-/// list, or when the list is full. Does not change the current player.
+/// list, or when the list is full. The player goes in at its canonical place (see `player_id_precedes`). Does not
+/// change the current player.
 [[nodiscard]] std::expected<void, PlayerError> add_player(SharedData& shared, std::string id,
                                                           const Tuning& tuning = Tuning::defaults());
 
