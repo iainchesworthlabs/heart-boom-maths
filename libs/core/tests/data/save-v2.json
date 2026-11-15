@@ -1,0 +1,55 @@
+{
+  "version": 2,
+  "device": {
+    "id": "9f1c2a7b3d4e5f60",
+    "sound": true,
+    "music": false,
+    "haptics": false,
+    "game_center": true,
+    "cloud_sync": true,
+    "current_player": "a1b2c3d4e5f60718",
+    "next_seq": 4,
+    "run": [3, 0, 1250, 4, 2, 7, 100, 1, 2, 3, -5, 9223372036854775807],
+    "run_player": "a1b2c3d4e5f60718"
+  },
+  "shared": {
+    "players": [
+      {
+        "id": "first",
+        "name": "ADA",
+        "name_rev": 2,
+        "removed": false,
+        "won_once": true,
+        "best": 48210,
+        "coins": [
+          { "device": "9f1c2a7b3d4e5f60", "earned": 200, "spent": 63 },
+          { "device": "0123456789abcdef", "earned": 40, "spent": 0 }
+        ]
+      },
+      {
+        "id": "a1b2c3d4e5f60718",
+        "name": "",
+        "name_rev": 0,
+        "removed": false,
+        "won_once": false,
+        "best": 0,
+        "coins": []
+      },
+      {
+        "id": "00000000000000ff",
+        "name": "OLD",
+        "name_rev": 1,
+        "removed": true,
+        "won_once": false,
+        "best": 120,
+        "coins": [{ "device": "9f1c2a7b3d4e5f60", "earned": 5, "spent": 5 }]
+      }
+    ],
+    "top10": [
+      { "name": "ADA", "score": 48210, "device": "9f1c2a7b3d4e5f60", "seq": 1 },
+      { "name": "BEN", "score": 31000, "device": "0123456789abcdef", "seq": 7 },
+      { "name": "CY", "score": 31000, "device": "9f1c2a7b3d4e5f60", "seq": 3 },
+      { "name": "DI", "score": 120, "device": "9f1c2a7b3d4e5f60", "seq": 2 }
+    ]
+  }
+}
