@@ -31,9 +31,6 @@ Item {
         objectName: "windowCues"
         anchors.fill: parent
         alert: shell.alertShown
-        unsafeLeft: frame.unsafeLeft
-        unsafeTop: frame.unsafeTop
-        unsafeRight: frame.unsafeRight
         unsafeBottom: frame.unsafeBottom
     }
 

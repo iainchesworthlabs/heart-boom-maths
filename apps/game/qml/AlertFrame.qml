@@ -8,22 +8,25 @@ import QtQuick
 // content stays inside the safe area. The play screen drives it through the shell (`alert` and `flash()`); nothing here
 // takes a tap, a key or a screen reader's attention.
 //
-// A phone's corners are rounded and its cut-out hides part of the top edge, so an 8 pixel line at the window edge would
-// all but vanish there. Each side is therefore as wide as the line plus the margin the device keeps clear on that side:
-// the frame is the old one (its line just inside the safe area) carried out to the edge, and it reads as a frame at the
-// corners too. With no margins (a desktop window) it is the plain 8 pixel line at the window edge, as board CP3 draws it.
+// The frame is one thin line whose outer edge is the window's edge, the same width all the way round, whatever the safe
+// area is: the status bar and the home indicator sit inside it and stay readable. Qt does not report how round a display's
+// corners are, so a rule stands in. A window with no bottom margin (a desktop window, a browser, a phone with a square
+// screen) gets square corners and the plain 8 pixel line of board CP3. A bottom margin is the home indicator, and only
+// phones and tablets with rounded screens have one, so the frame's outer corners are rounded to follow the screen. Real
+// corners differ by device, so the radius is a middle value from Theme: where the screen is rounder than the frame, the
+// screen cuts the frame's corner and the line is wide enough not to vanish there; where it is less round, a small gap shows.
 Item {
     id: root
 
     /// True while the red frame shows.
     property bool alert: false
-    /// What the device keeps clear on each side, from SafeAreaFrame.
-    property real unsafeLeft: 0
-    property real unsafeTop: 0
-    property real unsafeRight: 0
+    /// What the device keeps clear at the bottom, from SafeArea: above zero on a screen with rounded corners.
     property real unsafeBottom: 0
-    /// The line of the frame inside the safe area.
-    property real lineWidth: 8
+
+    readonly property bool roundedScreen: unsafeBottom > 0
+    readonly property real lineWidth: roundedScreen ? Theme.alertLineRounded : Theme.alertLine
+    readonly property real cornerRadius: !roundedScreen ? 0
+        : (Theme.sizeClassFor(Math.min(width, height)) === "compact" ? Theme.alertCornerCompact : Theme.alertCornerRegular)
 
     /// A short white flash over the window: the visual twin of the rising tone.
     function flash() {
@@ -32,14 +35,18 @@ Item {
 
     enabled: false
 
-    // The red frame: four bars that do not overlap, so the pulse of the group's opacity never doubles up at a corner.
-    Item {
+    // The red frame: one transparent rectangle with a border, so the pulse of its opacity moves only the line.
+    Rectangle {
         id: edge
 
         objectName: "alertEdge"
         anchors.fill: parent
         visible: root.alert
         enabled: false
+        color: "transparent"
+        radius: root.cornerRadius
+        border.width: root.lineWidth
+        border.color: Theme.red
 
         SequentialAnimation on opacity {
             running: edge.visible
@@ -57,46 +64,6 @@ Item {
                 duration: 450
                 easing.type: Easing.InOutSine
             }
-        }
-
-        Rectangle {
-            id: topBar
-
-            objectName: "alertEdgeTop"
-            x: 0
-            y: 0
-            width: edge.width
-            height: root.lineWidth + root.unsafeTop
-            color: Theme.red
-        }
-
-        Rectangle {
-            id: bottomBar
-
-            objectName: "alertEdgeBottom"
-            x: 0
-            y: edge.height - height
-            width: edge.width
-            height: root.lineWidth + root.unsafeBottom
-            color: Theme.red
-        }
-
-        Rectangle {
-            objectName: "alertEdgeLeft"
-            x: 0
-            y: topBar.height
-            width: root.lineWidth + root.unsafeLeft
-            height: Math.max(0, edge.height - topBar.height - bottomBar.height)
-            color: Theme.red
-        }
-
-        Rectangle {
-            objectName: "alertEdgeRight"
-            x: edge.width - width
-            y: topBar.height
-            width: root.lineWidth + root.unsafeRight
-            height: Math.max(0, edge.height - topBar.height - bottomBar.height)
-            color: Theme.red
         }
     }
 

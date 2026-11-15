@@ -11,6 +11,7 @@
 #include "services/clock.hpp"
 
 #include <QByteArray>
+#include <QImage>
 #include <QObject>
 #include <QQuickItem>
 #include <QQuickView>
@@ -90,6 +91,9 @@ public:
 
     /// Writes what the window shows to a PNG. Returns false when it could not.
     bool grab(const QString& path);
+
+    /// What the window shows, as an image. Null when it could not be rendered.
+    QImage grab_image();
 
 private:
     struct FromSource
