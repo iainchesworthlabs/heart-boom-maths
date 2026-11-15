@@ -127,10 +127,12 @@ are then removed.
 - **Safe area.** Qt 6.9 and later keep an iOS window inside the safe area unless it asks to be expanded: `Main.qml` sets
   `Qt.ExpandedClientAreaHint` on iOS, and without it the cut-out and home-indicator bars stay black. With the hint the
   cut-out of an iPhone, its rounded corners and the
-  home indicator are the application's to keep clear. `apps/game/qml/SafeAreaFrame.qml` (used by `Main.qml`) reads
+  home indicator are the application's to keep clear. `apps/game/qml/SafeAreaFrame.qml` (used by `AppRoot.qml`, which `Main.qml` shows) reads
   `SafeArea.margins` and lays the application shell out inside them; the yellow halftone page runs under the unsafe edges,
   with its dots in step with the page inside. Desktop windows report zero margins. The tests stand in for a phone's
-  margins with `SafeArea.additionalMargins`.
+  margins with `SafeArea.additionalMargins`. The red alert frame and the white streak flash are not inset: `AlertFrame.qml`
+  covers the whole window from `AppRoot.qml`, with each side of the frame as wide as its 8 pixel line plus the margin on
+  that side, so it reads at the rounded corners and beside the cut-out. Seeing that needs a device.
 - **The halftone page** is a repeated picture of one dot (`apps/game/images/halftone/`, drawn by
   `tools/assets/make_halftone_tiles.py`), not a Canvas. A Canvas fills in after the screen appears, and on a phone that was
   a flash of black on every screen change.

@@ -1076,6 +1076,115 @@ TEST_CASE("a refused adoption leaves the local save as it was", "[unit][save][me
     REQUIRE(local == before);
 }
 
+namespace
+{
+
+// The incoming shared part for the next_seq tests: the local players and these entries, in canonical form.
+SharedData incoming_with(std::vector<ScoreEntry> top10)
+{
+    return canonical(shared_of(local_save().shared.players, std::move(top10)));
+}
+
+} // namespace
+
+TEST_CASE("adopting raises next_seq past this device's own entries that are as new or newer", "[unit][save][merge]")
+{
+    // A device restored from a backup: its counter says 12, and the shared list holds its entries up to 14.
+    SaveData local = local_save();
+    const SaveData before = local;
+    const SharedData incoming = incoming_with({entry("A", 90, DEVICE_A, 13), entry("B", 80, DEVICE_A, 14),
+                                               entry("C", 70, DEVICE_A, 11), entry("D", 60, DEVICE_A, 3)});
+
+    REQUIRE(adopt_shared(local, incoming, hex_id(77)).has_value());
+    REQUIRE(local.device.next_seq == 15);
+    REQUIRE(local.shared == incoming);
+    DeviceData expected = before.device;
+    expected.next_seq = 15;
+    REQUIRE(local.device == expected); // nothing else on the device moved
+    REQUIRE(validate(local).has_value());
+
+    // The point of it: the next score takes a number nobody has, so a later merge keeps it.
+    REQUIRE(record_score(local, PLAYER_2, "NEW", 85).has_value());
+    const auto again = merge(local.shared, incoming);
+    REQUIRE(again.has_value());
+    REQUIRE(std::ranges::count_if(again->top10, [](const ScoreEntry& e) { return e.name == "NEW"; }) == 1);
+    REQUIRE(local.shared.top10.size() == again->top10.size());
+}
+
+TEST_CASE("adopting leaves next_seq alone when it is already past this device's own entries", "[unit][save][merge]")
+{
+    SECTION("the newest own entry is the one just before it")
+    {
+        SaveData local = local_save(); // next_seq 12
+        REQUIRE(
+            adopt_shared(local, incoming_with({entry("A", 90, DEVICE_A, 11), entry("B", 80, DEVICE_A, 2)}), hex_id(77))
+                .has_value());
+        REQUIRE(local.device.next_seq == 12);
+    }
+    SECTION("it is never lowered, however old the entries are")
+    {
+        SaveData local = local_save();
+        local.device.next_seq = 40;
+        REQUIRE(adopt_shared(local, incoming_with({entry("A", 90, DEVICE_A, 5)}), hex_id(77)).has_value());
+        REQUIRE(local.device.next_seq == 40);
+    }
+    SECTION("there are no entries of its own, or none at all")
+    {
+        SaveData local = local_save();
+        REQUIRE(adopt_shared(local, incoming_with({}), hex_id(77)).has_value());
+        REQUIRE(local.device.next_seq == 12);
+    }
+}
+
+TEST_CASE("adopting ignores the entries of other devices when it raises next_seq", "[unit][save][merge]")
+{
+    SaveData local = local_save();
+    const SharedData incoming = incoming_with({entry("A", 90, DEVICE_B, 99), entry("B", 80, DEVICE_C, 500),
+                                               entry("C", 70, "", 700), entry("D", 60, DEVICE_A, 4)});
+    REQUIRE(adopt_shared(local, incoming, hex_id(77)).has_value());
+    REQUIRE(local.device.next_seq == 12); // the empty device is not this device, which has an id
+}
+
+TEST_CASE("adopting on a device with no id yet counts the entries with an empty device", "[unit][save][merge]")
+{
+    // The device has not been given an id, so the entries with no device are the ones `assign_device_id` will make its
+    // own, and its numbers must clear them.
+    SaveData local = local_save();
+    local.device.id.clear();
+    local.device.next_seq = 3;
+    const SharedData incoming = incoming_with(
+        {entry("A", 90, DEVICE_B, 99), entry("B", 80, "", 6), entry("C", 70, "", 2), entry("D", 60, DEVICE_C, 50)});
+    REQUIRE(adopt_shared(local, incoming, hex_id(77)).has_value());
+    REQUIRE(local.device.next_seq == 7);
+
+    // With nothing of its own to clear, the counter stays.
+    SaveData fresh = local_save();
+    fresh.device.id.clear();
+    fresh.device.next_seq = 1;
+    REQUIRE(adopt_shared(fresh, incoming_with({entry("A", 90, DEVICE_B, 99)}), hex_id(77)).has_value());
+    REQUIRE(fresh.device.next_seq == 1);
+}
+
+TEST_CASE("adopting refuses rather than wrap a counter, and leaves the local save as it was", "[unit][save][merge]")
+{
+    SaveData local = local_save();
+    const SaveData before = local;
+    REQUIRE(adopt_shared(local, incoming_with({entry("A", 90, DEVICE_A, MAX_SAVED_COUNTER)}), hex_id(77)) ==
+            std::unexpected(PlayerError::COUNTER_FULL));
+    REQUIRE(local == before);
+
+    // One short of the bound is fine: the counter reaches it, and no further.
+    REQUIRE(
+        adopt_shared(local, incoming_with({entry("A", 90, DEVICE_A, MAX_SAVED_COUNTER - 1)}), hex_id(77)).has_value());
+    REQUIRE(local.device.next_seq == MAX_SAVED_COUNTER);
+    REQUIRE(validate(local).has_value());
+
+    // An entry of another device at the bound is no business of this one's counter.
+    SaveData other = local_save();
+    REQUIRE(adopt_shared(other, incoming_with({entry("A", 90, DEVICE_B, MAX_SAVED_COUNTER)}), hex_id(77)).has_value());
+    REQUIRE(other.device.next_seq == 12);
+}
+
 TEST_CASE("a merge then an adoption is a sync, whichever device runs it first", "[unit][save][merge]")
 {
     // Two devices that played apart, each with its own run and current player.

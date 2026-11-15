@@ -1,0 +1,1 @@
+**A new player always comes last on WHO'S PLAYING.** A player's id now starts with a creation counter, so adding a player no longer puts it among the others and changes the number of a player with no name. Two devices that each add a player while apart still end with one order after a sync.

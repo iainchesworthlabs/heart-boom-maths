@@ -202,6 +202,21 @@ std::expected<void, PlayerError> adopt_shared(SaveData& local, SharedData merged
             next.device.run_player.clear();
         }
     }
+    // A device restored from an older backup can meet its own newer entries in the merged list. Its next entry must not
+    // take a number one of them already has, or a later merge would take the new entry for a duplicate and drop it.
+    // An empty device id matches the entries with an empty device: those are the ones `assign_device_id` will give
+    // this device's id to.
+    for (const ScoreEntry& entry : next.shared.top10)
+    {
+        if (entry.device == next.device.id && entry.seq >= next.device.next_seq)
+        {
+            if (entry.seq >= MAX_SAVED_COUNTER)
+            {
+                return std::unexpected(PlayerError::COUNTER_FULL);
+            }
+            next.device.next_seq = entry.seq + 1;
+        }
+    }
     local = std::move(next);
     return {};
 }

@@ -155,8 +155,10 @@ qt_add_resources(heart_boom_maths_app images
 # the other files in the directory only then. One file per line, so two branches that each add a screen rarely collide.
 set(HEART_BOOM_MATHS_QML_FILES
     qml/AboutScreen.qml
+    qml/AlertFrame.qml
     qml/AnswerGrid.qml
     qml/AnswerTile.qml
+    qml/AppRoot.qml
     qml/AppShell.qml
     qml/ArrowIcon.qml
     qml/BackIcon.qml

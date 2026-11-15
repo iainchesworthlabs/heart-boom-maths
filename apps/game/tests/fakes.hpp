@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <functional>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <string>
@@ -28,6 +29,19 @@ namespace hbm_test
 {
 
 using namespace heart_boom_maths::game;
+
+/// An id source for a test that adds players: a short fixed list, repeated, so nothing depends on the system random
+/// source. The values fall high and low on purpose, so a rig would fail if the random part of an id decided its place
+/// in the list.
+inline std::function<std::uint64_t()> fixed_id_source()
+{
+    return [next = std::size_t{0}]() mutable
+    {
+        static constexpr std::uint64_t DRAWS[] = {0x9F1C2A7B3D4E5F60ULL, 0x0000000000000003ULL, 0xFFFFFFFFFFFFFFFFULL,
+                                                  0x0000000000000000ULL, 0x8000000000000001ULL, 0x00000000DEADBEEFULL};
+        return DRAWS[next++ % std::size(DRAWS)];
+    };
+}
 
 class RecordingAudio final : public AudioService
 {

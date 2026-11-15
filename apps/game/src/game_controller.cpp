@@ -399,7 +399,7 @@ QString GameController::addPlayer()
     // Two draws never meet in practice; a few tries cover a source that repeats itself.
     for (int attempt = 0; attempt < 4; ++attempt)
     {
-        std::string id = hex_id(m_IdSource());
+        std::string id = new_player_id(m_Save.shared, m_IdSource());
         const auto added = add_player(m_Save.shared, id, *m_Tuning);
         if (added.has_value())
         {
@@ -1129,7 +1129,8 @@ void GameController::assign_ids()
     {
         qCWarning(lcGame) << "The device id could not be assigned";
     }
-    if (current_player(m_Save) == nullptr && !ensure_current_player(m_Save, hex_id(m_IdSource()), *m_Tuning))
+    if (current_player(m_Save) == nullptr &&
+        !ensure_current_player(m_Save, new_player_id(m_Save.shared, m_IdSource()), *m_Tuning))
     {
         qCWarning(lcGame) << "There is no current player and none could be made";
     }

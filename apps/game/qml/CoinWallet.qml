@@ -17,16 +17,19 @@ Item {
     property real radius: Theme.radiusSmall
     // The count in the heading font, as the title screen has it.
     property bool displayNumerals: false
+    // The coin and the count without the pill, for a card that already has its own outline (the title's player card).
+    property bool plain: false
 
-    implicitWidth: row.implicitWidth + 24 + 2 * borderWidth
-    implicitHeight: pixelSize + 16 + 2 * borderWidth
+    implicitWidth: plain ? row.implicitWidth : row.implicitWidth + 24 + 2 * borderWidth
+    implicitHeight: plain ? Math.max(coinSize, row.implicitHeight) : pixelSize + 16 + 2 * borderWidth
 
     Accessible.role: Accessible.StaticText
     Accessible.name: qsTr("%1 coins").arg(root.value)
 
     ComicCard {
         anchors.fill: parent
-        borderWidth: root.borderWidth
+        fillColor: root.plain ? "transparent" : Theme.white
+        borderWidth: root.plain ? 0 : root.borderWidth
         radius: root.radius
         shadowOffset: 0
 

@@ -44,9 +44,13 @@ enum class MergeError
 
 /// Makes a merged shared part the local one and repairs what stays on the device. When `current_player` no longer
 /// names an active player, `ensure_current_player` picks one (and, when nobody is active, adds one with
-/// `new_player_id`). A saved run whose player is now removed or missing is dropped, with its `run_player`. Every other
-/// device field is left alone. `merged` is taken as given and is not checked: it comes from `merge` or from a payload
-/// that `parse_shared` has validated. Fails only as `ensure_current_player` does, and then `local` is unchanged.
+/// `new_player_id`). A saved run whose player is now removed or missing is dropped, with its `run_player`. `next_seq`
+/// is raised to one past the largest `seq` of this device's own entries in the merged top 10 when that is larger, and
+/// never lowered, so a device restored from an older backup does not give a new entry a number it has already used
+/// (an empty device id matches the entries with an empty device). Every other device field is left alone. `merged` is
+/// taken as given and is not checked: it comes from `merge` or from a payload that `parse_shared` has validated. Fails
+/// as `ensure_current_player` does, and with COUNTER_FULL when `next_seq` would have to pass MAX_SAVED_COUNTER; then
+/// `local` is unchanged.
 [[nodiscard]] std::expected<void, PlayerError>
 adopt_shared(SaveData& local, SharedData merged, std::string new_player_id, const Tuning& tuning = Tuning::defaults());
 

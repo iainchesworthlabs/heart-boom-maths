@@ -29,6 +29,9 @@ Item {
     readonly property bool playing: game.state === GameController.Playing
     readonly property bool alertShown: game.alert && playing
 
+    // The multiplier has just stepped up.
+    signal streakStepped
+
     readonly property var shownParts: holding ? feedback.parts : game.questionParts
     readonly property var shownTiles: holding ? feedback.tiles : game.tiles
     readonly property int shownRemoved: holding ? feedback.removedTiles : game.removedTiles
@@ -486,71 +489,15 @@ Item {
         }
     }
 
-    // The edge of the play area pulses in the alert: a red frame, one more cue besides the red fuse and the words.
-    Rectangle {
-        id: edge
-
-        objectName: "alertEdge"
-        anchors.fill: parent
-        visible: root.alertShown
-        color: "transparent"
-        border.width: 8
-        border.color: Theme.red
-        enabled: false
-
-        SequentialAnimation on opacity {
-            running: edge.visible
-            loops: Animation.Infinite
-
-            NumberAnimation {
-                from: 1
-                to: 0.45
-                duration: 450
-                easing.type: Easing.InOutSine
-            }
-            NumberAnimation {
-                from: 0.45
-                to: 1
-                duration: 450
-                easing.type: Easing.InOutSine
-            }
-        }
-    }
-
-    // A short white flash when the multiplier steps up: the visual twin of the rising tone.
-    Rectangle {
-        id: flash
-
-        objectName: "streakFlash"
-        anchors.fill: parent
-        color: Theme.white
-        opacity: 0
-        enabled: false
-
-        SequentialAnimation {
-            id: flashAnimation
-
-            NumberAnimation {
-                target: flash
-                property: "opacity"
-                to: 0.5
-                duration: 70
-            }
-            NumberAnimation {
-                target: flash
-                property: "opacity"
-                to: 0
-                duration: 220
-            }
-        }
-    }
-
+    // The red frame of the alert and the white flash of a multiplier step are not drawn here: they cover the whole window,
+    // under the cut-out and the home indicator, and this screen is laid out inside the safe area. AppShell hands them up
+    // (`alertShown`, `streakStepped`) and AlertFrame draws them.
     Connections {
         target: root.feedback
 
         function onHeldChanged() {
             if (root.feedback.multiplierRose) {
-                flashAnimation.restart();
+                root.streakStepped();
             }
         }
     }

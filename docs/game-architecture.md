@@ -186,9 +186,9 @@ Version 2 (decided 15 Nov 2026, see `SPEC.md`, Players and Sync) splits the docu
 | Field | Holds |
 |---|---|
 | `device.id` | 16 lowercase hex digits, made once from the system's random source by the app (the core has none). Empty until then |
-| `device.next_seq` | The next number this device gives a top 10 entry. With `device`, it makes an entry's identity, so a merge can drop duplicates |
+| `device.next_seq` | The next number this device gives a top 10 entry. With `device`, it makes an entry's identity, so a merge can drop duplicates. Adopting a merge keeps it past this device's own entries (see `adopt_shared`) |
 | `device.run`, `device.run_player` | The saved run and the player who paused it. Both absent when there is none |
-| `players[].id` | `first` for the player every save starts with, so two devices' first players merge into one. Later players get 16 hex digits from the app |
+| `players[].id` | `first` for the player every save starts with, so two devices' first players merge into one. A later player's id is 16 hex digits made by `new_player_id`: a 4 digit creation counter (one more than the largest in the list, removed players included, stopping at `ffff`), then 12 random digits. The list is kept in ascending id order, so this puts a new player last on the device that adds it, and the random part still breaks a tie between two devices that added while apart |
 | `players[].name_rev` | Counts name changes. The higher one wins a merge. On a tie the name that sorts first wins |
 | `players[].removed` | A removed player is kept as a mark, so a merge cannot bring the player back |
 | `players[].coins` | One entry per device that earned or spent for this player. The wallet is the sum of `earned` less the sum of `spent`, never below 0 |
@@ -212,7 +212,7 @@ As built (`save_data.hpp`, `save_codec.hpp`):
 - Two top 10 entries with one `device` and `seq` are one entry. Should they differ (a damaged file), the higher score is kept, then the name that sorts first. A name tie on `name_rev` goes to the name that sorts first.
 - More than `max_players` active players is kept (P6). A result over `MAX_SAVED_PLAYERS`, or over `MAX_SAVED_COIN_ENTRIES` for one player, is a `MergeError`: nothing is cut, because a cut would make the result depend on the order of merging.
 - `serialise_shared` and `parse_shared` (`save_codec.hpp`) are the sync payload: `{"version": 2, "shared": {...}}`, where `shared` is byte for byte what `serialise` writes in a save, checked by the same `validate`. A payload of a later version reads as NEWER and is left alone (P7); one below 2 is DAMAGED.
-- `adopt_shared` puts a merged part in the local save and repairs the device part: `ensure_current_player` when the current player is gone or removed, and `run` with `run_player` dropped when that player is gone or removed. No other device field changes, and a refusal leaves the save as it was. When to push, pull and adopt is the sync layer's business.
+- `adopt_shared` puts a merged part in the local save and repairs the device part: `ensure_current_player` when the current player is gone or removed, and `run` with `run_player` dropped when that player is gone or removed. `next_seq` is raised to one past the largest `seq` of this device's own entries in the merged top 10 when that is larger (a device restored from an older backup would otherwise reuse a number, and its next score would be dropped as a duplicate), and a refusal, including a `next_seq` that would pass `MAX_SAVED_COUNTER`, leaves the save as it was. No other device field changes. When to push, pull and adopt is the sync layer's business.
 
 ```cpp
 class SaveStore
@@ -245,7 +245,7 @@ QML screens driven by one view-model each. The QML is the same on every platform
 
 | Screen | Board | Shows |
 |---|---|---|
-| Title | CP1, CP18 | Best score, coins, the player chip, CONTINUE when the current player has a saved run |
+| Title | CP1, CP18 | The player card (name, best score, coins), CONTINUE when the current player has a saved run |
 | Play | CP2 to CP5, CP13 | Question, four tiles, timer, multiplier, streak, hint button |
 | Level clear | CP6 | Points breakdown, coins earned, wallet |
 | Win | CP8 | The 1,000-coin bonus, KEEP GOING (endless) or FINISH |
@@ -416,7 +416,7 @@ Deviations from the sketches above, all small:
 - The saved run (P4): `hasSavedRun`, `savedRun` and `continueGame()` need `device.run_player` to be the current player. A new game and a resume drop the run only when it is the current player's; a pause saves a run for the current player and replaces whoever's it was; a game over spends the player's own run; removing a player drops that player's run; a run whose player is not active when the save loads is dropped. `continueGame()` gives the session the player's wallet and mark after the restore.
 - The top 10 (SPEC, Leaderboard): a finished game that earns a place for a player with a name is saved by `finish_game` under that name, `scoreSavedAtOnce` follows `gameOver`, and no name screen shows. For a player with no name `saveName` names the player (`rename_player`) and saves the entry in one step, and SKIP drops the entry. Names are trimmed of spaces at both ends.
 - Best and NEW BEST! (P3): every finished game calls `record_best` for the current player, and `newBest` is true when the score is above 0 and above that player's best from before the game. SKIP no longer clears it, because the best counts whether or not the entry is kept.
-- Screens: the title chip, `PlayersScreen` and `NameEntryScreen` in player mode (`docs/ui-components.md`); journeys in [User journeys](user-journeys.md), journey 6.
+- Screens: the title's player card, `PlayersScreen` and `NameEntryScreen` in player mode (`docs/ui-components.md`); journeys in [User journeys](user-journeys.md), journey 6.
 
 ### As built (sync)
 
