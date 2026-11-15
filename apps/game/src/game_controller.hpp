@@ -62,6 +62,10 @@ struct GameOptions
     /// to a fixed list so the number to type back is known.
     std::function<std::uint64_t()> gate_seed_source;
 
+    /// Where the 64 random bits come from that become this device's id, and the id of a player the save needs and does
+    /// not have. Empty means the system random generator. Tests set it to a fixed value so the ids are known.
+    std::function<std::uint64_t()> id_source;
+
     /// How long answer taps are ignored after a level starts or the pause screen closes. Tests that tap straight away
     /// set it to 0.
     std::int64_t tile_guard_ns = TILE_GUARD_NS;
@@ -424,6 +428,8 @@ private:
     void sync_haptics();
     void play_haptic(HapticId id);
     void remember_run();
+    void forget_saved_run();
+    void assign_ids();
 
     [[nodiscard]] static State to_state(SessionState state) noexcept;
 
@@ -466,6 +472,7 @@ private:
     bool m_ScoreSubmitted = false;
 
     std::function<std::uint64_t()> m_GateSeedSource;
+    std::function<std::uint64_t()> m_IdSource;
     GatePurpose m_GatePurpose = GatePurpose::None;
     GateChallenge m_GateChallenge;
     std::string m_GateUrl;

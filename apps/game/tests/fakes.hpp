@@ -3,6 +3,7 @@
 
 // Recording stand-ins for the platform services, so a test reads what the controller asked for.
 
+#include "heart_boom_maths/save_data.hpp"
 #include "services/audio_service.hpp"
 #include "services/backed_haptics_service.hpp"
 #include "services/clock.hpp"
@@ -300,5 +301,50 @@ public:
 private:
     bool m_Available;
 };
+
+// ---- Save data the way the game keeps it ----------------------------------------------------------------------------
+// The tests build a first-run save and give it what they need. The coins go under the empty device, as a version 1 save
+// had them, and the controller gives them to its own device id when it loads.
+
+/// The wallet of the current player.
+inline std::int64_t wallet_of(const heart_boom_maths::SaveData& data)
+{
+    const heart_boom_maths::Player* player = heart_boom_maths::current_player(data);
+    return player != nullptr ? heart_boom_maths::player_wallet(*player) : 0;
+}
+
+/// Sets the wallet of the current player.
+inline void give_wallet(heart_boom_maths::SaveData& data, std::int64_t coins)
+{
+    heart_boom_maths::Player* player = heart_boom_maths::current_player(data);
+    if (player != nullptr)
+    {
+        (void)heart_boom_maths::record_wallet(*player, data.device.id, coins);
+    }
+}
+
+/// Puts a top 10 in the save, numbered in rank order, and the best score of the current player to match.
+inline void give_top10(heart_boom_maths::SaveData& data, std::vector<heart_boom_maths::ScoreEntry> entries)
+{
+    std::int64_t seq = 1;
+    for (heart_boom_maths::ScoreEntry& entry : entries)
+    {
+        entry.device = data.device.id;
+        entry.seq = seq++;
+    }
+    data.device.next_seq = seq;
+    data.shared.top10 = std::move(entries);
+    if (heart_boom_maths::Player* player = heart_boom_maths::current_player(data); player != nullptr)
+    {
+        player->best = heart_boom_maths::best_score(data.shared.top10);
+    }
+}
+
+/// A saved run, paused by the current player.
+inline void give_run(heart_boom_maths::SaveData& data, std::vector<std::int64_t> values)
+{
+    data.device.run = std::move(values);
+    data.device.run_player = data.device.current_player;
+}
 
 } // namespace hbm_test

@@ -90,11 +90,15 @@ GameController::GameController(GameServices services, GameOptions options, QObje
     : QObject(parent), m_Services(services), m_Tuning(options.tuning), m_Session(*options.tuning, options.session_seed),
       m_SaveManager(*services.store, *options.tuning), m_Driver(options.tuning->ticks_per_second),
       m_TileGuardNs(options.tile_guard_ns), m_GateSeedSource(std::move(options.gate_seed_source)),
-      m_BuildInfo(std::move(options.build_info))
+      m_IdSource(std::move(options.id_source)), m_BuildInfo(std::move(options.build_info))
 {
     if (!m_GateSeedSource)
     {
         m_GateSeedSource = [] { return QRandomGenerator::system()->generate64(); };
+    }
+    if (!m_IdSource)
+    {
+        m_IdSource = [] { return QRandomGenerator::system()->generate64(); };
     }
 
     m_Timer.setInterval(TICK_POLL_INTERVAL_MS);
@@ -123,8 +127,12 @@ GameController::GameController(GameServices services, GameOptions options, QObje
         break;
     }
 
-    m_Session.set_wallet(m_Save.coins);
-    m_Session.set_won_once(m_Save.won_once);
+    assign_ids();
+    if (const Player* player = current_player(m_Save); player != nullptr)
+    {
+        m_Session.set_wallet(player_wallet(*player));
+        m_Session.set_won_once(player->won_once);
+    }
     m_Shown = m_Session.view();
     apply_settings();
     update_music();
@@ -163,13 +171,13 @@ bool GameController::continueGame()
 {
     HBM_ZONE("controller.continue_game");
     const SessionState before = m_Session.view().state;
-    if ((before != SessionState::IDLE && before != SessionState::GAME_OVER) || !m_Save.run.has_value())
+    if ((before != SessionState::IDLE && before != SessionState::GAME_OVER) || !m_Save.device.run.has_value())
     {
         return false;
     }
-    const std::vector<std::int64_t> values = *m_Save.run;
+    const std::vector<std::int64_t> values = *m_Save.device.run;
     // The run is spent as soon as it is read, whether or not it restores (SPEC: it resumes once).
-    m_Save.run.reset();
+    forget_saved_run();
     emit savedRunChanged();
     // A scratch session decides first, so a run the game would not offer leaves the real session untouched.
     GameSession scratch(*m_Tuning, 0);
@@ -243,7 +251,7 @@ void GameController::resume()
     }
     m_Session.resume();
     arm_tile_guard();
-    m_Save.run.reset();
+    forget_saved_run();
     emit savedRunChanged();
     process();
     persist();
@@ -284,7 +292,7 @@ int GameController::saveName(const QString& typed)
         return 0;
     }
     const std::string name = normalise_name(typed.toStdString(), *m_Tuning);
-    const auto rank = insert_score(m_Save.top10, name, m_FinalScore, *m_Tuning);
+    const auto rank = record_score(m_Save, m_Save.device.current_player, name, m_FinalScore, *m_Tuning);
     if (!rank.has_value())
     {
         return 0; // an empty name: the screen keeps SAVE disabled until there is one
@@ -321,11 +329,11 @@ QString GameController::normaliseName(const QString& typed) const
 
 void GameController::setSoundEnabled(bool enabled)
 {
-    if (m_Save.sound == enabled)
+    if (m_Save.device.sound == enabled)
     {
         return;
     }
-    m_Save.sound = enabled;
+    m_Save.device.sound = enabled;
     apply_settings();
     emit settingsChanged();
     persist();
@@ -333,11 +341,11 @@ void GameController::setSoundEnabled(bool enabled)
 
 void GameController::setMusicEnabled(bool enabled)
 {
-    if (m_Save.music == enabled)
+    if (m_Save.device.music == enabled)
     {
         return;
     }
-    m_Save.music = enabled;
+    m_Save.device.music = enabled;
     apply_settings();
     emit settingsChanged();
     persist();
@@ -345,11 +353,11 @@ void GameController::setMusicEnabled(bool enabled)
 
 void GameController::setHapticsEnabled(bool enabled)
 {
-    if (m_Save.haptics == enabled)
+    if (m_Save.device.haptics == enabled)
     {
         return;
     }
-    m_Save.haptics = enabled;
+    m_Save.device.haptics = enabled;
     apply_settings();
     emit settingsChanged();
     persist();
@@ -368,16 +376,16 @@ void GameController::requestGameCenter(bool enabled)
     }
     if (!enabled)
     {
-        if (m_Save.game_center)
+        if (m_Save.device.game_center)
         {
-            m_Save.game_center = false;
+            m_Save.device.game_center = false;
             apply_settings();
             emit settingsChanged();
             persist();
         }
         return;
     }
-    if (!m_Save.game_center)
+    if (!m_Save.device.game_center)
     {
         begin_gate(GatePurpose::GameCenter);
     }
@@ -418,7 +426,7 @@ bool GameController::submitGate(const QString& typed)
     }
     else if (purpose == GatePurpose::GameCenter)
     {
-        m_Save.game_center = true;
+        m_Save.device.game_center = true;
         apply_settings();
         emit settingsChanged();
         persist();
@@ -692,7 +700,7 @@ void GameController::remember_answer(const Event& event, bool correct)
 void GameController::finish_game(const Event& event)
 {
     HBM_ZONE("controller.finish_game");
-    m_Save.run.reset();
+    forget_saved_run();
     emit savedRunChanged();
 
     m_EndReason = event.reason == GameOverReason::BOMB   ? EndReason::Bomb
@@ -700,7 +708,7 @@ void GameController::finish_game(const Event& event)
                                                          : EndReason::Finish;
     m_FinalScore = event.total_points;
     m_FinalLevel = event.level;
-    const std::optional<int> rank = rank_for_score(m_Save.top10, m_FinalScore, *m_Tuning);
+    const std::optional<int> rank = rank_for_score(m_Save.shared.top10, m_FinalScore, *m_Tuning);
     m_NameRank = rank.value_or(0);
     m_NewBest = rank.has_value() && *rank == 1;
     m_HighlightRank = 0;
@@ -759,8 +767,15 @@ void GameController::persist()
 {
     HBM_ZONE("controller.persist");
     const SessionView& v = m_Session.view();
-    m_Save.coins = v.wallet;
-    m_Save.won_once = v.won_once;
+    if (Player* player = current_player(m_Save); player != nullptr)
+    {
+        // The wallet goes back to the player who played, as this device's earned or spent.
+        if (!record_wallet(*player, m_Save.device.id, v.wallet))
+        {
+            qCWarning(lcGame) << "The wallet could not be recorded";
+        }
+        player->won_once = v.won_once;
+    }
     const SaveOutcome outcome = m_SaveManager.save(m_Save);
     switch (outcome)
     {
@@ -779,16 +794,37 @@ void GameController::persist()
 void GameController::remember_run()
 {
     HBM_ZONE("controller.remember_run");
-    const bool had_run = m_Save.run.has_value();
+    const bool had_run = m_Save.device.run.has_value();
     if (m_Session.view().state == SessionState::PAUSED)
     {
-        m_Save.run = m_Session.snapshot();
+        m_Save.device.run = m_Session.snapshot();
+        m_Save.device.run_player = m_Save.device.current_player;
         emit savedRunChanged();
     }
     else if (had_run)
     {
-        m_Save.run.reset();
+        forget_saved_run();
         emit savedRunChanged();
+    }
+}
+
+void GameController::forget_saved_run()
+{
+    m_Save.device.run.reset();
+    m_Save.device.run_player.clear();
+}
+
+void GameController::assign_ids()
+{
+    // The ids come from the random source, not the core, which has none. Each is drawn only when it is needed, so a
+    // source that is a fixed list of values is used in a known order.
+    if (m_Save.device.id.empty() && !assign_device_id(m_Save, hex_id(m_IdSource())))
+    {
+        qCWarning(lcGame) << "The device id could not be assigned";
+    }
+    if (current_player(m_Save) == nullptr && !ensure_current_player(m_Save, hex_id(m_IdSource()), *m_Tuning))
+    {
+        qCWarning(lcGame) << "There is no current player and none could be made";
     }
 }
 
@@ -810,11 +846,11 @@ void GameController::end_gate()
 void GameController::apply_settings()
 {
     HBM_ZONE("controller.apply_settings");
-    m_Services.audio->set_enabled(m_Save.sound, m_Save.music);
-    m_Services.scores->set_enabled(m_Save.game_center && m_Services.scores->available());
+    m_Services.audio->set_enabled(m_Save.device.sound, m_Save.device.music);
+    m_Services.scores->set_enabled(m_Save.device.game_center && m_Services.scores->available());
     if (m_Services.haptics != nullptr)
     {
-        m_Services.haptics->set_enabled(m_Save.haptics);
+        m_Services.haptics->set_enabled(m_Save.device.haptics);
     }
 }
 
@@ -1073,7 +1109,7 @@ QVariantList GameController::top10() const
 {
     QVariantList list;
     int rank = 1;
-    for (const ScoreEntry& entry : m_Save.top10)
+    for (const ScoreEntry& entry : m_Save.shared.top10)
     {
         list.append(QVariantMap{
             {QStringLiteral("rank"), rank},
@@ -1087,7 +1123,8 @@ QVariantList GameController::top10() const
 
 qint64 GameController::best_score() const
 {
-    return heart_boom_maths::best_score(m_Save.top10);
+    const Player* player = current_player(m_Save);
+    return player != nullptr ? player->best : 0;
 }
 
 int GameController::highlight_rank() const
@@ -1097,19 +1134,19 @@ int GameController::highlight_rank() const
 
 bool GameController::has_saved_run() const
 {
-    return m_Save.run.has_value();
+    return m_Save.device.run.has_value();
 }
 
 QVariantMap GameController::saved_run() const
 {
-    if (!m_Save.run.has_value())
+    if (!m_Save.device.run.has_value())
     {
         return {};
     }
     // Asking the core is the only way to read the snapshot without knowing its layout. A scratch session takes it, so
     // the one in play is untouched, and a run the core would refuse shows no caption.
     GameSession scratch(*m_Tuning, 0);
-    if (!scratch.restore(*m_Save.run) || !is_resumable(scratch.view().state))
+    if (!scratch.restore(*m_Save.device.run) || !is_resumable(scratch.view().state))
     {
         return {};
     }
@@ -1132,17 +1169,17 @@ int GameController::first_level_seconds() const
 
 bool GameController::sound_enabled() const
 {
-    return m_Save.sound;
+    return m_Save.device.sound;
 }
 
 bool GameController::music_enabled() const
 {
-    return m_Save.music;
+    return m_Save.device.music;
 }
 
 bool GameController::game_center_enabled() const
 {
-    return m_Save.game_center && game_center_available();
+    return m_Save.device.game_center && game_center_available();
 }
 
 bool GameController::game_center_available() const
@@ -1152,7 +1189,7 @@ bool GameController::game_center_available() const
 
 bool GameController::haptics_enabled() const
 {
-    return m_Save.haptics;
+    return m_Save.device.haptics;
 }
 
 bool GameController::haptics_available() const

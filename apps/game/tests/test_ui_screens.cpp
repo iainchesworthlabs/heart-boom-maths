@@ -37,8 +37,8 @@ const QString REPOSITORY_URL = QStringLiteral("https://github.com/iainchesworthl
 std::string board_save()
 {
     SaveData data;
-    data.coins = 61;
-    data.top10.push_back(ScoreEntry{"BOMB SQUAD", 1640});
+    give_wallet(data, 61);
+    give_top10(data, {ScoreEntry{"BOMB SQUAD", 1640}});
     return *serialise(data);
 }
 
@@ -61,8 +61,8 @@ std::string saved_run_text(int right_answers = 2, int play_ms = 4000)
 std::string broken_run_text()
 {
     SaveData data;
-    data.coins = 7;
-    data.run = std::vector<std::int64_t>{1, 2, 3};
+    give_wallet(data, 7);
+    give_run(data, {1, 2, 3});
     return *serialise(data);
 }
 
@@ -385,8 +385,8 @@ TEST_CASE("Settings shows the switches with ON and OFF in words and writes them 
     REQUIRE(s.rig.store.text().has_value());
     const ParseResult saved = parse_save(*s.rig.store.text());
     REQUIRE(saved.status == LoadStatus::OK);
-    CHECK_FALSE(saved.data.sound);
-    CHECK_FALSE(saved.data.music);
+    CHECK_FALSE(saved.data.device.sound);
+    CHECK_FALSE(saved.data.device.music);
 
     s.tap("soundSwitch");
     CHECK(s.rig.controller.sound_enabled());
