@@ -251,9 +251,11 @@ another device earned, merged in while the session still held the old wallet, wo
 
 ### The entitlement rule
 
-The key-value store needs the entitlement `com.apple.developer.ubiquity-kvstore-identifier` (type string, value
-`$(TeamIdentifierPrefix)$(CFBundleIdentifier)` as Xcode writes it), which follows the provisioning profile exactly as the
-Game Center rule above does. Apple says an app must request it to use the store; what the store does without it is not
+The key-value store needs the entitlement `com.apple.developer.ubiquity-kvstore-identifier` (type string). The app asks for
+the full value, `$(TeamIdentifierPrefix)$(CFBundleIdentifier)`, which is `TEAMID.com.iainchesworthlabs.heartboommaths`, with
+no wildcard. The provisioning profile normally holds the key with the team id and a wildcard, `TEAMID.*`
+([TN2415](https://developer.apple.com/library/ios/technotes/tn2415/_index.html)), and the wildcard covers the full value.
+The entitlement follows the profile as the Game Center rule above does. Apple says an app must request it to use the store; what the store does without it is not
 documented on the pages read, so the game does not offer the switch without it. And Xcode refuses to sign a bundle that
 asks for an entitlement the profile lacks, so:
 
@@ -261,8 +263,10 @@ asks for an entitlement the profile lacks, so:
    with the Game Center entry when `HEART_BOOM_MATHS_IOS_GAME_CENTER` is ON and the key-value store entry when
    `HEART_BOOM_MATHS_IOS_ICLOUD` is ON. Both default to ON locally. With both OFF no entitlements file is given to Xcode.
 2. Step 2 of the signed build reads the profile and passes `-DHEART_BOOM_MATHS_IOS_ICLOUD=ON` only when the profile's
-   entitlements hold the key with the value `TEAMID.com.iainchesworthlabs.heartboommaths`, and `OFF` otherwise (a
-   wildcard or another value counts as not carrying it), and prints which in the log and the job summary.
+   entitlements hold the key with the value `TEAMID.*` (the usual form) or exactly
+   `TEAMID.com.iainchesworthlabs.heartboommaths`, and `OFF` otherwise (the key missing, another team or another bundle),
+   and prints which, with the profile's value, in the log and the job summary. The entitlements file the app is signed with
+   holds the full value in both cases.
 3. `OFF` leaves out the entitlement, and the target is built with `HBM_ICLOUD_ENTITLED=0`, so `available()` is false and
    the Settings row is not offered. Nothing else changes. The unsigned build (`ios-game-build.yml`) works with either.
 4. `verify_game_app.sh --icloud on|off` checks the state it was given: the generated file holds exactly the entries of
@@ -300,9 +304,13 @@ JSON that the page itself loads (`developer.apple.com/tutorials/data/documentati
 
 **Unconfirmed**, to settle on a device or with Apple:
 
-- The **value** of the entitlement. `$(TeamIdentifierPrefix)$(CFBundleIdentifier)` is what Xcode writes when the capability is
-  switched on, but none of the pages read gives the value. The release job therefore accepts the profile's key only when
-  it equals `TEAMID.com.iainchesworthlabs.heartboommaths`, and `verify_game_app.sh` checks the signed value the same way.
+- The **value** of the entitlement. The profile holds the key as `TEAMID.*` and the app asks for the full
+  `TEAMID.com.iainchesworthlabs.heartboommaths` (Apple's
+  [TN2415](https://developer.apple.com/library/ios/technotes/tn2415/_index.html), and developer forum threads that agree
+  with it; the pages of the entitlement itself do not give the value). The release job accepts the profile's key when it is
+  `TEAMID.*` or the full value, and `verify_game_app.sh` checks that the signed value is the full one. **This has still not
+  been run**: neither the step nor a signed bundle has been seen by anyone, so the first release run may show a profile
+  that holds something else.
 - Whether **`ubiquityIdentityToken` is nil with iCloud Drive off** while an account is signed in. The page ties the token
   to iCloud Drive, and the store itself works with no Drive. If it is nil there, the row is hidden for those people (a
   safe failure). No better public way to ask "is an account signed in" without CloudKit was found, and CloudKit is not
@@ -383,6 +391,6 @@ real SDK yet (`avf_audio_backend.mm` was only checked against hand-written stubs
 `cloud_platform.mm` against nothing: the block that captures a `std::shared_ptr`, the `id<NSObject>` member under ARC and the
 `HBM_ICLOUD_ENTITLED` definition are the places to look); the entitlements file that CMake writes, whose
 `$(TeamIdentifierPrefix)$(CFBundleIdentifier)` Xcode must expand, and the profile test of the release job that expects the
-value `TEAMID.com.iainchesworthlabs.heartboommaths`; and the
+value `TEAMID.*` or `TEAMID.com.iainchesworthlabs.heartboommaths`; and the
 name search of `verify_game_app.sh` for the sound files in the executable. The workflow prints the kits it found and the errors of the
 build first, to make each of them quick to read.

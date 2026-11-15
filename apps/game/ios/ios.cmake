@@ -63,7 +63,7 @@ set_target_properties(heart_boom_maths_game PROPERTIES
 
 # The capabilities. Xcode embeds the entitlements file only into a signed build. The keys follow the two options, and the file
 # is not given to Xcode at all when both are OFF. The value of the key-value store entry is Xcode's own: the team prefix and
-# the bundle identifier, which is what the profile of the App ID holds.
+# the bundle identifier; the profile holds the same team prefix with a wildcard, which allows it (docs/ios.md).
 set(HBM_ENTITLEMENT_ENTRIES "")
 if(HEART_BOOM_MATHS_IOS_GAME_CENTER)
     string(APPEND HBM_ENTITLEMENT_ENTRIES "    <key>com.apple.developer.game-center</key>\n    <true/>\n")

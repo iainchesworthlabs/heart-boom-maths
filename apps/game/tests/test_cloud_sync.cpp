@@ -85,18 +85,21 @@ std::string payload_of(const SharedData& shared, const Tuning& tuning = Tuning::
 /// change. Returns how many rounds it took, and fails if it never settles.
 int settle(FakeCloudStore& store_a, FakeCloudStore& store_b, SaveData& a, SaveData& b)
 {
-    for (int round = 1; round <= 6; ++round)
+    int settled_in = 0;
+    for (int round = 1; round <= 6 && settled_in == 0; ++round)
     {
         const int writes_before = store_a.writes + store_b.writes;
         const bool changed_a = sync(store_a, a).result.local_changed();
         const bool changed_b = sync(store_b, b).result.local_changed();
         if (store_a.writes + store_b.writes == writes_before && !changed_a && !changed_b)
         {
-            return round;
+            settled_in = round;
         }
     }
-    FAIL("two devices did not settle");
-    return 0;
+    // A check and not FAIL(): FAIL ends the function by throwing, so a return after it is unreachable code (C4702, an
+    // error in the sanitizer build) and none is a missing return (C4715) in the release build.
+    REQUIRE(settled_in > 0);
+    return settled_in;
 }
 
 /// Two devices on one Apple Account.

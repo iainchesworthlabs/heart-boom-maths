@@ -185,7 +185,7 @@ jobs:
 
       # Reads the profile the action put where Xcode looks for it. Only names, dates and counts are printed. The Game
       # Center and the iCloud key-value store entitlements are asked for only if the profile has them (the second with
-      # the value TEAM.BUNDLE_ID, the form Xcode writes); a profile that expires within 14 days stops the run
+      # the value TEAM.* or TEAM.BUNDLE_ID, see below); a profile that expires within 14 days stops the run
       # here, with a sentence, and not as a build that fails an hour in or a TestFlight build that stops working.
       - name: Read the provisioning profile
         id: profile
@@ -231,15 +231,17 @@ jobs:
             echo "game-center-verify=$verify_value"
           } >> "$GITHUB_OUTPUT"
 
-          # The same rule for iCloud sync. The entitlement is requested only when the profile holds the key with the
-          # value Xcode will write for this team and identifier; any other value (a wildcard, another team) leaves it out,
-          # because a bundle that asks for a value the profile does not hold is refused at signing.
-          if [ "$(pb 'Entitlements:com.apple.developer.ubiquity-kvstore-identifier')" = "$TEAM_ID.$BUNDLE_ID" ]; then
+          # The same rule for iCloud sync. A profile holds the key as the team id and a wildcard (TEAM.*, Apple's TN2415)
+          # and the app asks for the full value (TEAM.BUNDLE_ID), which the wildcard allows; the full value in a profile
+          # is accepted too. Anything else (the key missing, another team, another bundle) leaves the entitlement out,
+          # because a bundle that asks for a value the profile does not allow is refused at signing.
+          kvstore="$(pb 'Entitlements:com.apple.developer.ubiquity-kvstore-identifier')"
+          if [ "$kvstore" = "$TEAM_ID.*" ] || [ "$kvstore" = "$TEAM_ID.$BUNDLE_ID" ]; then
             icloud_cmake=ON; icloud_verify=on
           else
             icloud_cmake=OFF; icloud_verify=off
           fi
-          echo "iCloud key-value store entitlement: $icloud_cmake (the profile does$([ "$icloud_cmake" = ON ] || echo ' not') carry com.apple.developer.ubiquity-kvstore-identifier = $TEAM_ID.$BUNDLE_ID)"
+          echo "iCloud key-value store entitlement: $icloud_cmake (the profile's com.apple.developer.ubiquity-kvstore-identifier is '${kvstore:-missing}'; ON needs '$TEAM_ID.*' or '$TEAM_ID.$BUNDLE_ID')"
           {
             echo "icloud-cmake=$icloud_cmake"
             echo "icloud-verify=$icloud_verify"
