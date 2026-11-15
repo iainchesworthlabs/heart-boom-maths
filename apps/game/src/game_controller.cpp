@@ -1224,8 +1224,8 @@ void GameController::sync_with_cloud_now()
     // What this device earned since it last saved goes into the player first, so the merge sees it.
     record_session_in_save();
     const std::vector<ScoreEntry> top10_before = m_Save.shared.top10;
-    const CloudSyncResult result =
-        sync_with_cloud(*m_Cloud, m_Save, [this] { return hex_id(m_IdSource()); }, *m_Tuning);
+    const CloudSyncResult result = sync_with_cloud(
+        *m_Cloud, m_Save, [this](const SharedData& merged) { return new_player_id(merged, m_IdSource()); }, *m_Tuning);
     m_CloudSyncing = false;
 
     if (result.outcome == CloudSyncOutcome::REFUSED)

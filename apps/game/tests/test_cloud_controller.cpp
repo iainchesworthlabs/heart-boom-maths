@@ -588,7 +588,7 @@ TEST_CASE("A saved wallet that a fall would book as spent shows why the session 
 
     const auto merged = merge(here.shared, other.shared);
     REQUIRE(merged.has_value());
-    REQUIRE(adopt_shared(here, *merged, hex_id(1)));
+    REQUIRE(adopt_shared(here, *merged, new_player_id(*merged, 1)));
     Player* player = current_player(here);
     REQUIRE(player != nullptr);
     REQUIRE(player_wallet(*player) == 35);

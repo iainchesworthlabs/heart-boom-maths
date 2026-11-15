@@ -41,10 +41,10 @@ Run sync(CloudStore& store, SaveData& data, const Tuning& tuning = Tuning::defau
     Run run;
     run.result = sync_with_cloud(
         store, data,
-        [&run]
+        [&run](const SharedData& merged)
         {
             ++run.ids_asked;
-            return hex_id(MADE_UP_PLAYER_BITS);
+            return new_player_id(merged, MADE_UP_PLAYER_BITS);
         },
         tuning);
     return run;
@@ -57,7 +57,7 @@ void earn(SaveData& data, std::int64_t coins)
 
 std::string add(SaveData& data, std::uint64_t id_bits)
 {
-    std::string id = hex_id(id_bits);
+    std::string id = new_player_id(data.shared, id_bits);
     REQUIRE(add_player(data.shared, id));
     return id;
 }
@@ -254,8 +254,8 @@ TEST_CASE("A merge that breaks a format limit keeps the local data, writes nothi
     SharedData other;
     for (std::uint64_t i = 1; i <= 40; ++i)
     {
-        REQUIRE(add_player(local.shared, hex_id(0x1000 + i), many));
-        REQUIRE(add_player(other, hex_id(0x2000 + i), many));
+        REQUIRE(add_player(local.shared, new_player_id(local.shared, 0x1000 + i), many));
+        REQUIRE(add_player(other, new_player_id(other, 0x2000 + i), many));
     }
     FakeCloudStore store;
     store.account->text = payload_of(other);
@@ -328,7 +328,7 @@ TEST_CASE("A merged part with nobody left makes up one player, and sends that pl
     CHECK(run.result.outcome == CloudSyncOutcome::BOTH_CHANGED);
     CHECK(active_player_count(two.b.shared) == 1);
     CHECK(current_player(two.b) != nullptr);
-    CHECK(current_player(two.b)->id == hex_id(MADE_UP_PLAYER_BITS));
+    CHECK(current_player(two.b)->id.substr(4) == hex_id(MADE_UP_PLAYER_BITS).substr(4)); // after the 4 digit counter
     CHECK(*two.account->text == payload_of(two.b.shared)); // the made-up player is in the cloud copy, so A makes none
 
     const Run other = sync(two.store_a, two.a);

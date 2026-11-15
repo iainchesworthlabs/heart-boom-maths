@@ -52,7 +52,8 @@ CloudSyncOutcome outcome_of(bool local_changed, bool cloud_changed) noexcept
 
 } // namespace
 
-CloudSyncResult sync_with_cloud(CloudStore& cloud, SaveData& local, const std::function<std::string()>& new_player_id,
+CloudSyncResult sync_with_cloud(CloudStore& cloud, SaveData& local,
+                                const std::function<std::string(const SharedData&)>& new_player_id,
                                 const Tuning& tuning)
 {
     const std::optional<std::string> stored = cloud.read();
@@ -93,7 +94,7 @@ CloudSyncResult sync_with_cloud(CloudStore& cloud, SaveData& local, const std::f
         // A player is made up only when the merge leaves nobody (each device removed a different player). That player
         // goes to the cloud as well, or every device would make up its own.
         const bool made_up_player = active_player_count(*merged) == 0;
-        std::string spare_id = made_up_player ? new_player_id() : std::string();
+        std::string spare_id = made_up_player ? new_player_id(*merged) : std::string();
         if (!adopt_shared(local, std::move(*merged), std::move(spare_id), tuning).has_value())
         {
             return refused("the joined players could not be taken in");

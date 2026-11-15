@@ -55,9 +55,10 @@ struct CloudSyncResult
 ///
 /// The caller records the session's wallet in `local` first and takes the player's wallet back into the session after a
 /// sync that changed it: this function knows nothing of a session. `new_player_id` is asked for only when the merge
-/// leaves no active player at all, and must give 16 random hex digits (`hex_id`).
+/// leaves no active player at all. It gets the merged part and must give an id made by the core's `new_player_id` for
+/// it, so the made-up player sorts last.
 [[nodiscard]] CloudSyncResult sync_with_cloud(CloudStore& cloud, SaveData& local,
-                                              const std::function<std::string()>& new_player_id,
+                                              const std::function<std::string(const SharedData&)>& new_player_id,
                                               const Tuning& tuning = Tuning::defaults());
 
 } // namespace heart_boom_maths::game
