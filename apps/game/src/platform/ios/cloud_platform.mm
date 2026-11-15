@@ -31,7 +31,7 @@ namespace
 NSString* const PAYLOAD_KEY = @"hbm.shared.v2";
 
 /// Whether the bundle was built asking for the key-value store entitlement. CMake gives the target HBM_ICLOUD_ENTITLED=1 or
-/// 0 from HEART_BOOM_MATHS_IOS_ICLOUD (ios/ios.cmake). Without the entitlement the store silently keeps nothing, so the
+/// 0 from HEART_BOOM_MATHS_IOS_ICLOUD (ios/ios.cmake). Apple requires the entitlement to use the store, so without it the
 /// Settings switch must not be offered. A value and not a condition: no platform #if is involved.
 constexpr bool ENTITLED = HBM_ICLOUD_ENTITLED != 0;
 

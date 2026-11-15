@@ -23,8 +23,8 @@ option(HEART_BOOM_MATHS_IOS_GAME_CENTER "Request the Game Center entitlement in 
 
 # The same rule for iCloud sync: the iCloud key-value store entitlement (com.apple.developer.ubiquity-kvstore-identifier) goes
 # in only when the provisioning profile carries it, and the release workflow turns this ON only then. OFF leaves out the
-# entitlement and nothing else: the code stays, but the store keeps nothing without the entitlement, so the Settings switch is
-# not offered (the platform file reads HBM_ICLOUD_ENTITLED, set below). An unsigned build works with it OFF or ON.
+# entitlement and nothing else: the code stays, but Apple requires the entitlement to use the store, so the Settings switch
+# is not offered (the platform file reads HBM_ICLOUD_ENTITLED, set below). An unsigned build works with it OFF or ON.
 option(HEART_BOOM_MATHS_IOS_ICLOUD "Request the iCloud key-value store entitlement in the iOS bundle (the signing profile must carry it)" ON)
 
 if(HEART_BOOM_MATHS_IOS_BUILD_NUMBER)
