@@ -502,11 +502,17 @@ TEST_CASE("Journey: clearing level 12 pays the bonus once, KEEP GOING into endle
     CHECK(j.c().wallet() - wallet_after_first_game < 1000);
     CHECK(current_player(j.on_disk())->won_once);
 
-    // 5. FINISH ends the game like QUIT: no BOOM, the name screen, SKIP, the card.
+    // 5. FINISH ends the game like QUIT: no BOOM. The player was named ACE at the first name screen, so there is no name
+    // screen now: the entry is saved at once and the Top 10 page opens with it marked, then the card.
     j.tap("finishButton");
-    REQUIRE(j.screen() == "nameEntry");
+    REQUIRE(j.screen() == "top10");
     CHECK(j.c().end_reason() == GameController::EndReason::Finish);
-    j.tap("skipButton");
+    CHECK_FALSE(j.has("nameEntryScreen"));
+    REQUIRE(j.c().highlight_rank() >= 1);
+    CHECK(property_of(j.h.find_item(QStringLiteral("scoreRow%1").arg(j.c().highlight_rank()).toLatin1().constData()),
+                      "name")
+              .toString() == "ACE");
+    j.tap("backButton");
     REQUIRE(j.screen() == "gameOver");
     CHECK_FALSE(j.visible("boomBurst"));
 

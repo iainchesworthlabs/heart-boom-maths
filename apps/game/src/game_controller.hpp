@@ -159,11 +159,25 @@ class GameController final : public QObject
     Q_PROPERTY(qint64 bestScore READ best_score NOTIFY topScoresChanged FINAL)
     Q_PROPERTY(int highlightRank READ highlight_rank NOTIFY topScoresChanged FINAL)
 
-    // The saved run that CONTINUE offers on the title screen.
+    // The saved run that CONTINUE offers on the title screen. A device keeps one run, with the player who paused it, so
+    // both are false and empty while another player is the current one.
     Q_PROPERTY(bool hasSavedRun READ has_saved_run NOTIFY savedRunChanged FINAL)
     // What the saved run was when it was saved, for the caption under CONTINUE: keys level and secondsLeft. Empty when
-    // there is no run, or when it is not a state the core would restore.
+    // there is no run, when it is another player's, or when it is not a state the core would restore.
     Q_PROPERTY(QVariantMap savedRun READ saved_run NOTIFY savedRunChanged FINAL)
+
+    // The players. `players` lists the active ones in the order of the save; each map has id, name (empty until it is
+    // typed), displayName (the name, or PLAYER 1, PLAYER 2 and so on by place in this list), best, coins, current and
+    // named. `playerName` and `playerId` are the current player's. canChangePlayers is true only on the title (the core
+    // idle, or over and dealt with): switching, adding and removing are refused in every other state. canAddPlayer is
+    // false when the list is full (maxPlayers, from the tuning) and canRemovePlayer when only one player is left.
+    Q_PROPERTY(QVariantList players READ players NOTIFY playersChanged FINAL)
+    Q_PROPERTY(QString playerName READ player_name NOTIFY playersChanged FINAL)
+    Q_PROPERTY(QString playerId READ player_id NOTIFY playersChanged FINAL)
+    Q_PROPERTY(int maxPlayers READ max_players CONSTANT FINAL)
+    Q_PROPERTY(bool canChangePlayers READ can_change_players NOTIFY playersChanged FINAL)
+    Q_PROPERTY(bool canAddPlayer READ can_add_player NOTIFY playersChanged FINAL)
+    Q_PROPERTY(bool canRemovePlayer READ can_remove_player NOTIFY playersChanged FINAL)
 
     // The numbers of the title screen's tagline, from the tuning: the questions of a level and the seconds of level 1.
     Q_PROPERTY(int firstLevelQuestions READ first_level_questions CONSTANT FINAL)
@@ -187,6 +201,9 @@ class GameController final : public QObject
     Q_PROPERTY(QString gateUrl READ gate_url NOTIFY gateChanged FINAL)
     // How many digits the number has.
     Q_PROPERTY(int gateDigits READ gate_digits CONSTANT FINAL)
+    // The display name of the player a RemovePlayer gate is for, so the screen can say who. Empty for any other
+    // purpose.
+    Q_PROPERTY(QString gatePlayerName READ gate_player_name NOTIFY gateChanged FINAL)
 
     // True when the save on disk came from a newer build: it is left alone, and nothing of this session is saved.
     Q_PROPERTY(bool saveBlocked READ save_blocked CONSTANT FINAL)
@@ -227,6 +244,7 @@ public:
         None,
         Link,
         GameCenter,
+        RemovePlayer,
     };
     Q_ENUM(GatePurpose)
 
@@ -251,15 +269,37 @@ public:
     Q_INVOKABLE void keepGoing();
     Q_INVOKABLE void finish();
 
-    /// Name entry. The typed text is normalised (capitals, A to Z and spaces, at most nameMaxLength). Returns the rank
-    /// the entry took, or 0 when nothing was saved.
+    /// Name entry for a score that earned a place, for a player who has no name yet. The typed text is normalised
+    /// (capitals, A to Z and spaces, at most nameMaxLength, no space at either end). It names the current player and
+    /// saves the entry under that name. Returns the rank the entry took, or 0 when nothing was saved. A player who has
+    /// a name gets no name screen: the entry is saved when the game ends (see scoreSavedAtOnce).
     Q_INVOKABLE int saveName(const QString& typed);
+    /// SKIP drops the entry and leaves the player unnamed.
     Q_INVOKABLE void skipName();
     [[nodiscard]] Q_INVOKABLE QString normaliseName(const QString& typed) const;
 
     /// Whether SAVE may be offered for what is typed: the name has at least one letter once cut and normalised. The
     /// core also accepts a name of spaces only, but a score saved under a blank name would show as an empty row.
     [[nodiscard]] Q_INVOKABLE bool canSaveName(const QString& typed) const;
+
+    // ---- WHO'S PLAYING. Switching, adding and removing work only while canChangePlayers (the title).
+
+    /// Makes a player the current one: the wallet is recorded for the old player first, and the session takes the new
+    /// player's wallet and win-bonus mark. Returns true when that player is now current (also when it already was).
+    Q_INVOKABLE bool selectPlayer(const QString& id);
+
+    /// Adds an unnamed player and makes it the current one. Returns the new id, or an empty string when refused (the
+    /// list is full, or the game is not on the title).
+    Q_INVOKABLE QString addPlayer();
+
+    /// Names a player, or renames one, in any state. The typed text is normalised as for a score. Returns false and
+    /// changes nothing when no active player has that id or the name has no letter.
+    Q_INVOKABLE bool renamePlayer(const QString& id, const QString& typed);
+
+    /// Opens the parental gate to remove a player. The player goes, with a saved run that player paused, when the gate
+    /// is passed. Returns false, and opens nothing, when removing is refused: no active player has that id, it is the
+    /// last one, or the game is not on the title.
+    Q_INVOKABLE bool requestRemovePlayer(const QString& id);
 
     Q_INVOKABLE void setSoundEnabled(bool enabled);
     Q_INVOKABLE void setMusicEnabled(bool enabled);
@@ -349,6 +389,14 @@ public:
     [[nodiscard]] int highlight_rank() const;
     [[nodiscard]] bool has_saved_run() const;
     [[nodiscard]] QVariantMap saved_run() const;
+    [[nodiscard]] QVariantList players() const;
+    [[nodiscard]] QString player_name() const;
+    [[nodiscard]] QString player_id() const;
+    [[nodiscard]] int max_players() const;
+    [[nodiscard]] bool can_change_players() const;
+    [[nodiscard]] bool can_add_player() const;
+    [[nodiscard]] bool can_remove_player() const;
+    [[nodiscard]] QString gate_player_name() const;
     [[nodiscard]] int first_level_questions() const;
     [[nodiscard]] int first_level_seconds() const;
     [[nodiscard]] bool sound_enabled() const;
@@ -389,6 +437,7 @@ signals:
     void nameEntryChanged();
     void topScoresChanged();
     void savedRunChanged();
+    void playersChanged();
     void settingsChanged();
     void gateChanged();
 
@@ -402,7 +451,12 @@ signals:
     void alertEntered();
     void levelCleared();
     void gameWon(int bonusCoins);
+    // `rank` is the place the score took in the top 10 (saved at once for a player with a name, or waiting for the name
+    // screen for one without), and 0 when it does not qualify.
     void gameOver(EndReason reason, qint64 score, bool newBest, int rank);
+    // The finished game's score went into the top 10 under the current player's name with no name screen, as it would
+    // after SAVE. Sent right after gameOver; the shell opens the Top 10 page with the entry marked.
+    void scoreSavedAtOnce(int rank);
 
     // The grown-up's answer to the gate was right or wrong.
     void gatePassed(GatePurpose purpose);
@@ -429,7 +483,14 @@ private:
     void play_haptic(HapticId id);
     void remember_run();
     void forget_saved_run();
+    void forget_own_saved_run();
     void assign_ids();
+    void switch_to_player(const std::string& id);
+    void take_current_player_into_session();
+    void remove_player_now(const std::string& id);
+    [[nodiscard]] bool run_is_current_players() const;
+    [[nodiscard]] QString display_name_of(const std::string& id) const;
+    [[nodiscard]] static std::string trimmed_name(const std::string& normalised);
 
     [[nodiscard]] static State to_state(SessionState state) noexcept;
 
@@ -476,6 +537,7 @@ private:
     GatePurpose m_GatePurpose = GatePurpose::None;
     GateChallenge m_GateChallenge;
     std::string m_GateUrl;
+    std::string m_GatePlayer; // the player a RemovePlayer gate is for
 
     BuildInfo m_BuildInfo;
 };
