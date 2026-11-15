@@ -32,8 +32,8 @@ constexpr int MAX_LEVEL = 1'000'000;
 constexpr std::int64_t SMALL_LIMIT = 1'000'000'000;
 
 // The wallet and the win-bonus mark come from the save. They are taken before a game starts and, since a saved run
-// holds the wallet as it was at the pause, again on the pause screen after a restore, when the player's wallet has moved
-// on (a sync, or the same player's coins earned on another device).
+// holds the wallet as it was at the pause, again on the pause screen after a restore, when the player's wallet has
+// moved on (a sync, or the same player's coins earned on another device).
 [[nodiscard]] bool accepts_save_values(SessionState state) noexcept
 {
     return state == SessionState::IDLE || state == SessionState::GAME_OVER || state == SessionState::PAUSED;
