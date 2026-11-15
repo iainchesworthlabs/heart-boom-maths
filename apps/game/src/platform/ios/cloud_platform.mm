@@ -30,10 +30,10 @@ namespace
 /// The one key. Well under the 64 bytes Apple's design guide allows for a key.
 NSString* const PAYLOAD_KEY = @"hbm.shared.v2";
 
-/// A property list key that CMake fills in from HEART_BOOM_MATHS_IOS_ICLOUD (ios/ios.cmake): true when the bundle was
-/// built asking for the key-value store entitlement. Without that entitlement the store silently keeps nothing, so the
-/// Settings switch must not be offered.
-NSString* const ENTITLED_INFO_KEY = @"HBMICloudSyncEntitled";
+/// Whether the bundle was built asking for the key-value store entitlement. CMake gives the target HBM_ICLOUD_ENTITLED=1 or
+/// 0 from HEART_BOOM_MATHS_IOS_ICLOUD (ios/ios.cmake). Without the entitlement the store silently keeps nothing, so the
+/// Settings switch must not be offered. A value and not a condition: no platform #if is involved.
+constexpr bool ENTITLED = HBM_ICLOUD_ENTITLED != 0;
 
 /// What the observer block shares with the backend. Used on the main thread only.
 struct Shared
@@ -54,9 +54,9 @@ public:
     [[nodiscard]] bool available() const override
     {
         // The bundle asked for the entitlement, and an iCloud account is signed in. ubiquityIdentityToken is nil when
-        // iCloud is unavailable or nobody is logged in; reading it is fast and does not read the store.
-        NSNumber* entitled = [NSBundle.mainBundle objectForInfoDictionaryKey:ENTITLED_INFO_KEY];
-        if (![entitled isKindOfClass:NSNumber.class] || !entitled.boolValue)
+        // iCloud is unavailable or nobody is logged in; Apple says reading it is fast and may be done on the main thread,
+        // and it does not read the store.
+        if (!ENTITLED)
         {
             return false;
         }
