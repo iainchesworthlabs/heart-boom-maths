@@ -78,9 +78,9 @@ Still to do for decision 1, with the sync work: `COMPLIANCE.md`, the privacy pol
 
 ### Gaps in the players rules (15 Nov 2026)
 
-Small points the twelve decisions do not state. Each has a suggested answer so work is not blocked, as G1 to G8 did. The owner confirms or changes them.
+Small points the twelve decisions do not state. The owner accepted all eight answers on 15 Nov 2026.
 
-| # | Gap | Suggested answer |
+| # | Gap | Decided |
 |---|---|---|
 | P1 | What does a player with no name show as? | PLAYER 1, PLAYER 2 and so on, by place in the list |
 | P2 | Can a player be named without reaching the top 10? | Yes. WHO'S PLAYING opens the name screen to name or rename a player at any time |
