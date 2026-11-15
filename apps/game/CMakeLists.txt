@@ -192,6 +192,7 @@ set(HEART_BOOM_MATHS_QML_FILES
     qml/PlayScreen.qml
     qml/PlayStats.qml
     qml/PlayTopBar.qml
+    qml/PlayersScreen.qml
     qml/QuestionCard.qml
     qml/RowButton.qml
     qml/SafeAreaFrame.qml
