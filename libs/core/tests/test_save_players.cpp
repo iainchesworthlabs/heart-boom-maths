@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "heart_boom_maths/save_codec.hpp"
 #include "heart_boom_maths/save_data.hpp"
+#include "heart_boom_maths/save_merge.hpp"
 #include "heart_boom_maths/tuning.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <array>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -314,6 +316,91 @@ TEST_CASE("a player is refused for a bad or repeated id, or a full list", "[unit
         REQUIRE(add_player(crowded.shared, hex_id(1000)) == std::unexpected(PlayerError::LIST_FULL));
         REQUIRE(crowded.shared.players.size() == MAX_SAVED_PLAYERS);
     }
+}
+
+TEST_CASE("a new player's id is a valid id with a creation counter and 48 random bits", "[unit][save][players]")
+{
+    SaveData data; // only `first`, which has no counter
+    const std::string id = new_player_id(data.shared, 0x9F1C2A7B3D4E5F60ULL);
+    REQUIRE(is_valid_player_id(id));
+    REQUIRE(id != FIRST_PLAYER_ID);
+    REQUIRE(id == "00012a7b3d4e5f60"); // counter 1, then the low 48 bits: the high 16 bits of the draw are dropped
+
+    REQUIRE(new_player_id(data.shared, 0) == "0001000000000000");
+    REQUIRE(new_player_id(data.shared, std::numeric_limits<std::uint64_t>::max()) == "0001ffffffffffff");
+    REQUIRE(add_player(data.shared, id).has_value()); // add_player accepts it
+}
+
+TEST_CASE("a player added by new_player_id always sorts after the players already in the list", "[unit][save][players]")
+{
+    SaveData data;
+    data.shared.players.clear();
+    data.shared.players.push_back(Player{.id = std::string(FIRST_PLAYER_ID)});
+    Tuning tuning = Tuning::defaults();
+    tuning.max_players = 40; // room for every draw below
+
+    // Draws that fall in every order: if the random part decided, some of these would land in the middle.
+    const std::array<std::uint64_t, 8> draws{0xFFFFFFFFFFFFFFFFULL, 0,  0x8000000000000000ULL, 1, 0x0000FFFFFFFFFFFFULL,
+                                             0x0000000000000001ULL, 42, 0xABCDEF0123456789ULL};
+    for (std::size_t i = 0; i < 30; ++i)
+    {
+        const std::string id = new_player_id(data.shared, draws[i % draws.size()]);
+        REQUIRE(add_player(data.shared, id, tuning).has_value());
+        REQUIRE(data.shared.players.back().id == id);
+        REQUIRE(data.shared.players.size() == i + 2);
+    }
+    REQUIRE(data.shared.players.front().id == FIRST_PLAYER_ID);
+    for (std::size_t i = 2; i < data.shared.players.size(); ++i)
+    {
+        REQUIRE(data.shared.players[i - 1].id < data.shared.players[i].id);
+    }
+}
+
+TEST_CASE("a removed player still counts for the next counter", "[unit][save][players]")
+{
+    SaveData data;
+    const std::string second = new_player_id(data.shared, 7);
+    REQUIRE(add_player(data.shared, second).has_value());
+    REQUIRE(remove_player(data.shared, second).has_value());
+    REQUIRE(new_player_id(data.shared, 7).substr(0, 4) == "0002");
+}
+
+TEST_CASE("the counter follows the largest among the ids, old ones included", "[unit][save][players]")
+{
+    SharedData shared;
+    shared.players = {Player{.id = std::string(FIRST_PLAYER_ID)}, Player{.id = "00a3000000000001"},
+                      Player{.id = "9f1c2a7b3d4e5f60", .removed = true}};
+    // An id from before the counter existed counts as its first 4 digits read.
+    REQUIRE(new_player_id(shared, 5) == "9f1d000000000005");
+}
+
+TEST_CASE("the creation counter stops at ffff", "[unit][save][players]")
+{
+    SharedData shared;
+    shared.players = {Player{.id = std::string(FIRST_PLAYER_ID)}, Player{.id = "fffe000000000001"}};
+    REQUIRE(new_player_id(shared, 9) == "ffff000000000009");
+    shared.players.push_back(Player{.id = "ffff000000000009"});
+    REQUIRE(new_player_id(shared, 3) == "ffff000000000003"); // no wrap to 0000
+    shared.players.push_back(Player{.id = "ffff000000000003"});
+    REQUIRE(new_player_id(shared, 0xFFFFFFFFFFFFFFFFULL) == "ffffffffffffffff");
+    REQUIRE(is_valid_player_id(new_player_id(shared, 0)));
+}
+
+TEST_CASE("two devices that each add a player while apart agree on one order after a merge", "[unit][save][players]")
+{
+    SaveData one;
+    SaveData two;
+    REQUIRE(add_player(one.shared, new_player_id(one.shared, 0xBBBB)).has_value());
+    REQUIRE(add_player(two.shared, new_player_id(two.shared, 0xAAAA)).has_value());
+    // Both are counter 1, so the random part decides, the same on both devices.
+    const auto merged_one_way = merge(one.shared, two.shared);
+    const auto merged_other_way = merge(two.shared, one.shared);
+    REQUIRE(merged_one_way.has_value());
+    REQUIRE(merged_one_way == merged_other_way);
+    const SharedData& merged = *merged_one_way;
+    REQUIRE(merged.players.size() == 3);
+    REQUIRE(merged.players[1].id == "000100000000aaaa");
+    REQUIRE(merged.players[2].id == "000100000000bbbb");
 }
 
 TEST_CASE("a player is renamed with a valid name and the change counter rises", "[unit][save][players]")

@@ -149,6 +149,13 @@ enum class SaveError
 /// An id made from 64 random bits the app drew: 16 lowercase hexadecimal digits, the high bits first.
 [[nodiscard]] std::string hex_id(std::uint64_t bits);
 
+/// The id for a player this device adds: a 4 digit creation counter, then the low 48 bits of `random_bits` as 12
+/// digits. The counter is one more than the largest among the ids in `shared` (removed players included; `first` has
+/// none; an older id counts as whatever its first 4 digits read), and stops at `ffff`. The list is kept in ascending id
+/// order, so a player added later sorts later on this device, while two devices that add while apart still agree on one
+/// order after a merge, with the random part breaking a tie of counters.
+[[nodiscard]] std::string new_player_id(const SharedData& shared, std::uint64_t random_bits);
+
 /// A name of at least one and at most `name_max_length` characters, each A to Z or a space.
 [[nodiscard]] bool is_valid_name(std::string_view name, const Tuning& tuning = Tuning::defaults()) noexcept;
 
@@ -215,7 +222,7 @@ enum class PlayerError
 /// How many players are not removed.
 [[nodiscard]] int active_player_count(const SharedData& shared) noexcept;
 
-/// Adds an unnamed player with the id the caller made (`hex_id`). Refused when the active count is already
+/// Adds an unnamed player with the id the caller made (`new_player_id`). Refused when the active count is already
 /// `max_players` (a removed player does not count), when the id is not 16 lowercase hex digits or is already in the
 /// list, or when the list is full. The player goes in at its canonical place (see `player_id_precedes`). Does not
 /// change the current player.

@@ -11,6 +11,7 @@
 #include <QSignalSpy>
 #include <functional>
 #include <memory>
+#include <vector>
 
 using namespace heart_boom_maths;
 using namespace heart_boom_maths::game;
@@ -54,7 +55,14 @@ struct Rig
         options.tile_guard_ns = guard_ns; // most tests tap straight after a level starts; the guard has its own tests
         options.gate_seed_source = [this] { return gate_seeds_used++ == 0 ? FIRST_GATE_SEED : SECOND_GATE_SEED; };
         // The first draw is the device's id; every later one is another id, so a test can add several players.
-        options.id_source = [this] { return id_draws++ == 0 ? FIRST_ID_BITS : SECOND_ID_BITS + (id_draws - 2); };
+        options.id_source = [this]
+        {
+            if (id_override)
+            {
+                return id_override();
+            }
+            return id_draws++ == 0 ? FIRST_ID_BITS : SECOND_ID_BITS + (id_draws - 2);
+        };
         return options;
     }
 
@@ -101,6 +109,7 @@ struct Rig
     RecordingLinks links;
     int gate_seeds_used = 0;
     int id_draws = 0;
+    std::function<std::uint64_t()> id_override; // set by a test after the device id is drawn
     GameController controller;
 };
 
@@ -1951,8 +1960,9 @@ TEST_CASE("A save with no active player gets an unnamed one, as the current play
     rig.controller.setSoundEnabled(false);
     const SaveData on_disk = saved(memory);
     REQUIRE(on_disk.shared.players.size() == 1);
-    CHECK(on_disk.shared.players[0] == Player{.id = std::string(hex_id(SECOND_ID_BITS))});
-    CHECK(on_disk.device.current_player == hex_id(SECOND_ID_BITS));
+    // The creation counter is 1, the random part the low 48 bits of the draw.
+    CHECK(on_disk.shared.players[0] == Player{.id = "00010000000000ff"});
+    CHECK(on_disk.device.current_player == "00010000000000ff");
 }
 
 TEST_CASE("The best score on the title is the current player's", "[integration][controller][save]")
@@ -2217,6 +2227,53 @@ TEST_CASE("A new player is unnamed and current, and adding stops at the limit", 
     CHECK(c.can_add_player());
     CHECK_FALSE(c.addPlayer().isEmpty());
     CHECK(c.players().size() == 4);
+}
+
+TEST_CASE("Whatever the random draw, a new player is last among the active players and nobody else is renumbered",
+          "[integration][controller][players]")
+{
+    // A 64 bit linear congruential step: each trial draws a different run of values, high and low alike.
+    for (std::uint64_t trial = 0; trial < 60; ++trial)
+    {
+        CAPTURE(trial);
+        MemorySaveStore memory;
+        Rig rig(memory);
+        GameController& c = rig.controller;
+        std::uint64_t state = trial * 0x9E3779B97F4A7C15ULL + 1;
+        rig.id_override = [&state]
+        {
+            state = state * 6364136223846793005ULL + 1442695040888963407ULL;
+            return state;
+        };
+
+        std::vector<QString> names_before;
+        for (int added = 0; added < 3; ++added)
+        {
+            const QString id = c.addPlayer();
+            REQUIRE_FALSE(id.isEmpty());
+            const QVariantList list = c.players();
+            REQUIRE(list.size() == added + 2);
+            CHECK(list.back().toMap().value("id").toString() == id);
+            CHECK(list.back().toMap().value("displayName").toString() == QStringLiteral("PLAYER %1").arg(added + 2));
+            for (int i = 0; i < static_cast<int>(names_before.size()); ++i)
+            {
+                CHECK(list[i].toMap().value("displayName").toString() == names_before[static_cast<std::size_t>(i)]);
+            }
+            names_before.clear();
+            for (const QVariant& entry : list)
+            {
+                names_before.push_back(entry.toMap().value("displayName").toString());
+            }
+        }
+
+        // A removed player still counts for the counter, so the next one is again last.
+        const QString second = c.players()[1].toMap().value("id").toString();
+        REQUIRE(remove_through_gate(rig, second));
+        const QString replacement = c.addPlayer();
+        REQUIRE_FALSE(replacement.isEmpty());
+        CHECK(c.players().back().toMap().value("id").toString() == replacement);
+        CHECK(replacement != second);
+    }
 }
 
 TEST_CASE("A player is named and renamed on the name screen's rules, in any state",
