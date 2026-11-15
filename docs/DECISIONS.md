@@ -89,7 +89,7 @@ Small points the twelve decisions do not state. The owner accepted all eight ans
 | P5 | When can the player be switched? | From the title only |
 | P6 | Two devices each add players while apart, and the merge has more than four | All are kept. `max_players` limits adding only |
 | P7 | A sync payload written by a later build | It is left alone and not merged, as a newer save file is |
-| P8 | WHO'S PLAYING and the player chip have no board | Built from the existing components for the designer to review. A board follows |
+| P8 | WHO'S PLAYING and the title's player card have no board | Built from the existing components for the designer to review. A board follows |
 
 ### The questions felt too alike (15 Nov 2026)
 

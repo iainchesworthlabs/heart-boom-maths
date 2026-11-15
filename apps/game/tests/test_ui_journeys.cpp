@@ -1264,6 +1264,25 @@ std::string named_player_save(const char* name)
     return *serialise(data);
 }
 
+/// The text of a save for one player with a name, a best score and coins, and, when asked, a run paused in level 1.
+std::string player_card_save(const char* name, int best, int coins, bool with_run)
+{
+    SaveData data;
+    REQUIRE(rename_player(data.shared, "first", name).has_value());
+    REQUIRE(record_wallet(data.shared.players[0], "", coins).has_value());
+    data.shared.players[0].best = best;
+    if (!with_run)
+    {
+        return *serialise(data);
+    }
+    UiRig first(SEED, *serialise(data));
+    first.controller.startGame();
+    first.answer_right();
+    first.controller.pause();
+    REQUIRE(first.store.text().has_value());
+    return *first.store.text();
+}
+
 } // namespace
 
 TEST_CASE("Journey: the chip on the title opens WHO'S PLAYING; add, switch, rename and remove players",
@@ -1554,7 +1573,7 @@ TEST_CASE("Journey: players are switched from the title only", "[ui][journey][pl
 
 // ---- Screenshots of the players screens, for the designer to look at. Run by hand: the test does nothing unless
 // HBM_SCREENSHOT_DIR names a folder, and it is hidden from the ordinary run.
-TEST_CASE("Screenshots of the title chip, WHO'S PLAYING and the name screen of a player", "[.][screenshots]")
+TEST_CASE("Screenshots of WHO'S PLAYING and the name screen of a player", "[.][screenshots]")
 {
     const QString dir = qEnvironmentVariable("HBM_SCREENSHOT_DIR");
     if (dir.isEmpty())
@@ -1584,7 +1603,6 @@ TEST_CASE("Screenshots of the title chip, WHO'S PLAYING and the name screen of a
             h.settle();
         };
 
-        CHECK(h.grab(path("title-chip")));
         tap("playerChip");
         CHECK(h.grab(path("whos-playing-1")));
         for (const char* name : {"Dad", "Mum", "Ben"})
@@ -1598,5 +1616,41 @@ TEST_CASE("Screenshots of the title chip, WHO'S PLAYING and the name screen of a
         CHECK(h.grab(path("whos-playing-4")));
         tap("renameButton1");
         CHECK(h.grab(path("player-name")));
+    }
+}
+
+// The title's player card at the sizes and with the names that matter, for the owner to look at. Same rules as above.
+TEST_CASE("Screenshots of the title's player card", "[.][screenshots]")
+{
+    const QString dir = qEnvironmentVariable("HBM_SCREENSHOT_DIR");
+    if (dir.isEmpty())
+    {
+        return;
+    }
+    struct Shot
+    {
+        const char* file;
+        QSize size;
+        const char* name;
+        int best;
+        int coins;
+        bool with_run;
+    };
+    const Shot shots[] = {
+        {"title-card-390x844-short-name", PHONE, "ROCKET", 1640, 61, false},
+        {"title-card-390x844-12-letters", PHONE, "WWWWWWWWWWWW", 1234567, 98765, false},
+        {"title-card-390x844-12-letters-narrow", PHONE, "MMMMMMMMMMMM", 1640, 61, false},
+        {"title-card-390x844-saved-run", PHONE, "ROCKET", 1640, 61, true},
+        {"title-card-375x667", QSize{375, 667}, "ROCKET", 1640, 61, false},
+        {"title-card-375x667-saved-run", QSize{375, 667}, "WWWWWWWWWWWW", 1640, 61, true},
+        {"title-card-1280x800", DESKTOP, "ROCKET", 1640, 61, false},
+        {"title-card-1280x800-saved-run", DESKTOP, "WWWWWWWWWWWW", 1640, 61, true},
+        {"title-card-820x1180", TABLET, "ROCKET", 1640, 61, false},
+    };
+    for (const Shot& shot : shots)
+    {
+        UiRig rig(SEED, player_card_save(shot.name, shot.best, shot.coins, shot.with_run));
+        QmlHarness h = app_root(&rig.controller, shot.size, {});
+        CHECK(h.grab(QStringLiteral("%1/%2.png").arg(dir, QLatin1String(shot.file))));
     }
 }

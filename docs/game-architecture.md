@@ -245,7 +245,7 @@ QML screens driven by one view-model each. The QML is the same on every platform
 
 | Screen | Board | Shows |
 |---|---|---|
-| Title | CP1, CP18 | Best score, coins, the player chip, CONTINUE when the current player has a saved run |
+| Title | CP1, CP18 | The player card (name, best score, coins), CONTINUE when the current player has a saved run |
 | Play | CP2 to CP5, CP13 | Question, four tiles, timer, multiplier, streak, hint button |
 | Level clear | CP6 | Points breakdown, coins earned, wallet |
 | Win | CP8 | The 1,000-coin bonus, KEEP GOING (endless) or FINISH |
@@ -388,7 +388,7 @@ Deviations from the sketches above, all small:
 - The saved run (P4): `hasSavedRun`, `savedRun` and `continueGame()` need `device.run_player` to be the current player. A new game and a resume drop the run only when it is the current player's; a pause saves a run for the current player and replaces whoever's it was; a game over spends the player's own run; removing a player drops that player's run; a run whose player is not active when the save loads is dropped. `continueGame()` gives the session the player's wallet and mark after the restore.
 - The top 10 (SPEC, Leaderboard): a finished game that earns a place for a player with a name is saved by `finish_game` under that name, `scoreSavedAtOnce` follows `gameOver`, and no name screen shows. For a player with no name `saveName` names the player (`rename_player`) and saves the entry in one step, and SKIP drops the entry. Names are trimmed of spaces at both ends.
 - Best and NEW BEST! (P3): every finished game calls `record_best` for the current player, and `newBest` is true when the score is above 0 and above that player's best from before the game. SKIP no longer clears it, because the best counts whether or not the entry is kept.
-- Screens: the title chip, `PlayersScreen` and `NameEntryScreen` in player mode (`docs/ui-components.md`); journeys in [User journeys](user-journeys.md), journey 6.
+- Screens: the title's player card, `PlayersScreen` and `NameEntryScreen` in player mode (`docs/ui-components.md`); journeys in [User journeys](user-journeys.md), journey 6.
 
 ## Tests
 
