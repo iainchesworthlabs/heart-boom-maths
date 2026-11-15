@@ -65,6 +65,7 @@ add_executable(heart_boom_maths_core_tests
     test_save.cpp
     test_save_fuzz.cpp
     test_save_manager.cpp
+    test_save_merge.cpp
     test_save_players.cpp
     test_session.cpp
     test_session_property.cpp
