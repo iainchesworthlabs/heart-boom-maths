@@ -109,7 +109,39 @@ The device keeps a top 10 of final scores. A final score is the total for one ga
 - A score qualifies if the list has fewer than 10 entries or the score beats the 10th. A score of 0 never qualifies. On equal scores the older entry ranks first.
 - Name entry: a name screen shows the rank and score, a text field, SAVE and SKIP. A name is up to 12 characters, A to Z and space, shown in capitals. SAVE needs at least one character. SKIP drops the entry.
 - The Top 10 screen shows rank, name and score, with a new entry highlighted. It opens from Title and from Game over.
-- The list and the names stay on the device. Names typed by children are never sent anywhere.
+- The list and the names stay on the device unless a grown-up turns sync on (see Sync between a family's devices). They never reach the developer or anyone outside the family's own iCloud account.
+- With players (see Players), an entry takes the current player's name, and the name screen appears only for a player who has no name yet.
+
+## Players
+
+Decided on 15 Nov 2026 (`DECISIONS.md`, "After v1"). The PRD follows.
+
+- The save holds up to four players (`max_players`). A player has a name, a wallet, the win-bonus mark and a best score. A name follows the top 10 name rules and may be empty until it is first typed.
+- One player is the current player. A game is played as that player: its coins, the win bonus and its best score belong to that player. The best score on the title and the game-over card is the current player's.
+- A first run has one player with no name. A save from before players existed becomes that one player, with its coins and win-bonus mark.
+- The title shows who is playing. WHO'S PLAYING lists the players, picks one and adds one. Anyone may add a player while there is room. Removing a player needs the parental gate.
+- The top 10 is one list shared by all players. An entry takes the player's name. A player with no name gets the name screen once: SAVE names the player and saves the entry, SKIP drops the entry and leaves the player unnamed.
+- The saved run belongs to the player who paused it. CONTINUE is offered only while that player is the current one.
+- When a run resumes, its wallet is the player's wallet as it is now, not as it was at the pause.
+
+## Sync between a family's devices
+
+Decided on 15 Nov 2026. Sync uses the iCloud key-value store of the Apple Account signed in on the device. The game has no account, sign-in or server of its own, and nothing reaches the developer or anyone outside that account.
+
+- A Settings switch on Apple devices, off by default, behind the parental gate. With the switch off, or iCloud unavailable, the game behaves exactly as it does without sync. Other platforms have no sync.
+- The players and the top 10 sync. The Settings switches, the saved run and the choice of current player stay on each device.
+- Two devices that were played apart are merged, and nothing a player earned or was given is lost:
+
+| Data | Merge rule |
+|---|---|
+| Players | Both sets together, matched by player id. A removed player stays removed |
+| Name | The later change wins, by a change counter and not a clock |
+| Coins | Each device counts what was earned and what was spent on it. The merge keeps the larger count for each device. The wallet is earned less spent, never below 0 |
+| Win-bonus mark | Set if either has it |
+| Best score | The larger |
+| Top 10 | Both lists together without duplicates, best ten kept |
+
+The merge reads no clock. Merging in either order gives the same result, and merging the same data again changes nothing.
 
 ## Ending a game
 
@@ -160,6 +192,7 @@ Settings opens from a gear button on Title and in the pause menu. Values are sav
 | Music | On | Separate from sound effects |
 | Haptics | On | Only where the device can make them (a phone, a browser on a touch screen). A little touch feedback for answers and presses, never the only cue. See `haptics.md` |
 | Game Center | Off | Apple devices only. Needs the parental gate to turn on |
+| iCloud sync | Off | Apple devices only. Needs the parental gate to turn on. See Sync between a family's devices |
 
 About shows version and build number, short commit hash, branch or tag and build date ("dev" for local builds), the game's own licence (GPL-3.0-or-later), third-party notices generated at build time, the font licences for Bangers and Lilita One, and a privacy statement with a link to the privacy policy. Every link that leaves the app opens behind the parental gate, where an adult types back a number written in words.
 

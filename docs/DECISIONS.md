@@ -51,6 +51,41 @@ The project owner allows Tracy in `libs/core`. The rule that the core includes o
 
 The project owner asked for a little touch feedback on phones: on a right or a wrong answer and on a few other actions, not overboard, with a preference to turn it off. It is on by default, a Settings switch that is shown only where the device can make haptics, and saved as the optional `haptics` field of the save (an older save reads as on; the schema version stays 1). It is never the only cue: every haptic goes with a visual cue that already exists, and the game plays the same without it. It needs no permission and sends nothing anywhere (no `VIBRATE` on Android, no change to the privacy manifest). The feel (which beats, how long, how close together) is a first guess to be judged on a device. The events, the platform notes and the device checks are in `haptics.md`.
 
+## After v1: players, sync and four stages (15 Nov 2026)
+
+The project owner accepted a plan for the game after v1 and the twelve decisions below. The PRD is the owner's to edit and follows; until it does, this table and `SPEC.md` are the record. Each stage's rules are written into `SPEC.md` when that stage starts.
+
+Order of work: the foundation (players, save version 2, the merge, iCloud sync), then stage 2 (Dress up), stage 1 (It knows her), stage 3 (More maths), stage 4 (More ways to play).
+
+| # | Part | Decided |
+|---|---|---|
+| 1 | Foundation | iCloud sync is allowed. The rules "no network calls or accounts", "names never leave the device" and "no cloud sync" become: nothing leaves the family's own devices and iCloud account, and nothing reaches the developer. The switch is off by default, behind the parental gate |
+| 2 | Foundation | Players and the top 10 sync. Settings switches and the saved run stay on each device |
+| 3 | Foundation | Up to four players. Adding is free, removing is behind the gate. A top 10 entry takes the player's name |
+| 4 | Stage 2 | The place where coins are spent is called DRESS UP. "No store" in `SPEC.md` becomes "nothing costs real money" |
+| 5 | Stage 2 | Diamonds bring animal friends at set totals. There is no second price list |
+| 6 | Stage 2 | One bonus question per level carries a diamond. A hint is allowed, and missing it costs nothing extra |
+| 7 | Stage 2 | Costumes are vector redraws of the designer's drawings, not scans |
+| 8 | Stage 1 | A game may start at any level the player has cleared, and earns 300 points for each level skipped |
+| 9 | Stage 1 | Look-again pictures of missed sums go on the level-clear and game-over cards, not into play. The clock rules do not change |
+| 10 | Stage 3 | Worlds (Number Bonds, Times Tables, Sharing) are all open from the start, share coins, and each has its own top 10 |
+| 11 | Stage 4 | Calm mode pays coins but has no points and no top 10 |
+| 12 | Stage 4 | Two-player is for tablets and desktop. Most points in one level wins |
+
+The mechanics of the party cat, the bonus animal and diamonds are new proposals: the PRD holds only their names.
+
+Still to do for decision 1, with the sync work: `COMPLIANCE.md`, the privacy policy and the store forms, and a check of how Apple's privacy answers treat data kept in the user's own iCloud.
+
+### Open: the questions feel too alike (15 Nov 2026)
+
+The owner reported that the questions feel less random than they should. Two causes are in the generator, and neither is decided:
+
+| Cause | Detail | Options |
+|---|---|---|
+| Small levels | Levels 1 and 2 have 10 and 15 possible sums, so every game opens with the same 25 | Stage 1's start level lets a player skip them. Or widen the two levels in the PRD table |
+| Answer-first dealing | Larger levels choose the answer evenly and then split it, so sums with few splits come up far too often. On level 3, "1 + 1" is in about 4 games of 10, against 1 in 10 if every sum were equally likely | Deal every possible sum of a level with equal chance |
+| Tiles | The wrong tiles are mostly the answer ±1 and ±2, so the right answer is usually one of the middle values | Vary the wrong tiles so the answer's place in the order gives nothing away |
+
 ## Earlier decisions (7 and 14 Nov)
 
 Alert is the last 10 s of the 60 and gives no extra time. Correct answers keep adding time during the alert. Coins survive the bomb. Wrong answers cost time with clear feedback. When the bomb goes off the game is over, and a new game starts at level 1. 12 levels, then endless mode. Four answer tiles on every level, and a hint removes two wrong ones (removing one is the alternative to playtest). Look is Comic Pop. Name is Heart Boom Maths (first chosen as Star Bomb, then changed because Star Boom was already taken). The bomb is a pink heart (option A on the design canvas) and the explosion is a star burst. The game-over card shows a best score, and a high score earns a typed name on a top 10 that stays on the device. Settings (sound, music) and About exist. Game Center is integrated on Apple devices and assumed allowed at this rating. Target age rating is the lowest in each store. Diamonds, characters and the bonus animal are parked. The ESP32-P4 handheld is v2.

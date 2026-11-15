@@ -155,6 +155,49 @@ The plan's field table does not list `game_center`. The PRD and decision 6 requi
 
 Best score is the top entry of `top10`, so it is not stored twice.
 
+### Version 2: players and a part that syncs
+
+Version 2 (decided 15 Nov 2026, see `SPEC.md`, Players and Sync) splits the document in two. `device` stays on the device. `shared` is what a sync sends, and what `merge` joins.
+
+```json
+{
+  "version": 2,
+  "device": {
+    "id": "9f1c2a7b3d4e5f60",
+    "sound": true, "music": true, "haptics": true, "game_center": false, "cloud_sync": false,
+    "current_player": "first",
+    "next_seq": 3,
+    "run": [1, 2, 3],
+    "run_player": "first"
+  },
+  "shared": {
+    "players": [
+      {
+        "id": "first", "name": "ROCKET", "name_rev": 1, "removed": false,
+        "won_once": false, "best": 1640,
+        "coins": [{ "device": "9f1c2a7b3d4e5f60", "earned": 80, "spent": 19 }]
+      }
+    ],
+    "top10": [{ "name": "ROCKET", "score": 1640, "device": "9f1c2a7b3d4e5f60", "seq": 2 }]
+  }
+}
+```
+
+| Field | Holds |
+|---|---|
+| `device.id` | 16 lowercase hex digits, made once from the system's random source by the app (the core has none). Empty until then |
+| `device.next_seq` | The next number this device gives a top 10 entry. With `device`, it makes an entry's identity, so a merge can drop duplicates |
+| `device.run`, `device.run_player` | The saved run and the player who paused it. Both absent when there is none |
+| `players[].id` | `first` for the player every save starts with, so two devices' first players merge into one. Later players get 16 hex digits from the app |
+| `players[].name_rev` | Counts name changes. The higher one wins a merge. On a tie the name that sorts first wins |
+| `players[].removed` | A removed player is kept as a mark, so a merge cannot bring the player back |
+| `players[].coins` | One entry per device that earned or spent for this player. The wallet is the sum of `earned` less the sum of `spent`, never below 0 |
+| `players[].best` | The player's best final score |
+
+A version 1 save migrates to one player, `first`, with its coins as `earned` under the device, its top 10 entries numbered in rank order, and its run. A field added later for a new feature is optional on reading and takes its default when absent, as `haptics` did, so the version does not rise for each one.
+
+`merge(a, b)` is a function in `libs/core` over the `shared` part. It is commutative, associative and idempotent, and property tests hold that. Of equal scores in the merged top 10, the order is by `device` and then `seq`.
+
 ```cpp
 class SaveStore
 {
@@ -174,7 +217,7 @@ Rules:
 - A file with a higher `version` than the build knows is left alone. The game runs on defaults for that session and does not overwrite it.
 - Each schema step is one function from version n to n + 1 in `libs/core`, with a fixture file in `libs/core/tests/` for every old version.
 - `libs/core` carries a small JSON reader and writer limited to objects, arrays, strings, integers and booleans. Round-trip and random-input tests cover it.
-- Names and scores never leave the device. No cloud sync.
+- Names and scores never leave the device unless a grown-up turns iCloud sync on. Then they go to the family's own iCloud account and nowhere else.
 
 ### Browser storage
 
