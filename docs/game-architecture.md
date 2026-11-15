@@ -188,7 +188,7 @@ Version 2 (decided 15 Nov 2026, see `SPEC.md`, Players and Sync) splits the docu
 | `device.id` | 16 lowercase hex digits, made once from the system's random source by the app (the core has none). Empty until then |
 | `device.next_seq` | The next number this device gives a top 10 entry. With `device`, it makes an entry's identity, so a merge can drop duplicates. Adopting a merge keeps it past this device's own entries (see `adopt_shared`) |
 | `device.run`, `device.run_player` | The saved run and the player who paused it. Both absent when there is none |
-| `players[].id` | `first` for the player every save starts with, so two devices' first players merge into one. Later players get 16 hex digits from the app |
+| `players[].id` | `first` for the player every save starts with, so two devices' first players merge into one. A later player's id is 16 hex digits made by `new_player_id`: a 4 digit creation counter (one more than the largest in the list, removed players included, stopping at `ffff`), then 12 random digits. The list is kept in ascending id order, so this puts a new player last on the device that adds it, and the random part still breaks a tie between two devices that added while apart |
 | `players[].name_rev` | Counts name changes. The higher one wins a merge. On a tie the name that sorts first wins |
 | `players[].removed` | A removed player is kept as a mark, so a merge cannot bring the player back |
 | `players[].coins` | One entry per device that earned or spent for this player. The wallet is the sum of `earned` less the sum of `spent`, never below 0 |

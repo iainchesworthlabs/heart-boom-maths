@@ -23,6 +23,8 @@ bool is_lowercase_hex(std::string_view text) noexcept
            std::ranges::all_of(text, [](char c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); });
 }
 
+constexpr std::size_t COUNTER_HEX_DIGITS = 4;
+
 // A device that has no id yet writes the empty one, so the empty id is a legal value in an entry.
 bool is_entry_device(std::string_view device) noexcept
 {
@@ -180,6 +182,31 @@ std::string hex_id(std::uint64_t bits)
         bits >>= 4;
     }
     return id;
+}
+
+std::string new_player_id(const SharedData& shared, std::uint64_t random_bits)
+{
+    constexpr std::uint64_t COUNTER_MAX = 0xFFFF;
+    constexpr int RANDOM_BITS = 48;
+    constexpr std::uint64_t RANDOM_MASK = (std::uint64_t{1} << RANDOM_BITS) - 1;
+
+    std::uint64_t largest = 0;
+    for (const Player& player : shared.players)
+    {
+        if (!is_lowercase_hex(player.id))
+        {
+            continue; // `first`, which has no counter
+        }
+        std::uint64_t counter = 0;
+        for (std::size_t i = 0; i < COUNTER_HEX_DIGITS; ++i)
+        {
+            const char c = player.id[i];
+            counter = counter * 16 + static_cast<std::uint64_t>(c <= '9' ? c - '0' : c - 'a' + 10);
+        }
+        largest = std::max(largest, counter);
+    }
+    const std::uint64_t counter = std::min(largest + 1, COUNTER_MAX);
+    return hex_id((counter << RANDOM_BITS) | (random_bits & RANDOM_MASK));
 }
 
 bool is_valid_name(std::string_view name, const Tuning& tuning) noexcept
