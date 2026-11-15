@@ -238,9 +238,12 @@ TEST_CASE("The title screen in a window of the phone's shape matches the board's
     const auto top_of = [&](const char* name) { return s.item(name)->mapToScene(QPointF(0, 0)).y(); };
     CHECK_THAT(top_of("hero"), WithinAbs(119.7, 1.0));
     CHECK_THAT(top_of("tagline"), WithinAbs(552.7, 1.0));
-    CHECK_THAT(top_of("playButton"), WithinAbs(609.7, 1.0));
-    CHECK_THAT(top_of("top10Button"), WithinAbs(709.7, 1.0));
-    CHECK_THAT(top_of("titleCaption"), WithinAbs(789.7, 1.0));
+    // The buttons and the caption sit on the bottom margin, so the caption's own text height moves them: it is 19 high
+    // under one font engine and a pixel less under another. Two pixels holds that and is still well short of the 16 a
+    // changed margin or gap would move them.
+    CHECK_THAT(top_of("playButton"), WithinAbs(609.7, 2.0));
+    CHECK_THAT(top_of("top10Button"), WithinAbs(709.7, 2.0));
+    CHECK_THAT(top_of("titleCaption"), WithinAbs(789.7, 2.0));
     CHECK(s.item("playerChip")->height() == 72);
 }
 
