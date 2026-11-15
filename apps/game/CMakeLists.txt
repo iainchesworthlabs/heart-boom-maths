@@ -22,6 +22,7 @@ add_library(heart_boom_maths_app STATIC
     src/qml_types.hpp
     src/tick_driver.cpp
     src/services/build_info.cpp
+    src/services/cloud_sync.cpp
     src/services/file_save_store.cpp
     src/services/game_center_score_service.cpp
     src/services/notices.cpp
@@ -311,6 +312,7 @@ if(HEART_BOOM_MATHS_BUILD_TESTS)
     add_executable(heart_boom_maths_game_tests
         tests/test_main.cpp
         tests/test_build_info.cpp
+        tests/test_cloud_sync.cpp
         tests/test_event_sounds.cpp
         tests/test_file_save_store.cpp
         tests/test_game_center.cpp
